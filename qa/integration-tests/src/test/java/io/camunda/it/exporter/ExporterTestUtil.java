@@ -21,6 +21,9 @@ import org.awaitility.Awaitility;
 
 public class ExporterTestUtil {
 
+  public static final String RESOURCE_MANUAL_PROCESS = "process/manual_process.bpmn";
+  public static final String PROCESS_ID_MANUAL_PROCESS = "manual_process";
+
   @SafeVarargs
   public static String createAndDeployUserTaskProcess(
       final ZeebeClient zeebeClient,
@@ -78,18 +81,21 @@ public class ExporterTestUtil {
     return String.valueOf(deploymentEvent.getProcesses().getFirst().getProcessDefinitionKey());
   }
 
-  public static String startProcessInstance(final ZeebeClient client, final String processId) {
-    return String.valueOf(
-        client
-            .newCreateInstanceCommand()
-            .bpmnProcessId(processId)
-            .latestVersion()
-            .send()
-            .join()
-            .getProcessInstanceKey());
+  public static long startProcessInstance(final ZeebeClient client, final String processId) {
+    return client
+        .newCreateInstanceCommand()
+        .bpmnProcessId(processId)
+        .latestVersion()
+        .send()
+        .join()
+        .getProcessInstanceKey();
   }
 
-  public static String startProcessInstance(
+  public static String startProcessInstanceWithStringReturn(final ZeebeClient client, final String processId) {
+    return String.valueOf(startProcessInstance(client, processId));
+  }
+
+  public static String startProcessInstanceWithStringReturn(
       final ZeebeClient client, final String processId, final String tenantId) {
     return String.valueOf(
         client
@@ -102,7 +108,7 @@ public class ExporterTestUtil {
             .getProcessInstanceKey());
   }
 
-  public static String startProcessInstance(
+  public static String startProcessInstanceWithStringReturn(
       final ZeebeClient client,
       final String processId,
       final String tenantId,
@@ -119,7 +125,7 @@ public class ExporterTestUtil {
             .getProcessInstanceKey());
   }
 
-  public static String startProcessInstance(
+  public static String startProcessInstanceWithStringReturn(
       final ZeebeClient client, final String processId, final Map<String, Object> variables) {
     return String.valueOf(
         client

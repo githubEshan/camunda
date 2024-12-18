@@ -55,7 +55,7 @@ public class UserTaskExporterIT {
                     .zeebeCandidateUsers("demoUsers")
                     .zeebeCandidateGroups("demoGroup"));
 
-    final var processInstanceId = ExporterTestUtil.startProcessInstance(client, "test-process-id");
+    final var processInstanceId = ExporterTestUtil.startProcessInstanceWithStringReturn(client, "test-process-id");
 
     ExporterTestUtil.waitForProcessTasks(client, processInstanceId);
 
@@ -103,7 +103,7 @@ public class UserTaskExporterIT {
       ExporterTestUtil.createAndDeployUserTaskProcess(
           client, "test-process-id", "zeebe-task", AbstractUserTaskBuilder::zeebeUserTask);
     }
-    final var processInstanceId = ExporterTestUtil.startProcessInstance(client, "test-process-id");
+    final var processInstanceId = ExporterTestUtil.startProcessInstanceWithStringReturn(client, "test-process-id");
 
     ExporterTestUtil.waitForProcessTasks(client, processInstanceId);
 
@@ -131,7 +131,7 @@ public class UserTaskExporterIT {
           client, "test-process-id", "zeebe-task", AbstractUserTaskBuilder::zeebeUserTask);
 
       final var processInstanceId =
-          ExporterTestUtil.startProcessInstance(
+          ExporterTestUtil.startProcessInstanceWithStringReturn(
               client,
               "test-process-id",
               Map.of(
@@ -366,7 +366,7 @@ public class UserTaskExporterIT {
           t -> t.zeebeUserTask().zeebeExternalFormReference("test-form-reference"));
 
       final var processInstanceId =
-          ExporterTestUtil.startProcessInstance(client, "test-process-id");
+          ExporterTestUtil.startProcessInstanceWithStringReturn(client, "test-process-id");
 
       ExporterTestUtil.waitForProcessTasks(client, processInstanceId);
 
@@ -399,7 +399,7 @@ public class UserTaskExporterIT {
           t -> t.zeebeUserTask().zeebeFormId(form.getFormId()));
 
       final var processInstanceId =
-          ExporterTestUtil.startProcessInstance(client, "test-process-id");
+          ExporterTestUtil.startProcessInstanceWithStringReturn(client, "test-process-id");
 
       ExporterTestUtil.waitForProcessTasks(client, processInstanceId);
 
