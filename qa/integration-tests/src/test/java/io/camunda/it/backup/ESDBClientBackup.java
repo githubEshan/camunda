@@ -10,6 +10,8 @@ package io.camunda.it.backup;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import co.elastic.clients.elasticsearch.ElasticsearchClient;
+import co.elastic.clients.elasticsearch.cat.indices.IndicesRecord;
+import co.elastic.clients.elasticsearch.indices.DeleteIndexRequest;
 import co.elastic.clients.elasticsearch.snapshot.Repository;
 import co.elastic.clients.elasticsearch.snapshot.RestoreRequest;
 import co.elastic.clients.json.jackson.JacksonJsonpMapper;
@@ -17,6 +19,7 @@ import co.elastic.clients.transport.rest_client.RestClientTransport;
 import io.camunda.qa.util.cluster.TestStandaloneCamunda;
 import java.io.IOException;
 import java.util.Collection;
+import java.util.List;
 import org.apache.http.HttpHost;
 import org.elasticsearch.client.RestClient;
 
@@ -56,6 +59,16 @@ public class ESDBClientBackup implements BackupDBClient {
     final var response =
         esClient.snapshot().createRepository(b -> b.repository(repository).name(repositoryName));
     assertThat(response.acknowledged()).isTrue();
+  }
+
+  @Override
+  public void deleteAllIndices() throws IOException {
+    esClient.indices().delete(DeleteIndexRequest.of(b -> b.index("*")));
+  }
+
+  @Override
+  public List<String> cat() throws IOException {
+    return esClient.cat().indices().valueBody().stream().map(IndicesRecord::index).toList();
   }
 
   @Override

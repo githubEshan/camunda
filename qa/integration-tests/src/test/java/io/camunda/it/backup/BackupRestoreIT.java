@@ -31,8 +31,6 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.MethodSource;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.testcontainers.containers.BindMode;
-import org.testcontainers.containers.SelinuxContext;
 
 @ZeebeIntegration
 public class BackupRestoreIT {
@@ -73,14 +71,12 @@ public class BackupRestoreIT {
     LOG.info("Backup completed");
 
     // stop all apps and restart elasticsearch
-    testStandaloneCamunda.stop();
+    testStandaloneCamunda.stopApplications();
     camundaClient.close();
 
     // Start ES/OS before TestStandaloneCamunda in order to perform the restore
-    testStandaloneCamunda.startDBContainer();
-    // perform a restore with a new client (old one is not valid anymore)
-    createBackupDbClient();
-    backupDbClient.createRepository(REPOSITORY_NAME);
+    backupDbClient.deleteAllIndices();
+    Awaitility.await().untilAsserted(() -> assertThat(backupDbClient.cat()).isEmpty());
 
     // when
     backupDbClient.restore(REPOSITORY_NAME, snapshots);
@@ -166,16 +162,7 @@ public class BackupRestoreIT {
       testStandaloneCamunda.withBackupRepository(REPOSITORY_NAME);
 
       switch (repositoryType) {
-        case FS ->
-            testStandaloneCamunda.withDBContainer(
-                c -> {
-                  c.addFileSystemBind(
-                      repositoryDir.toString(),
-                      "/home",
-                      BindMode.READ_WRITE,
-                      SelinuxContext.SHARED);
-                  return c.withEnv("path.repo", "/home");
-                });
+        case FS -> testStandaloneCamunda.withDBContainer(c -> c.withEnv("path.repo", "~/"));
         default ->
             throw new IllegalStateException("Unsupported repository type: " + repositoryType);
       }

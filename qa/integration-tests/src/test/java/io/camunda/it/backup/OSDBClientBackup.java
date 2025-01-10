@@ -12,8 +12,11 @@ import static org.assertj.core.api.Assertions.assertThat;
 import io.camunda.qa.util.cluster.TestStandaloneCamunda;
 import java.io.IOException;
 import java.util.Collection;
+import java.util.List;
 import org.apache.http.HttpHost;
 import org.opensearch.client.opensearch.OpenSearchClient;
+import org.opensearch.client.opensearch.cat.indices.IndicesRecord;
+import org.opensearch.client.opensearch.indices.DeleteIndexRequest;
 
 public class OSDBClientBackup implements BackupDBClient {
   private final org.opensearch.client.RestClient osRestClient;
@@ -62,6 +65,17 @@ public class OSDBClientBackup implements BackupDBClient {
                         .name(repositoryName)
                         .settings(sb -> sb.location(repositoryName)));
     assertThat(response.acknowledged()).isTrue();
+  }
+
+  @Override
+  public void deleteAllIndices() throws IOException {
+    opensearchClient.indices().delete(DeleteIndexRequest.of(b -> b.index("*")));
+    System.out.println(cat());
+  }
+
+  @Override
+  public List<String> cat() throws IOException {
+    return opensearchClient.cat().indices().valueBody().stream().map(IndicesRecord::index).toList();
   }
 
   @Override

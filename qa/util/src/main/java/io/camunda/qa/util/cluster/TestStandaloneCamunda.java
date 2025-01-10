@@ -204,6 +204,11 @@ public final class TestStandaloneCamunda extends TestSpringApplication<TestStand
     return super.createSpringBuilder();
   }
 
+  // Stop only applications, don't stop the DB
+  public void stopApplications() {
+    super.stop();
+  }
+
   public void startDBContainer() {
     if (!dbContainer.isCreated()) {
       dbContainer.start();

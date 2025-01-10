@@ -11,6 +11,7 @@ import io.camunda.qa.util.cluster.TestStandaloneCamunda;
 import io.camunda.search.connect.configuration.DatabaseType;
 import java.io.IOException;
 import java.util.Collection;
+import java.util.List;
 
 public interface BackupDBClient extends AutoCloseable {
   void restore(String repositoryName, Collection<String> snapshots) throws IOException;
@@ -26,4 +27,8 @@ public interface BackupDBClient extends AutoCloseable {
       default -> throw new IllegalStateException("Unsupported database type: " + databaseType);
     };
   }
+
+  void deleteAllIndices() throws IOException;
+
+  List<String> cat() throws IOException;
 }
