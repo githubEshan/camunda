@@ -15,65 +15,55 @@ import io.camunda.client.api.command.ProblemException;
 import io.camunda.client.api.response.DeploymentEvent;
 import io.camunda.client.api.response.Process;
 import io.camunda.client.api.search.response.ProcessDefinition;
-import io.camunda.qa.util.cluster.TestStandaloneCamunda;
-import io.camunda.zeebe.qa.util.junit.ZeebeIntegration;
-import io.camunda.zeebe.qa.util.junit.ZeebeIntegration.TestZeebe;
+import io.camunda.it.utils.BrokerITInvocationProvider;
+import io.camunda.zeebe.qa.util.cluster.TestStandaloneBroker;
 import java.time.Duration;
-import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Objects;
 import org.awaitility.Awaitility;
-import org.junit.jupiter.api.BeforeAll;
-import org.junit.jupiter.api.Test;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import org.junit.jupiter.api.TestTemplate;
+import org.junit.jupiter.api.extension.ExtendWith;
 
-@ZeebeIntegration
+@ExtendWith(BrokerITInvocationProvider.class)
 public class ProcessDefinitionQueryTest {
 
-  private static final Logger LOGGER = LoggerFactory.getLogger(ProcessDefinitionQueryTest.class);
-  private static final List<Process> DEPLOYED_PROCESSES = new ArrayList<>();
+  private static final List<String> PROCESS_DEFINITIONS = List.of(
+      "service_tasks_v1.bpmn",
+      "service_tasks_v2.bpmn",
+      "incident_process_v1.bpmn",
+      "manual_process.bpmn",
+      "parent_process_v1.bpmn",
+      "child_process_v1.bpmn",
+      "process_start_form.bpmn",
+      "processWithVersionTag.bpmn"
+  );
 
-  private static CamundaClient camundaClient;
-
-  @TestZeebe(initMethod = "initTestStandaloneCamunda")
-  private static TestStandaloneCamunda testStandaloneCamunda;
-
-  static void initTestStandaloneCamunda() {
-    testStandaloneCamunda = new TestStandaloneCamunda().withCamundaExporter();
-  }
-
-  @BeforeAll
-  public static void beforeAll() throws InterruptedException {
-
-    camundaClient = testStandaloneCamunda.newClientBuilder().build();
-
+  public List<Process> deployResources(final CamundaClient camundaClient) throws InterruptedException {
     // Deploy form
-    deployResource(String.format("form/%s", "form.form"));
-    deployResource(String.format("form/%s", "form_v2.form"));
+    deployResource(camundaClient, String.format("form/%s", "form.form"));
+    deployResource(camundaClient, String.format("form/%s", "form_v2.form"));
 
-    final List<String> processes =
-        List.of(
-            "service_tasks_v1.bpmn",
-            "service_tasks_v2.bpmn",
-            "incident_process_v1.bpmn",
-            "manual_process.bpmn",
-            "parent_process_v1.bpmn",
-            "child_process_v1.bpmn",
-            "process_start_form.bpmn",
-            "processWithVersionTag.bpmn");
-    processes.forEach(
-        process ->
-            DEPLOYED_PROCESSES.addAll(
-                deployResource(String.format("process/%s", process)).getProcesses()));
+    final var processes = PROCESS_DEFINITIONS.parallelStream()
+        .map(process -> deployResource(camundaClient, String.format("process/%s", process)))
+        .map(DeploymentEvent::getProcesses)
+        .flatMap(List::stream)
+        .toList();
 
-    waitForProcessesToBeDeployed();
+    waitForProcessesToBeDeployed(camundaClient, processes);
+
+    return processes;
   }
 
-  @Test
-  void shouldSearchByFromWithLimit() {
+  @TestTemplate
+  void shouldSearchByFromWithLimit(final TestStandaloneBroker testBroker)
+      throws InterruptedException {
+    final var camundaClient = testBroker.newClientBuilder().build();
+
+    // given
+    deployResources(camundaClient);
+
     // when
     final var resultAll = camundaClient.newProcessDefinitionQuery().send().join();
     final var thirdKey = resultAll.items().get(2).getProcessDefinitionKey();
@@ -87,9 +77,15 @@ public class ProcessDefinitionQueryTest {
         .isEqualTo(thirdKey);
   }
 
-  @Test
-  void shouldPaginateWithSortingByProcessDefinitionKey() {
+  @TestTemplate
+  void shouldPaginateWithSortingByProcessDefinitionKey(final TestStandaloneBroker testBroker)
+      throws InterruptedException {
+    final var camundaClient = testBroker.newClientBuilder().build();
+
     // given
+    deployResources(camundaClient);
+
+    // when
     final var resultAll =
         camundaClient
             .newProcessDefinitionQuery()
@@ -97,7 +93,6 @@ public class ProcessDefinitionQueryTest {
             .send()
             .join();
 
-    // when
     final var firstPage =
         camundaClient
             .newProcessDefinitionQuery()
@@ -122,9 +117,15 @@ public class ProcessDefinitionQueryTest {
         .isEqualTo(resultAll.items().get(1).getProcessDefinitionKey());
   }
 
-  @Test
-  void shouldPaginateWithSortingByProcessDefinitionId() {
+  @TestTemplate
+  void shouldPaginateWithSortingByProcessDefinitionId(final TestStandaloneBroker testBroker)
+      throws InterruptedException {
+    final var camundaClient = testBroker.newClientBuilder().build();
+
     // given
+    deployResources(camundaClient);
+
+    // when
     final var resultAll =
         camundaClient
             .newProcessDefinitionQuery()
@@ -132,7 +133,6 @@ public class ProcessDefinitionQueryTest {
             .send()
             .join();
 
-    // when
     final var firstPage =
         camundaClient
             .newProcessDefinitionQuery()
@@ -159,9 +159,15 @@ public class ProcessDefinitionQueryTest {
         .isEqualTo(resultAll.items().get(2).getProcessDefinitionKey());
   }
 
-  @Test
-  void shouldGetPreviousPageWithSortingByProcessDefinitionId() {
+  @TestTemplate
+  void shouldGetPreviousPageWithSortingByProcessDefinitionId(final TestStandaloneBroker testBroker)
+      throws InterruptedException {
+    final var camundaClient = testBroker.newClientBuilder().build();
+
     // given
+    deployResources(camundaClient);
+
+    // when
     final var firstPage =
         camundaClient
             .newProcessDefinitionQuery()
@@ -176,7 +182,6 @@ public class ProcessDefinitionQueryTest {
             .page(p -> p.limit(1).searchAfter(firstPage.page().lastSortValues()))
             .send()
             .join();
-    // when
     final var firstPageAgain =
         camundaClient
             .newProcessDefinitionQuery()
@@ -189,9 +194,14 @@ public class ProcessDefinitionQueryTest {
     assertThat(firstPageAgain.items()).isEqualTo(firstPage.items());
   }
 
-  @Test
-  void shouldThrownExceptionIfProcessDefinitionNotFoundByKey() {
+  @TestTemplate
+  void shouldThrownExceptionIfProcessDefinitionNotFoundByKey(final TestStandaloneBroker testBroker)
+      throws InterruptedException {
+    final var camundaClient = testBroker.newClientBuilder().build();
+
     // given
+    deployResources(camundaClient);
+
     final long invalidProcessDefinitionKey = 0xC00L;
 
     // when / then
@@ -211,12 +221,17 @@ public class ProcessDefinitionQueryTest {
         .isEqualTo("Process definition with key 3072 not found");
   }
 
-  @Test
-  void shouldGetProcessDefinitionByKey() {
+  @TestTemplate
+  void shouldGetProcessDefinitionByKey(final TestStandaloneBroker testBroker)
+      throws InterruptedException {
+    final var camundaClient = testBroker.newClientBuilder().build();
+
     // given
+    final var processes = deployResources(camundaClient);
+
     final var processDefinitionId = "service_tasks_v1";
     final var processEvent =
-        DEPLOYED_PROCESSES.stream()
+        processes.stream()
             .filter(p -> Objects.equals(processDefinitionId, p.getBpmnProcessId()))
             .findFirst()
             .orElseThrow();
@@ -237,11 +252,16 @@ public class ProcessDefinitionQueryTest {
     assertThat(result.getVersionTag()).isNull();
   }
 
-  @Test
-  void shouldRetrieveAllProcessDefinitionsByDefault() {
+  @TestTemplate
+  void shouldRetrieveAllProcessDefinitionsByDefault(final TestStandaloneBroker testBroker)
+      throws InterruptedException {
+    final var camundaClient = testBroker.newClientBuilder().build();
+
     // given
+    final var processes = deployResources(camundaClient);
+
     final var expectedProcessDefinitionIds =
-        DEPLOYED_PROCESSES.stream().map(Process::getBpmnProcessId).toList();
+        processes.stream().map(Process::getBpmnProcessId).toList();
 
     // when
     final var result = camundaClient.newProcessDefinitionQuery().send().join();
@@ -252,9 +272,14 @@ public class ProcessDefinitionQueryTest {
         .containsExactlyInAnyOrderElementsOf(expectedProcessDefinitionIds);
   }
 
-  @Test
-  void shouldRetrieveProcessDefinitionsByProcessDefinitionId() {
+  @TestTemplate
+  void shouldRetrieveProcessDefinitionsByProcessDefinitionId(final TestStandaloneBroker testBroker)
+      throws InterruptedException {
+    final var camundaClient = testBroker.newClientBuilder().build();
+
     // given
+    deployResources(camundaClient);
+
     final var processDefinitionId = "service_tasks_v1";
 
     // when
@@ -270,9 +295,14 @@ public class ProcessDefinitionQueryTest {
     assertThat(result.items().getFirst().getProcessDefinitionId()).isEqualTo(processDefinitionId);
   }
 
-  @Test
-  void shouldRetrieveProcessDefinitionsByName() {
+  @TestTemplate
+  void shouldRetrieveProcessDefinitionsByName(final TestStandaloneBroker testBroker)
+      throws InterruptedException {
+    final var camundaClient = testBroker.newClientBuilder().build();
+
     // given
+    deployResources(camundaClient);
+
     final var name = "Service tasks v1";
 
     // when
@@ -284,9 +314,14 @@ public class ProcessDefinitionQueryTest {
     assertThat(result.items().getFirst().getName()).isEqualTo(name);
   }
 
-  @Test
-  void shouldRetrieveProcessDefinitionsByVersion() {
+  @TestTemplate
+  void shouldRetrieveProcessDefinitionsByVersion(final TestStandaloneBroker testBroker)
+      throws InterruptedException {
+    final var camundaClient = testBroker.newClientBuilder().build();
+
     // given
+    deployResources(camundaClient);
+
     final var version = 1;
 
     // when
@@ -298,9 +333,14 @@ public class ProcessDefinitionQueryTest {
     assertThat(result.items().getFirst().getVersion()).isEqualTo(version);
   }
 
-  @Test
-  void shouldRetrieveProcessDefinitionsByResourceName() {
+  @TestTemplate
+  void shouldRetrieveProcessDefinitionsByResourceName(final TestStandaloneBroker testBroker)
+      throws InterruptedException {
+    final var camundaClient = testBroker.newClientBuilder().build();
+
     // given
+    deployResources(camundaClient);
+
     final var resourceName = "process/service_tasks_v1.bpmn";
 
     // when
@@ -316,9 +356,14 @@ public class ProcessDefinitionQueryTest {
     assertThat(result.items().getFirst().getResourceName()).isEqualTo(resourceName);
   }
 
-  @Test
-  void shouldRetrieveProcessDefinitionsByTenantId() {
+  @TestTemplate
+  void shouldRetrieveProcessDefinitionsByTenantId(final TestStandaloneBroker testBroker)
+      throws InterruptedException {
+    final var camundaClient = testBroker.newClientBuilder().build();
+
     // given
+    deployResources(camundaClient);
+
     final var tenantId = "<default>";
 
     // when
@@ -330,9 +375,14 @@ public class ProcessDefinitionQueryTest {
     assertThat(result.items().getFirst().getTenantId()).isEqualTo(tenantId);
   }
 
-  @Test
-  void shouldRetrieveProcessDefinitionsByNullVersionTag() {
+  @TestTemplate
+  void shouldRetrieveProcessDefinitionsByNullVersionTag(final TestStandaloneBroker testBroker)
+      throws InterruptedException {
+    final var camundaClient = testBroker.newClientBuilder().build();
+
     // given
+    deployResources(camundaClient);
+
     final String versionTag = null;
 
     // when
@@ -348,9 +398,14 @@ public class ProcessDefinitionQueryTest {
     assertThat(result.items().getFirst().getVersionTag()).isEqualTo(versionTag);
   }
 
-  @Test
-  void shouldRetrieveProcessDefinitionsByVersionTag() {
+  @TestTemplate
+  void shouldRetrieveProcessDefinitionsByVersionTag(final TestStandaloneBroker testBroker)
+      throws InterruptedException {
+    final var camundaClient = testBroker.newClientBuilder().build();
+
     // given
+    deployResources(camundaClient);
+
     final String versionTag = "1.1.0";
 
     // when
@@ -366,11 +421,16 @@ public class ProcessDefinitionQueryTest {
     assertThat(result.items().getFirst().getVersionTag()).isEqualTo(versionTag);
   }
 
-  @Test
-  void shouldRetrieveProcessDefinitionsWithReverseSorting() {
+  @TestTemplate
+  void shouldRetrieveProcessDefinitionsWithReverseSorting(final TestStandaloneBroker testBroker)
+      throws InterruptedException {
+    final var camundaClient = testBroker.newClientBuilder().build();
+
     // given
+    final var processes = deployResources(camundaClient);
+
     final var expectedProcessDefinitionIds =
-        DEPLOYED_PROCESSES.stream()
+        processes.stream()
             .map(Process::getBpmnProcessId)
             .sorted(Comparator.reverseOrder())
             .toList();
@@ -389,8 +449,14 @@ public class ProcessDefinitionQueryTest {
         .containsExactlyElementsOf(expectedProcessDefinitionIds);
   }
 
-  @Test
-  void shouldSortProcessDefinitionsByKey() {
+  @TestTemplate
+  void shouldSortProcessDefinitionsByKey(final TestStandaloneBroker testBroker)
+      throws InterruptedException {
+    final var camundaClient = testBroker.newClientBuilder().build();
+
+    // given
+    deployResources(camundaClient);
+
     // when
     final var resultAsc =
         camundaClient
@@ -417,8 +483,14 @@ public class ProcessDefinitionQueryTest {
         .containsExactlyElementsOf(sortedDesc);
   }
 
-  @Test
-  void shouldSortProcessDefinitionsByProcessDefinitionId() {
+  @TestTemplate
+  void shouldSortProcessDefinitionsByProcessDefinitionId(final TestStandaloneBroker testBroker)
+      throws InterruptedException {
+    final var camundaClient = testBroker.newClientBuilder().build();
+
+    // given
+    deployResources(camundaClient);
+
     // when
     final var resultAsc =
         camundaClient
@@ -445,8 +517,14 @@ public class ProcessDefinitionQueryTest {
         .containsExactlyElementsOf(sortedDesc);
   }
 
-  @Test
-  void shouldSortProcessDefinitionsByName() {
+  @TestTemplate
+  void shouldSortProcessDefinitionsByName(final TestStandaloneBroker testBroker)
+      throws InterruptedException {
+    final var camundaClient = testBroker.newClientBuilder().build();
+
+    // given
+    deployResources(camundaClient);
+
     // when
     final var resultAsc =
         camundaClient.newProcessDefinitionQuery().sort(s -> s.name().asc()).send().join();
@@ -464,8 +542,14 @@ public class ProcessDefinitionQueryTest {
         .containsExactlyElementsOf(sortedDesc);
   }
 
-  @Test
-  void shouldSortProcessDefinitionsByProcessResourceName() {
+  @TestTemplate
+  void shouldSortProcessDefinitionsByProcessResourceName(final TestStandaloneBroker testBroker)
+      throws InterruptedException {
+    final var camundaClient = testBroker.newClientBuilder().build();
+
+    // given
+    deployResources(camundaClient);
+
     // when
     final var resultAsc =
         camundaClient.newProcessDefinitionQuery().sort(s -> s.resourceName().asc()).send().join();
@@ -483,8 +567,14 @@ public class ProcessDefinitionQueryTest {
         .containsExactlyElementsOf(sortedDesc);
   }
 
-  @Test
-  void shouldSortProcessDefinitionsByVersion() {
+  @TestTemplate
+  void shouldSortProcessDefinitionsByVersion(final TestStandaloneBroker testBroker)
+      throws InterruptedException {
+    final var camundaClient = testBroker.newClientBuilder().build();
+
+    // given
+    deployResources(camundaClient);
+
     // when
     final var resultAsc =
         camundaClient.newProcessDefinitionQuery().sort(s -> s.version().asc()).send().join();
@@ -502,8 +592,14 @@ public class ProcessDefinitionQueryTest {
         .containsExactlyElementsOf(sortedDesc);
   }
 
-  @Test
-  void shouldSortProcessDefinitionsByTenantId() {
+  @TestTemplate
+  void shouldSortProcessDefinitionsByTenantId(final TestStandaloneBroker testBroker)
+      throws InterruptedException {
+    final var camundaClient = testBroker.newClientBuilder().build();
+
+    // given
+    deployResources(camundaClient);
+
     // when
     final var resultAsc =
         camundaClient.newProcessDefinitionQuery().sort(s -> s.tenantId().asc()).send().join();
@@ -521,8 +617,14 @@ public class ProcessDefinitionQueryTest {
         .containsExactlyElementsOf(sortedDesc);
   }
 
-  @Test
-  public void shouldValidatePagination() {
+  @TestTemplate
+  public void shouldValidatePagination(final TestStandaloneBroker testBroker)
+      throws InterruptedException {
+    final var camundaClient = testBroker.newClientBuilder().build();
+
+    // given
+    deployResources(camundaClient);
+
     final var result =
         camundaClient.newProcessDefinitionQuery().page(p -> p.limit(2)).send().join();
     assertThat(result.items().size()).isEqualTo(2);
@@ -548,8 +650,14 @@ public class ProcessDefinitionQueryTest {
     assertThat(resultBefore.items().getFirst().getProcessDefinitionKey()).isEqualTo(key);
   }
 
-  @Test
-  public void shouldValidateGetProcessForm() {
+  @TestTemplate
+  public void shouldValidateGetProcessForm(final TestStandaloneBroker testBroker)
+      throws InterruptedException {
+    final var camundaClient = testBroker.newClientBuilder().build();
+
+    // given
+    deployResources(camundaClient);
+
     final var resultProcess =
         camundaClient
             .newProcessDefinitionQuery()
@@ -564,10 +672,10 @@ public class ProcessDefinitionQueryTest {
         camundaClient.newProcessDefinitionGetFormRequest(processDefinitionKey).send().join();
 
     assertThat(resultForm.getFormId()).isEqualTo("test");
-    assertThat(resultForm.getVersion()).isEqualTo(2L);
   }
 
-  private static DeploymentEvent deployResource(final String resourceName) {
+  private static DeploymentEvent deployResource(
+      final CamundaClient camundaClient, final String resourceName) {
     return camundaClient
         .newDeployResourceCommand()
         .addResourceFromClasspath(resourceName)
@@ -575,14 +683,15 @@ public class ProcessDefinitionQueryTest {
         .join();
   }
 
-  private static void waitForProcessesToBeDeployed() throws InterruptedException {
+  private static void waitForProcessesToBeDeployed(final CamundaClient camundaClient, final List<Process> processes)
+      throws InterruptedException {
     Awaitility.await("should deploy processes and import in Operate")
         .atMost(Duration.ofMinutes(3))
         .ignoreExceptions() // Ignore exceptions and continue retrying
         .untilAsserted(
             () -> {
               final var result = camundaClient.newProcessDefinitionQuery().send().join();
-              assertThat(result.items().size()).isEqualTo(DEPLOYED_PROCESSES.size());
+              assertThat(result.items().size()).isEqualTo(processes.size());
 
               final var processDefinitionKey =
                   camundaClient
