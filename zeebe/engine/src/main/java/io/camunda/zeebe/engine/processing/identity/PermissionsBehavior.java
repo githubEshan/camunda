@@ -31,6 +31,8 @@ public class PermissionsBehavior {
       "Expected to remove '%s' permission for resource '%s' and resource identifiers '%s' for owner '%s', but this permission for resource identifiers '%s' is not found. Existing resource ids are: '%s'";
   public static final String AUTHORIZATION_ALREADY_EXISTS_MESSAGE =
       "Expected to create authorization for owner '%s' with permission type '%s' and resource type '%s', but this permission for resource identifiers '%s' already exist. Existing resource ids are: '%s'";
+  private static final String AUTHORIZATION_DOES_NOT_EXIST_ERROR_MESSAGE =
+      "Expected to delete authorization with key %s, but an authorization with this key does not exist";
 
   private final AuthorizationState authorizationState;
   private final AuthorizationCheckBehavior authCheckBehavior;
@@ -97,7 +99,8 @@ public class PermissionsBehavior {
     return Either.right(record);
   }
 
-  // TODO: we need to provide also the ownerType here when https://github.com/camunda/camunda/issues/27036 is implemented
+  // TODO: we need to provide also the ownerType here when
+  // https://github.com/camunda/camunda/issues/27036 is implemented
   public Either<Rejection, AuthorizationRecord> authorizationAlreadyExists(
       final AuthorizationRecord record) {
     for (final PermissionType permission : record.getAuthorizationPermissions()) {
@@ -147,6 +150,20 @@ public class PermissionsBehavior {
     }
 
     return Either.right(record);
+  }
+
+  public Either<Rejection, Long> authorizationExist(final AuthorizationRecord record) {
+    final var key = record.getAuthorizationKey();
+    final var persistedAuthorization = authorizationState.get(key);
+    return persistedAuthorization
+        .<Either<Rejection, Long>>map(
+            authorization -> Either.right(authorization.getAuthorizationKey()))
+        .orElseGet(
+            () ->
+                Either.left(
+                    new Rejection(
+                        RejectionType.NOT_FOUND,
+                        AUTHORIZATION_DOES_NOT_EXIST_ERROR_MESSAGE.formatted(key))));
   }
 
   public Either<Rejection, AuthorizationRecord> hasValidPermissionTypes(
