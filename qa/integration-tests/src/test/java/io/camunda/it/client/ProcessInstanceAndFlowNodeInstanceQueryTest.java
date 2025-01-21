@@ -20,70 +20,60 @@ import static org.junit.jupiter.api.Assertions.assertThrowsExactly;
 
 import io.camunda.client.CamundaClient;
 import io.camunda.client.api.command.ProblemException;
+import io.camunda.client.api.response.DeploymentEvent;
 import io.camunda.client.api.response.Process;
 import io.camunda.client.api.response.ProcessInstanceEvent;
 import io.camunda.client.api.search.response.FlowNodeInstance;
 import io.camunda.client.api.search.response.ProcessInstance;
 import io.camunda.client.protocol.rest.ProcessInstanceStateEnum;
 import io.camunda.client.protocol.rest.ProcessInstanceVariableFilterRequest;
-import io.camunda.qa.util.cluster.TestStandaloneCamunda;
-import io.camunda.zeebe.qa.util.junit.ZeebeIntegration;
-import io.camunda.zeebe.qa.util.junit.ZeebeIntegration.TestZeebe;
+import io.camunda.it.utils.BrokerITInvocationProvider;
+import io.camunda.zeebe.qa.util.cluster.TestStandaloneBroker;
 import java.time.OffsetDateTime;
 import java.time.temporal.ChronoUnit;
 import java.util.*;
-import org.junit.jupiter.api.AfterAll;
-import org.junit.jupiter.api.BeforeAll;
-import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.TestTemplate;
+import org.junit.jupiter.api.extension.ExtendWith;
 
-@ZeebeIntegration
+@ExtendWith(BrokerITInvocationProvider.class)
 public class ProcessInstanceAndFlowNodeInstanceQueryTest {
 
-  static final List<Process> DEPLOYED_PROCESSES = new ArrayList<>();
-  static final List<ProcessInstanceEvent> PROCESS_INSTANCES = new ArrayList<>();
-
-  private static CamundaClient camundaClient;
-
-  @TestZeebe(initMethod = "initTestStandaloneCamunda")
-  private static TestStandaloneCamunda testStandaloneCamunda;
+  private static final List<String> PROCESS_DEFINITIONS = List.of(
+      "service_tasks_v1.bpmn",
+      "service_tasks_v2.bpmn",
+      "incident_process_v1.bpmn",
+      "manual_process.bpmn",
+      "parent_process_v1.bpmn",
+      "child_process_v1.bpmn"
+  );
 
   private static FlowNodeInstance flowNodeInstance;
   private static FlowNodeInstance flowNodeInstanceWithIncident;
 
-  @SuppressWarnings("unused")
-  static void initTestStandaloneCamunda() {
-    testStandaloneCamunda =
-        new TestStandaloneCamunda().withElasticsearchExporter(false).withCamundaExporter();
+  public List<Process> deployProcesses(final CamundaClient camundaClient) throws InterruptedException {
+
+    final var processes = PROCESS_DEFINITIONS.parallelStream()
+        .map(process -> deployResource(camundaClient, String.format("process/%s", process)))
+        .map(DeploymentEvent::getProcesses)
+        .flatMap(List::stream)
+        .toList();
+
+    waitForProcessesToBeDeployed(camundaClient, processes.size());
+
+    return processes;
   }
 
-  @BeforeAll
-  public static void beforeAll() {
+  public List<ProcessInstanceEvent> startProcesses(final CamundaClient camundaClient) {
 
-    camundaClient = testStandaloneCamunda.newClientBuilder().build();
+    final var processInstances = new ArrayList<ProcessInstanceEvent>();
 
-    final List<String> processes =
-        List.of(
-            "service_tasks_v1.bpmn",
-            "service_tasks_v2.bpmn",
-            "incident_process_v1.bpmn",
-            "manual_process.bpmn",
-            "parent_process_v1.bpmn",
-            "child_process_v1.bpmn");
-    processes.forEach(
-        process ->
-            DEPLOYED_PROCESSES.addAll(
-                deployResource(camundaClient, String.format("process/%s", process))
-                    .getProcesses()));
-
-    waitForProcessesToBeDeployed(camundaClient, DEPLOYED_PROCESSES.size());
-
-    PROCESS_INSTANCES.add(
+    processInstances.add(
         startProcessInstance(camundaClient, "service_tasks_v1", "{\"xyz\":\"bar\"}"));
-    PROCESS_INSTANCES.add(
+    processInstances.add(
         startProcessInstance(camundaClient, "service_tasks_v2", "{\"path\":222}"));
-    PROCESS_INSTANCES.add(startProcessInstance(camundaClient, "manual_process"));
-    PROCESS_INSTANCES.add(startProcessInstance(camundaClient, "incident_process_v1"));
-    PROCESS_INSTANCES.add(startProcessInstance(camundaClient, "parent_process_v1"));
+    processInstances.add(startProcessInstance(camundaClient, "manual_process"));
+    processInstances.add(startProcessInstance(camundaClient, "incident_process_v1"));
+    processInstances.add(startProcessInstance(camundaClient, "parent_process_v1"));
 
     waitForProcessInstancesToStart(camundaClient, 6);
     waitForFlowNodeInstances(camundaClient, 20);
@@ -104,20 +94,21 @@ public class ProcessInstanceAndFlowNodeInstanceQueryTest {
             .filter(f -> f.getIncidentKey() != null)
             .findFirst()
             .orElseThrow();
+
+    return processInstances;
   }
 
-  @AfterAll
-  static void afterAll() {
-    DEPLOYED_PROCESSES.clear();
-    PROCESS_INSTANCES.clear();
-  }
+  @TestTemplate
+  void shouldGetProcessInstanceByKey(final TestStandaloneBroker testBroker) throws InterruptedException {
+    final var camundaClient = testBroker.newClientBuilder().build();
 
-  @Test
-  void shouldGetProcessInstanceByKey() {
     // given
+    deployProcesses(camundaClient);
+    final var processes = startProcesses(camundaClient);
+
     final String bpmnProcessId = "service_tasks_v1";
     final ProcessInstanceEvent processInstanceEvent =
-        PROCESS_INSTANCES.stream()
+        processes.stream()
             .filter(p -> Objects.equals(bpmnProcessId, p.getBpmnProcessId()))
             .findFirst()
             .orElseThrow();
@@ -141,9 +132,13 @@ public class ProcessInstanceAndFlowNodeInstanceQueryTest {
     assertThat(result.getTenantId()).isEqualTo("<default>");
   }
 
-  @Test
-  void shouldThrownExceptionIfProcessInstanceNotFoundByKey() {
+  @TestTemplate
+  void shouldThrownExceptionIfProcessInstanceNotFoundByKey(final TestStandaloneBroker testBroker) throws InterruptedException {
+    final var camundaClient = testBroker.newClientBuilder().build();
+
     // given
+    deployProcesses(camundaClient);
+    startProcesses(camundaClient);
     final long invalidProcessInstanceKey = 100L;
 
     // when / then
@@ -163,12 +158,17 @@ public class ProcessInstanceAndFlowNodeInstanceQueryTest {
         .isEqualTo("Process instance with key 100 not found");
   }
 
-  @Test
-  void shouldQueryAllProcessInstancesByDefault() {
+  @TestTemplate
+  void shouldQueryAllProcessInstancesByDefault(final TestStandaloneBroker testBroker) throws InterruptedException {
+    final var camundaClient = testBroker.newClientBuilder().build();
+
     // given
+    deployProcesses(camundaClient);
+    final var processInstances = startProcesses(camundaClient);
+
     final List<String> expectedBpmnProcessIds =
         new ArrayList<>(
-            PROCESS_INSTANCES.stream().map(ProcessInstanceEvent::getBpmnProcessId).toList());
+            processInstances.stream().map(ProcessInstanceEvent::getBpmnProcessId).toList());
     expectedBpmnProcessIds.add("child_process_v1");
 
     // when
@@ -180,11 +180,16 @@ public class ProcessInstanceAndFlowNodeInstanceQueryTest {
         .containsExactlyInAnyOrderElementsOf(expectedBpmnProcessIds);
   }
 
-  @Test
-  void shouldQueryProcessInstancesByKey() {
+  @TestTemplate
+  void shouldQueryProcessInstancesByKey(final TestStandaloneBroker testBroker) throws InterruptedException {
+    final var camundaClient = testBroker.newClientBuilder().build();
+
     // given
+    deployProcesses(camundaClient);
+    final var processInstances = startProcesses(camundaClient);
+
     final long processInstanceKey =
-        PROCESS_INSTANCES.stream().findFirst().orElseThrow().getProcessInstanceKey();
+        processInstances.stream().findFirst().orElseThrow().getProcessInstanceKey();
 
     // when
     final var result =
@@ -199,11 +204,15 @@ public class ProcessInstanceAndFlowNodeInstanceQueryTest {
     assertThat(result.items().getFirst().getProcessInstanceKey()).isEqualTo(processInstanceKey);
   }
 
-  @Test
-  void shouldQueryProcessInstancesByKeyFilterIn() {
+  @TestTemplate
+  void shouldQueryProcessInstancesByKeyFilterGtLt(final TestStandaloneBroker testBroker) throws InterruptedException {
+    final var camundaClient = testBroker.newClientBuilder().build();
+
     // given
+    deployProcesses(camundaClient);
+    final var processInstances = startProcesses(camundaClient);
     final List<Long> processInstanceKeys =
-        PROCESS_INSTANCES.subList(0, 2).stream()
+        processInstances.subList(0, 2).stream()
             .map(ProcessInstanceEvent::getProcessInstanceKey)
             .toList();
 
@@ -222,12 +231,16 @@ public class ProcessInstanceAndFlowNodeInstanceQueryTest {
         .containsExactlyInAnyOrderElementsOf(processInstanceKeys);
   }
 
-  @Test
-  void shouldQueryProcessInstancesByProcessDefinitionId() {
+  @TestTemplate
+  void shouldQueryProcessInstancesByProcessDefinitionId(final TestStandaloneBroker testBroker) throws InterruptedException {
+    final var camundaClient = testBroker.newClientBuilder().build();
+
     // given
+    deployProcesses(camundaClient);
+    final var processInstances = startProcesses(camundaClient);
     final String bpmnProcessId = "service_tasks_v1";
     final long processInstanceKey =
-        PROCESS_INSTANCES.stream()
+        processInstances.stream()
             .filter(p -> Objects.equals(bpmnProcessId, p.getBpmnProcessId()))
             .findFirst()
             .orElseThrow()
@@ -246,12 +259,16 @@ public class ProcessInstanceAndFlowNodeInstanceQueryTest {
     assertThat(result.items().getFirst().getProcessInstanceKey()).isEqualTo(processInstanceKey);
   }
 
-  @Test
-  void shouldQueryProcessInstancesByProcessDefinitionIdFilterIn() {
+  @TestTemplate
+  void shouldQueryProcessInstancesByProcessDefinitionIdFilterIn(final TestStandaloneBroker testBroker) throws InterruptedException {
+    final var camundaClient = testBroker.newClientBuilder().build();
+
     // given
+    deployProcesses(camundaClient);
+    final var processInstances = startProcesses(camundaClient);
     final String bpmnProcessId = "service_tasks_v1";
     final long processInstanceKey =
-        PROCESS_INSTANCES.stream()
+        processInstances.stream()
             .filter(p -> Objects.equals(bpmnProcessId, p.getBpmnProcessId()))
             .findFirst()
             .orElseThrow()
@@ -270,12 +287,16 @@ public class ProcessInstanceAndFlowNodeInstanceQueryTest {
     assertThat(result.items()).extracting("processInstanceKey").containsExactly(processInstanceKey);
   }
 
-  @Test
-  void shouldRetrieveProcessInstancesByProcessDefinitionIdFilterLikeMultiple() {
+  @TestTemplate
+  void shouldRetrieveProcessInstancesByProcessDefinitionIdFilterLikeMultiple(final TestStandaloneBroker testBroker) throws InterruptedException {
+    final var camundaClient = testBroker.newClientBuilder().build();
+
     // given
+    deployProcesses(camundaClient);
+    final var processInstances = startProcesses(camundaClient);
     final String bpmnProcessId = "service_tasks";
     final List<Long> processInstanceKeys =
-        PROCESS_INSTANCES.stream()
+        processInstances.stream()
             .filter(p -> p.getBpmnProcessId().startsWith(bpmnProcessId))
             .map(ProcessInstanceEvent::getProcessInstanceKey)
             .toList();
@@ -295,9 +316,13 @@ public class ProcessInstanceAndFlowNodeInstanceQueryTest {
         .containsExactlyInAnyOrder(processInstanceKeys.toArray());
   }
 
-  @Test
-  void shouldRetrieveProcessInstancesByStartDateFilterGtLt() {
+  @TestTemplate
+  void shouldRetrieveProcessInstancesByStartDateFilterGtLt(final TestStandaloneBroker testBroker) throws InterruptedException {
+    final var camundaClient = testBroker.newClientBuilder().build();
+
     // given
+    deployProcesses(camundaClient);
+    startProcesses(camundaClient);
     final var pi =
         camundaClient
             .newProcessInstanceQuery()
@@ -327,9 +352,13 @@ public class ProcessInstanceAndFlowNodeInstanceQueryTest {
         .isEqualTo(pi.getProcessInstanceKey());
   }
 
-  @Test
-  void shouldRetrieveProcessInstancesByExistEndDates() {
+  @TestTemplate
+  void shouldRetrieveProcessInstancesByExistEndDates(final TestStandaloneBroker testBroker) throws InterruptedException {
+    final var camundaClient = testBroker.newClientBuilder().build();
+
     // when
+    deployProcesses(camundaClient);
+    startProcesses(camundaClient);
     final var result =
         camundaClient
             .newProcessInstanceQuery()
@@ -342,9 +371,13 @@ public class ProcessInstanceAndFlowNodeInstanceQueryTest {
     assertThat(result.items()).allMatch(p -> p.getEndDate() != null);
   }
 
-  @Test
-  void shouldRetrieveProcessInstancesByNotExistEndDates() {
+  @TestTemplate
+  void shouldRetrieveProcessInstancesByNotExistEndDates(final TestStandaloneBroker testBroker) throws InterruptedException {
+    final var camundaClient = testBroker.newClientBuilder().build();
+
     // when
+    deployProcesses(camundaClient);
+    startProcesses(camundaClient);
     final var result =
         camundaClient
             .newProcessInstanceQuery()
@@ -357,9 +390,13 @@ public class ProcessInstanceAndFlowNodeInstanceQueryTest {
     assertThat(result.items()).allMatch(p -> p.getEndDate() == null);
   }
 
-  @Test
-  void shouldRetrieveProcessInstancesByEndDateFilterGteLte() {
+  @TestTemplate
+  void shouldRetrieveProcessInstancesByEndDateFilterGteLte(final TestStandaloneBroker testBroker) throws InterruptedException {
+    final var camundaClient = testBroker.newClientBuilder().build();
+
     // given
+    deployProcesses(camundaClient);
+    startProcesses(camundaClient);
     final var pi =
         camundaClient
             .newProcessInstanceQuery()
@@ -384,12 +421,16 @@ public class ProcessInstanceAndFlowNodeInstanceQueryTest {
         .isEqualTo(pi.getProcessInstanceKey());
   }
 
-  @Test
-  void shouldQueryProcessInstancesByProcessDefinitionKey() {
+  @TestTemplate
+  void shouldQueryProcessInstancesByProcessDefinitionKey(final TestStandaloneBroker testBroker) throws InterruptedException {
+    final var camundaClient = testBroker.newClientBuilder().build();
+
     // given
+    deployProcesses(camundaClient);
+    final var processInstances = startProcesses(camundaClient);
     final String bpmnProcessId = "service_tasks_v1";
     final ProcessInstanceEvent processInstanceEvent =
-        PROCESS_INSTANCES.stream()
+        processInstances.stream()
             .filter(p -> Objects.equals(bpmnProcessId, p.getBpmnProcessId()))
             .findFirst()
             .orElseThrow();
@@ -409,9 +450,13 @@ public class ProcessInstanceAndFlowNodeInstanceQueryTest {
     assertThat(result.items().getFirst().getProcessInstanceKey()).isEqualTo(processInstanceKey);
   }
 
-  @Test
-  void shouldQueryProcessInstancesByStateActive() {
+  @TestTemplate
+  void shouldQueryProcessInstancesByStateActive(final TestStandaloneBroker testBroker) throws InterruptedException {
+    final var camundaClient = testBroker.newClientBuilder().build();
+
     // when
+    deployProcesses(camundaClient);
+    startProcesses(camundaClient);
     final var result =
         camundaClient.newProcessInstanceQuery().filter(f -> f.state("ACTIVE")).send().join();
 
@@ -421,9 +466,13 @@ public class ProcessInstanceAndFlowNodeInstanceQueryTest {
         .containsExactlyInAnyOrder("service_tasks_v1", "service_tasks_v2", "incident_process_v1");
   }
 
-  @Test
-  void shouldQueryProcessInstancesByStateFilterLike() {
+  @TestTemplate
+  void shouldQueryProcessInstancesByStateFilterLike(final TestStandaloneBroker testBroker) throws InterruptedException {
+    final var camundaClient = testBroker.newClientBuilder().build();
+
     // when
+    deployProcesses(camundaClient);
+    startProcesses(camundaClient);
     final var result =
         camundaClient
             .newProcessInstanceQuery()
@@ -437,9 +486,13 @@ public class ProcessInstanceAndFlowNodeInstanceQueryTest {
         .containsExactlyInAnyOrder("service_tasks_v1", "service_tasks_v2", "incident_process_v1");
   }
 
-  @Test
-  void shouldQueryProcessInstancesByStateFilterNeq() {
+  @TestTemplate
+  void shouldQueryProcessInstancesByStateFilterNeq(final TestStandaloneBroker testBroker) throws InterruptedException {
+    final var camundaClient = testBroker.newClientBuilder().build();
+
     // when
+    deployProcesses(camundaClient);
+    startProcesses(camundaClient);
     final var result =
         camundaClient
             .newProcessInstanceQuery()
@@ -451,10 +504,13 @@ public class ProcessInstanceAndFlowNodeInstanceQueryTest {
     assertThat(result.items().size()).isEqualTo(3);
     assertThat(result.items()).extracting("state").doesNotContain(ProcessInstanceStateEnum.ACTIVE);
   }
+  @TestTemplate
+  void shouldQueryProcessInstancesByStateCompleted(final TestStandaloneBroker testBroker) throws InterruptedException {
+    final var camundaClient = testBroker.newClientBuilder().build();
 
-  @Test
-  void shouldQueryProcessInstancesByStateCompleted() {
     // when
+    deployProcesses(camundaClient);
+    startProcesses(camundaClient);
     final var result =
         camundaClient.newProcessInstanceQuery().filter(f -> f.state("COMPLETED")).send().join();
 
@@ -464,9 +520,13 @@ public class ProcessInstanceAndFlowNodeInstanceQueryTest {
         .containsExactlyInAnyOrder("parent_process_v1", "child_process_v1", "manual_process");
   }
 
-  @Test
-  void shouldQueryProcessInstancesWithIncidents() {
+  @TestTemplate
+  void shouldQueryProcessInstancesWithIncidents(final TestStandaloneBroker testBroker) throws InterruptedException {
+    final var camundaClient = testBroker.newClientBuilder().build();
+
     // when
+    deployProcesses(camundaClient);
+    startProcesses(camundaClient);
     final var result =
         camundaClient.newProcessInstanceQuery().filter(f -> f.hasIncident(true)).send().join();
 
@@ -476,11 +536,15 @@ public class ProcessInstanceAndFlowNodeInstanceQueryTest {
         .containsExactlyInAnyOrder("incident_process_v1");
   }
 
-  @Test
-  void shouldQueryProcessInstancesByParentProcessInstanceKey() {
+  @TestTemplate
+  void shouldQueryProcessInstancesByParentProcessInstanceKey(final TestStandaloneBroker testBroker) throws InterruptedException {
+    final var camundaClient = testBroker.newClientBuilder().build();
+
     // given
+    deployProcesses(camundaClient);
+    final var processInstances = startProcesses(camundaClient);
     final long parentProcessInstanceKey =
-        PROCESS_INSTANCES.stream()
+        processInstances.stream()
             .filter(p -> Objects.equals("parent_process_v1", p.getBpmnProcessId()))
             .findFirst()
             .orElseThrow()
@@ -500,13 +564,18 @@ public class ProcessInstanceAndFlowNodeInstanceQueryTest {
         .containsExactlyInAnyOrder("child_process_v1");
   }
 
-  @Test
-  void shouldQueryProcessInstancesWithReverseSorting() {
+  @TestTemplate
+  void shouldQueryProcessInstancesWithReverseSorting(final TestStandaloneBroker testBroker) throws InterruptedException {
+    final var camundaClient = testBroker.newClientBuilder().build();
+
     // given
+    deployProcesses(camundaClient);
+    startProcesses(camundaClient);
     final List<String> expectedBpmnProcessIds =
         new ArrayList<>(
-            PROCESS_INSTANCES.stream().map(ProcessInstanceEvent::getBpmnProcessId).toList());
-    expectedBpmnProcessIds.add("child_process_v1");
+            camundaClient.newProcessInstanceQuery().send().join().items().stream()
+                .map(ProcessInstance::getProcessDefinitionId)
+                .toList());
     expectedBpmnProcessIds.sort(Comparator.reverseOrder());
 
     // when
@@ -518,15 +587,18 @@ public class ProcessInstanceAndFlowNodeInstanceQueryTest {
             .join();
 
     // then
-    assertThat(result.items().size()).isEqualTo(6);
+    assertThat(result.items().size()).isEqualTo(expectedBpmnProcessIds.size());
     assertThat(result.items().stream().map(ProcessInstance::getProcessDefinitionId).toList())
         .containsExactlyElementsOf(expectedBpmnProcessIds);
   }
 
-  @Test
-  void shouldQueryProcessInstancesByVariableSingle() {
+  @TestTemplate
+  void shouldQueryProcessInstancesByVariableSingle(final TestStandaloneBroker testBroker) throws InterruptedException {
+    final var camundaClient = testBroker.newClientBuilder().build();
+
     // given
-    final List<String> expectedBpmnProcessIds = List.of("service_tasks_v1");
+    deployProcesses(camundaClient);
+    startProcesses(camundaClient);
     final List<ProcessInstanceVariableFilterRequest> variables =
         List.of(new ProcessInstanceVariableFilterRequest().name("xyz").value("\"bar\""));
 
@@ -537,13 +609,16 @@ public class ProcessInstanceAndFlowNodeInstanceQueryTest {
     // then
     assertThat(result.items().size()).isEqualTo(1);
     assertThat(result.items().stream().map(ProcessInstance::getProcessDefinitionId).toList())
-        .containsExactlyInAnyOrderElementsOf(expectedBpmnProcessIds);
+        .containsExactlyInAnyOrder("service_tasks_v1");
   }
 
-  @Test
-  void shouldQueryProcessInstancesByVariableSingleUsingMap() {
+  @TestTemplate
+  void shouldQueryProcessInstancesByVariableSingleUsingMap(final TestStandaloneBroker testBroker) throws InterruptedException {
+    final var camundaClient = testBroker.newClientBuilder().build();
+
     // given
-    final List<String> expectedBpmnProcessIds = List.of("service_tasks_v1");
+    deployProcesses(camundaClient);
+    startProcesses(camundaClient);
 
     // when
     final var result =
@@ -556,13 +631,16 @@ public class ProcessInstanceAndFlowNodeInstanceQueryTest {
     // then
     assertThat(result.items().size()).isEqualTo(1);
     assertThat(result.items().stream().map(ProcessInstance::getProcessDefinitionId).toList())
-        .containsExactlyInAnyOrderElementsOf(expectedBpmnProcessIds);
+        .containsExactlyInAnyOrder("service_tasks_v1");
   }
 
-  @Test
-  void shouldQueryProcessInstancesByVariableMulti() {
+  @TestTemplate
+  void shouldQueryProcessInstancesByVariableMulti(final TestStandaloneBroker testBroker) throws InterruptedException {
+    final var camundaClient = testBroker.newClientBuilder().build();
+
     // given
-    final List<String> expectedBpmnProcessIds = List.of("service_tasks_v1", "service_tasks_v2");
+    deployProcesses(camundaClient);
+    startProcesses(camundaClient);
     final List<ProcessInstanceVariableFilterRequest> variables =
         List.of(
             new ProcessInstanceVariableFilterRequest().name("xyz").value("\"bar\""),
@@ -575,12 +653,16 @@ public class ProcessInstanceAndFlowNodeInstanceQueryTest {
     // then
     assertThat(result.items().size()).isEqualTo(2);
     assertThat(result.items().stream().map(ProcessInstance::getProcessDefinitionId).toList())
-        .containsExactlyInAnyOrderElementsOf(expectedBpmnProcessIds);
+        .containsExactlyInAnyOrder("service_tasks_v1", "service_tasks_v2");
   }
 
-  @Test
-  void shouldSortProcessInstancesByProcessInstanceKey() {
+  @TestTemplate
+  void shouldSortProcessInstancesByProcessInstanceKey(final TestStandaloneBroker testBroker) throws InterruptedException {
+    final var camundaClient = testBroker.newClientBuilder().build();
+
     // when
+    deployProcesses(camundaClient);
+    startProcesses(camundaClient);
     final var resultAsc =
         camundaClient
             .newProcessInstanceQuery()
@@ -597,9 +679,13 @@ public class ProcessInstanceAndFlowNodeInstanceQueryTest {
     assertSorted(resultAsc, resultDesc, ProcessInstance::getProcessInstanceKey);
   }
 
-  @Test
-  void shouldSortProcessInstancesByProcessDefinitionName() {
+  @TestTemplate
+  void shouldSortProcessInstancesByProcessDefinitionName(final TestStandaloneBroker testBroker) throws InterruptedException {
+    final var camundaClient = testBroker.newClientBuilder().build();
+
     // when
+    deployProcesses(camundaClient);
+    startProcesses(camundaClient);
     final var resultAsc =
         camundaClient
             .newProcessInstanceQuery()
@@ -616,9 +702,13 @@ public class ProcessInstanceAndFlowNodeInstanceQueryTest {
     assertSorted(resultAsc, resultDesc, ProcessInstance::getProcessDefinitionName);
   }
 
-  @Test
-  void shouldSortProcessInstancesByProcessDefinitionKey() {
+  @TestTemplate
+  void shouldSortProcessInstancesByProcessDefinitionKey(final TestStandaloneBroker testBroker) throws InterruptedException {
+    final var camundaClient = testBroker.newClientBuilder().build();
+
     // when
+    deployProcesses(camundaClient);
+    startProcesses(camundaClient);
     final var resultAsc =
         camundaClient
             .newProcessInstanceQuery()
@@ -635,9 +725,13 @@ public class ProcessInstanceAndFlowNodeInstanceQueryTest {
     assertSorted(resultAsc, resultDesc, ProcessInstance::getProcessDefinitionKey);
   }
 
-  @Test
-  void shouldSortProcessInstancesByParentProcessInstanceKey() {
+  @TestTemplate
+  void shouldSortProcessInstancesByParentProcessInstanceKey(final TestStandaloneBroker testBroker) throws InterruptedException {
+    final var camundaClient = testBroker.newClientBuilder().build();
+
     // when
+    deployProcesses(camundaClient);
+    startProcesses(camundaClient);
     final var resultAsc =
         camundaClient
             .newProcessInstanceQuery()
@@ -654,9 +748,13 @@ public class ProcessInstanceAndFlowNodeInstanceQueryTest {
     assertSorted(resultAsc, resultDesc, ProcessInstance::getParentProcessInstanceKey);
   }
 
-  @Test
-  void shouldSortProcessInstancesByStartDate() {
+  @TestTemplate
+  void shouldSortProcessInstancesByStartDate(final TestStandaloneBroker testBroker) throws InterruptedException {
+    final var camundaClient = testBroker.newClientBuilder().build();
+
     // when
+    deployProcesses(camundaClient);
+    startProcesses(camundaClient);
     final var resultAsc =
         camundaClient.newProcessInstanceQuery().sort(s -> s.startDate().asc()).send().join();
     final var resultDesc =
@@ -665,9 +763,13 @@ public class ProcessInstanceAndFlowNodeInstanceQueryTest {
     assertSorted(resultAsc, resultDesc, ProcessInstance::getStartDate);
   }
 
-  @Test
-  void shouldSortProcessInstancesByState() {
+  @TestTemplate
+  void shouldSortProcessInstancesByState(final TestStandaloneBroker testBroker) throws InterruptedException {
+    final var camundaClient = testBroker.newClientBuilder().build();
+
     // when
+    deployProcesses(camundaClient);
+    startProcesses(camundaClient);
     final var resultAsc =
         camundaClient.newProcessInstanceQuery().sort(s -> s.state().asc()).send().join();
     final var resultDesc =
@@ -676,8 +778,13 @@ public class ProcessInstanceAndFlowNodeInstanceQueryTest {
     assertSorted(resultAsc, resultDesc, ProcessInstance::getState);
   }
 
-  @Test
-  public void shouldValidateProcessInstancePagination() {
+  @TestTemplate
+  void shouldValidateProcessInstancePagination(final TestStandaloneBroker testBroker) throws InterruptedException {
+    final var camundaClient = testBroker.newClientBuilder().build();
+
+    // when
+    deployProcesses(camundaClient);
+    startProcesses(camundaClient);
     final var result = camundaClient.newProcessInstanceQuery().page(p -> p.limit(2)).send().join();
     assertThat(result.items().size()).isEqualTo(2);
     final var key = result.items().getFirst().getProcessInstanceKey();
@@ -702,8 +809,13 @@ public class ProcessInstanceAndFlowNodeInstanceQueryTest {
     assertThat(resultBefore.items().getFirst().getProcessInstanceKey()).isEqualTo(key);
   }
 
-  @Test
-  public void shouldValidateFlowNodeInstancePagination() {
+  @TestTemplate
+  void shouldValidateFlowNodeInstancePagination(final TestStandaloneBroker testBroker) throws InterruptedException {
+    final var camundaClient = testBroker.newClientBuilder().build();
+
+    // when
+    deployProcesses(camundaClient);
+    startProcesses(camundaClient);
     final var result = camundaClient.newFlownodeInstanceQuery().page(p -> p.limit(2)).send().join();
     assertThat(result.items().size()).isEqualTo(2);
     final var key = result.items().getFirst().getFlowNodeInstanceKey();
@@ -726,344 +838,5 @@ public class ProcessInstanceAndFlowNodeInstanceQueryTest {
             .join();
     assertThat(result.items().size()).isEqualTo(2);
     assertThat(resultBefore.items().getFirst().getFlowNodeInstanceKey()).isEqualTo(key);
-  }
-
-  @Test
-  void shouldQueryFlowNodeInstanceByFlowNodeInstanceKey() {
-    // given
-    final var key = flowNodeInstance.getFlowNodeInstanceKey();
-    // when
-    final var result =
-        camundaClient
-            .newFlownodeInstanceQuery()
-            .filter(f -> f.flowNodeInstanceKey(key))
-            .send()
-            .join();
-
-    // then
-    assertThat(result.items().size()).isEqualTo(1);
-    assertThat(result.items().getFirst()).isEqualTo(flowNodeInstance);
-  }
-
-  @Test
-  void shouldSortFlowNodeInstanceByFlowNodeInstanceKey() {
-    // when
-    final var resultAsc =
-        camundaClient
-            .newFlownodeInstanceQuery()
-            .sort(s -> s.flowNodeInstanceKey().asc())
-            .send()
-            .join();
-    final var resultDesc =
-        camundaClient
-            .newFlownodeInstanceQuery()
-            .sort(s -> s.flowNodeInstanceKey().desc())
-            .send()
-            .join();
-
-    assertSorted(resultAsc, resultDesc, FlowNodeInstance::getFlowNodeInstanceKey);
-  }
-
-  @Test
-  void shouldQueryFlowNodeInstanceQueryByProcessInstanceKey() {
-    // given
-    final var processInstanceKey = flowNodeInstance.getProcessInstanceKey();
-    // when
-    final var result =
-        camundaClient
-            .newFlownodeInstanceQuery()
-            .filter(f -> f.processInstanceKey(processInstanceKey))
-            .send()
-            .join();
-
-    // then
-    assertThat(result.items().size()).isEqualTo(5);
-    assertThat(result.items().getFirst().getProcessInstanceKey()).isEqualTo(processInstanceKey);
-    assertThat(result.items().get(1).getProcessInstanceKey()).isEqualTo(processInstanceKey);
-  }
-
-  @Test
-  void shouldSortFlowNodeInstanceByProcessInstanceKey() {
-    // when
-    final var resultAsc =
-        camundaClient
-            .newFlownodeInstanceQuery()
-            .sort(s -> s.processInstanceKey().asc())
-            .send()
-            .join();
-    final var resultDesc =
-        camundaClient
-            .newFlownodeInstanceQuery()
-            .sort(s -> s.processInstanceKey().desc())
-            .send()
-            .join();
-
-    assertSorted(resultAsc, resultDesc, FlowNodeInstance::getProcessInstanceKey);
-  }
-
-  @Test
-  void shouldGetFlowNodeInstanceByKey() {
-    // given
-    final var flowNodeInstanceKey = flowNodeInstance.getFlowNodeInstanceKey();
-
-    // when
-    final var result =
-        camundaClient.newFlowNodeInstanceGetRequest(flowNodeInstanceKey).send().join();
-
-    // then
-    assertThat(result).isNotNull();
-    assertThat(result).isEqualTo(flowNodeInstance);
-  }
-
-  @Test
-  void shouldQueryFlowNodeInstanceByFlowNodeId() {
-    // given
-    final var flowNodeId = flowNodeInstance.getFlowNodeId();
-    // when
-    final var result =
-        camundaClient
-            .newFlownodeInstanceQuery()
-            .filter(f -> f.flowNodeId(flowNodeId))
-            .send()
-            .join();
-
-    // then
-    assertThat(result.items().size()).isEqualTo(1);
-    assertThat(result.items().getFirst().getFlowNodeId()).isEqualTo(flowNodeId);
-    assertThat(result.items().getFirst().getProcessDefinitionId()).isNotNull();
-    assertThat(result.items().getFirst().getProcessDefinitionId())
-        .isEqualTo(flowNodeInstance.getProcessDefinitionId());
-  }
-
-  @Test
-  void shouldSortFlowNodeInstanceByFlowNodeId() {
-    // when
-    final var resultAsc =
-        camundaClient.newFlownodeInstanceQuery().sort(s -> s.flowNodeId().asc()).send().join();
-    final var resultDesc =
-        camundaClient.newFlownodeInstanceQuery().sort(s -> s.flowNodeId().desc()).send().join();
-    assertSorted(resultAsc, resultDesc, FlowNodeInstance::getFlowNodeId);
-  }
-
-  @Test
-  void shouldHaveCorrectFlowNodeInstanceFlowNodeName() {
-    // when
-    final var result =
-        camundaClient
-            .newFlownodeInstanceQuery()
-            .filter(f -> f.flowNodeId("noOpTask"))
-            .send()
-            .join();
-    // then
-    assertThat(result.items()).hasSize(1);
-    assertThat(result.items().getFirst().getFlowNodeName()).isEqualTo("No Op");
-  }
-
-  @Test
-  void shouldUseFlowNodeInstanceFlowNodeIdIfNameNotSet() {
-    // when
-    final var result =
-        camundaClient
-            .newFlownodeInstanceQuery()
-            .filter(f -> f.flowNodeId("Event_1p0nsc7"))
-            .send()
-            .join();
-    // then
-    assertThat(result.items()).hasSize(1);
-    assertThat(result.items().getFirst().getFlowNodeName()).isEqualTo("Event_1p0nsc7");
-  }
-
-  @Test
-  void shouldQueryFlowNodeInstanceByProcessDefinitionKey() {
-    // given
-    final var processDefinitionKey = flowNodeInstance.getProcessDefinitionKey();
-    // when
-    final var result =
-        camundaClient
-            .newFlownodeInstanceQuery()
-            .filter(f -> f.processDefinitionKey(processDefinitionKey))
-            .send()
-            .join();
-
-    // then
-    assertThat(result.items().size()).isEqualTo(5);
-    assertThat(result.items().getFirst().getProcessDefinitionKey()).isEqualTo(processDefinitionKey);
-  }
-
-  @Test
-  void shouldSortFlowNodeInstanceByProcessDefinitionKey() {
-    // when
-    final var resultAsc =
-        camundaClient
-            .newFlownodeInstanceQuery()
-            .sort(s -> s.processDefinitionKey().asc())
-            .send()
-            .join();
-    final var resultDesc =
-        camundaClient
-            .newFlownodeInstanceQuery()
-            .sort(s -> s.processDefinitionKey().desc())
-            .send()
-            .join();
-    assertSorted(resultAsc, resultDesc, FlowNodeInstance::getProcessDefinitionKey);
-  }
-
-  @Test
-  void shouldQueryFlowNodeInstanceByIncidentKey() {
-    // given
-    final var incidentKey = flowNodeInstanceWithIncident.getIncidentKey();
-    // when
-    final var result =
-        camundaClient
-            .newFlownodeInstanceQuery()
-            .filter(f -> f.incidentKey(incidentKey))
-            .send()
-            .join();
-
-    // then
-    assertThat(result.items().size()).isEqualTo(1);
-    assertThat(result.items().getFirst().getIncidentKey()).isEqualTo(incidentKey);
-  }
-
-  @Test
-  void shouldSortFlowNodeInstanceByIncidentKey() {
-    // when
-    final var resultAsc =
-        camundaClient.newFlownodeInstanceQuery().sort(s -> s.incidentKey().asc()).send().join();
-    final var resultDesc =
-        camundaClient.newFlownodeInstanceQuery().sort(s -> s.incidentKey().desc()).send().join();
-
-    assertSorted(resultAsc, resultDesc, FlowNodeInstance::getIncidentKey);
-  }
-
-  @Test
-  void shouldQueryFlowNodeInstanceByState() {
-    // given
-    final var state = flowNodeInstance.getState();
-    // when
-    final var result =
-        camundaClient.newFlownodeInstanceQuery().filter(f -> f.state(state)).send().join();
-
-    // then
-    assertThat(result.items().size()).isEqualTo(17);
-    assertThat(result.items().getFirst().getState()).isEqualTo(state);
-  }
-
-  @Test
-  void shouldSortFlowNodeInstanceByState() {
-    // when
-    final var resultAsc =
-        camundaClient.newFlownodeInstanceQuery().sort(s -> s.state().asc()).send().join();
-    final var resultDesc =
-        camundaClient.newFlownodeInstanceQuery().sort(s -> s.state().desc()).send().join();
-
-    assertSorted(resultAsc, resultDesc, flowNodeInstance -> flowNodeInstance.getState().name());
-  }
-
-  @Test
-  void shouldQueryFlowNodeInstanceByIncident() {
-    // given
-    final var hasIncident = flowNodeInstanceWithIncident.getIncident();
-    // when
-    final var result =
-        camundaClient
-            .newFlownodeInstanceQuery()
-            .filter(f -> f.hasIncident(hasIncident))
-            .send()
-            .join();
-
-    // then
-    assertThat(result.items().size()).isEqualTo(1);
-    assertThat(result.items().getFirst().getIncident()).isEqualTo(hasIncident);
-  }
-
-  @Test
-  void shouldQueryFlowNodeInstanceByType() {
-    // given
-    final var type = flowNodeInstance.getType();
-    // when
-    final var result =
-        camundaClient.newFlownodeInstanceQuery().filter(f -> f.type(type)).send().join();
-
-    // then
-    assertThat(result.items().size()).isEqualTo(3);
-    assertThat(result.items().getFirst().getType()).isEqualTo(type);
-    assertThat(result.items().get(1).getType()).isEqualTo(type);
-    assertThat(result.items().get(2).getType()).isEqualTo(type);
-  }
-
-  @Test
-  void shouldSortFlowNodeInstanceByType() {
-    // when
-    final var resultAsc =
-        camundaClient
-            .newFlownodeInstanceQuery()
-            .page(p -> p.limit(100))
-            .sort(s -> s.type().asc())
-            .send()
-            .join();
-    final var resultDesc =
-        camundaClient
-            .newFlownodeInstanceQuery()
-            .page(p -> p.limit(100))
-            .sort(s -> s.type().desc())
-            .send()
-            .join();
-
-    assertSorted(resultAsc, resultDesc, flowNodeInstance -> flowNodeInstance.getType().name());
-  }
-
-  @Test
-  void shouldQueryFlowNodeInstanceByTenantId() {
-    // given
-    final var tenantId = flowNodeInstance.getTenantId();
-    // when
-    final var result =
-        camundaClient.newFlownodeInstanceQuery().filter(f -> f.tenantId(tenantId)).send().join();
-
-    // then
-    assertThat(result.page().totalItems()).isEqualTo(20);
-    assertThat(result.items()).allMatch(f -> f.getTenantId().equals(tenantId));
-  }
-
-  @Test
-  public void shouldQueryFlowNodeInstanceValidatePagination() {
-    final var result = camundaClient.newFlownodeInstanceQuery().page(p -> p.limit(2)).send().join();
-    assertThat(result.items().size()).isEqualTo(2);
-    final var key = result.items().getFirst().getFlowNodeInstanceKey();
-    // apply searchAfter
-    final var resultAfter =
-        camundaClient
-            .newFlownodeInstanceQuery()
-            .page(p -> p.searchAfter(Collections.singletonList(key)))
-            .send()
-            .join();
-
-    assertThat(resultAfter.items().size()).isEqualTo(19);
-    final var keyAfter = resultAfter.items().getFirst().getFlowNodeInstanceKey();
-    // apply searchBefore
-    final var resultBefore =
-        camundaClient
-            .newFlownodeInstanceQuery()
-            .page(p -> p.searchBefore(Collections.singletonList(keyAfter)))
-            .send()
-            .join();
-    assertThat(result.items().size()).isEqualTo(2);
-    assertThat(resultBefore.items().getFirst().getFlowNodeInstanceKey()).isEqualTo(key);
-  }
-
-  @Test
-  void shouldSearchByFromWithLimit() {
-    // when
-    final var resultAll = camundaClient.newFlownodeInstanceQuery().send().join();
-    final var thirdKey = resultAll.items().get(2).getFlowNodeInstanceKey();
-
-    final var resultSearchFrom =
-        camundaClient.newFlownodeInstanceQuery().page(p -> p.limit(2).from(2)).send().join();
-
-    // then
-    assertThat(resultSearchFrom.items().size()).isEqualTo(2);
-    assertThat(resultSearchFrom.items().stream().findFirst().get().getFlowNodeInstanceKey())
-        .isEqualTo(thirdKey);
   }
 }

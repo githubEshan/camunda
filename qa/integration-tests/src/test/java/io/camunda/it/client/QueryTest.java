@@ -13,6 +13,7 @@ import io.camunda.client.CamundaClient;
 import io.camunda.client.api.command.CreateProcessInstanceCommandStep1;
 import io.camunda.client.api.response.DeploymentEvent;
 import io.camunda.client.api.response.ProcessInstanceEvent;
+import io.camunda.client.api.search.response.FlowNodeInstance;
 import io.camunda.client.api.search.response.SearchQueryResponse;
 import java.time.Duration;
 import java.util.Comparator;
@@ -20,6 +21,8 @@ import java.util.List;
 import java.util.Objects;
 import java.util.function.Function;
 import org.awaitility.Awaitility;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * This class provides several static methods to facilitate common operations such as deploying
@@ -48,6 +51,8 @@ import org.awaitility.Awaitility;
  * }</pre>
  */
 public class QueryTest {
+
+  static final Logger LOGGER = LoggerFactory.getLogger(QueryTest.class);
 
   public static DeploymentEvent deployResource(
       final CamundaClient camundaClient, final String resourceName) {
@@ -104,6 +109,8 @@ public class QueryTest {
         .untilAsserted(
             () -> {
               final var result = camundaClient.newFlownodeInstanceQuery().send().join();
+              final var flowNodeNames = result.items().stream().map(FlowNodeInstance::getFlowNodeName).sorted().toList();
+              LOGGER.error("Flow node names: {}", flowNodeNames);
               assertThat(result.page().totalItems()).isEqualTo(expectedFlowNodeInstances);
             });
   }
