@@ -46,4 +46,7 @@ public interface SearchEngineClient {
       final int partitionId, final List<IndexDescriptor> importPositionIndices);
 
   void reindex(Map<String, String> sourceToTargetIndices);
+
+  void cloneArchivedIndices(
+      final String oldOperatePrefix, final String oldTasklistPrefix, final String newPrefix);
 }

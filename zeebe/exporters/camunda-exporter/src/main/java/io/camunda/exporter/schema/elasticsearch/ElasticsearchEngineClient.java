@@ -265,6 +265,69 @@ public class ElasticsearchEngineClient implements SearchEngineClient {
     CompletableFuture.allOf(reindexFutures.toArray(new CompletableFuture[0])).join();
   }
 
+  @Override
+  public void cloneArchivedIndices(
+      final String oldOperatePrefix, final String oldTasklistPrefix, final String newPrefix) {
+
+    try {
+      final var operateArchivedIndices = getArchivedIndices(oldOperatePrefix);
+      final var tasklistArchivedIndices = getArchivedIndices(oldTasklistPrefix);
+
+      markIndexReadOnly(operateArchivedIndices);
+      markIndexReadOnly(tasklistArchivedIndices);
+
+      LOG.info("Migrating Operate archived indices");
+      for (final var srcIdx : operateArchivedIndices) {
+        final var targetIdx = srcIdx.replace(oldOperatePrefix, newPrefix + "-operate");
+        cloneIndex(srcIdx, targetIdx);
+      }
+
+      LOG.info("Migrating Tasklist archived indices");
+      for (final var srcIdx : tasklistArchivedIndices) {
+        final var targetIdx = srcIdx.replace(oldOperatePrefix, newPrefix + "-tasklist");
+        cloneIndex(srcIdx, targetIdx);
+      }
+
+    } catch (final Exception e) {
+      LOG.error(
+          "Failed to retrieve archived indices with prefixes [{}],[{}]",
+          oldOperatePrefix,
+          oldTasklistPrefix,
+          e);
+    }
+  }
+
+  private List<String> getArchivedIndices(final String prefix) throws IOException {
+    return client.cat().indices(i -> i.index(prefix + "*")).valueBody().stream()
+        .map(IndicesRecord::index)
+        .filter(index -> Pattern.matches(".*\\d{4}-\\d{2}-\\d{2}$", index))
+        .toList();
+  }
+
+  private void markIndexReadOnly(final List<String> indices) throws IOException {
+    client
+        .indices()
+        .putSettings(
+            r -> r.index(indices).settings(s -> s.index(i -> i.blocks(b -> b.write(true)))));
+  }
+
+  private void cloneIndex(final String src, final String target) throws IOException {
+    final var targetAlias = target.substring(0, target.length() - 10) + "alias";
+    client
+        .indices()
+        .clone(
+            c ->
+                c.index(src)
+                    .target(target)
+                    .settings(
+                        Map.of(
+                            "index.blocks.write",
+                            JsonData.of(false),
+                            "number_of_replicas",
+                            JsonData.of(0)))
+                    .aliases(targetAlias, new Alias.Builder().build()));
+  }
+
   private SearchRequest allImportPositionDocuments(
       final int partitionId, final List<IndexDescriptor> importPositionIndices) {
     final var importPositionIndicesNames =

@@ -236,6 +236,10 @@ public class OpensearchEngineClient implements SearchEngineClient {
   @Override
   public void reindex(final Map<String, String> sourceToTargetIndices) {}
 
+  @Override
+  public void cloneArchivedIndices(
+      final String oldOperatePrefix, final String oldTasklistPrefix, final String newPrefix) {}
+
   private SearchRequest allImportPositionDocuments(
       final int partitionId, final List<IndexDescriptor> importPositionIndices) {
     final var importPositionIndicesNames =
