@@ -44,4 +44,6 @@ public interface SearchEngineClient {
 
   boolean importersCompleted(
       final int partitionId, final List<IndexDescriptor> importPositionIndices);
+
+  void reindex(Map<String, String> sourceToTargetIndices);
 }

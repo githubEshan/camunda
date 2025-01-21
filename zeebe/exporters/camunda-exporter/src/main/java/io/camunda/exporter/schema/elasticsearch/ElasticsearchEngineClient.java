@@ -13,8 +13,11 @@ import static io.camunda.exporter.utils.SearchEngineClientUtils.mapToSettings;
 
 import co.elastic.clients.elasticsearch.ElasticsearchClient;
 import co.elastic.clients.elasticsearch._types.ElasticsearchException;
+import co.elastic.clients.elasticsearch._types.OpType;
 import co.elastic.clients.elasticsearch._types.mapping.Property;
 import co.elastic.clients.elasticsearch._types.mapping.TypeMapping;
+import co.elastic.clients.elasticsearch.cat.indices.IndicesRecord;
+import co.elastic.clients.elasticsearch.core.ReindexRequest;
 import co.elastic.clients.elasticsearch.core.SearchRequest;
 import co.elastic.clients.elasticsearch.ilm.PutLifecycleRequest;
 import co.elastic.clients.elasticsearch.indices.Alias;
@@ -48,6 +51,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Set;
+import java.util.concurrent.CompletableFuture;
+import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -222,6 +227,42 @@ public class ElasticsearchEngineClient implements SearchEngineClient {
       LOG.error(errMsg, e);
       return false;
     }
+  }
+
+  @Override
+  public void reindex(final Map<String, String> sourceToTargetIndices) {
+    final var reindexFutures =
+        sourceToTargetIndices.entrySet().stream()
+            .map(
+                (ent) -> {
+                  final var src = ent.getKey();
+                  final var dest = ent.getValue();
+
+                  return CompletableFuture.supplyAsync(
+                          () -> {
+                            final var reindexRequest =
+                                new ReindexRequest.Builder()
+                                    .source(s -> s.index(src))
+                                    .dest(d -> d.index(dest).opType(OpType.Create))
+                                    .build();
+
+                            try {
+                              return client.reindex(reindexRequest);
+                            } catch (final Exception e) {
+                              throw new IllegalStateException(e);
+                            }
+                          })
+                      .thenAccept(
+                          response -> LOG.info("Successfully re-indexed [{}] to [{}]", src, dest))
+                      .exceptionally(
+                          e -> {
+                            LOG.error("Failed to re-index [{}] to [{}]", src, dest, e);
+                            return null;
+                          });
+                })
+            .toList();
+
+    CompletableFuture.allOf(reindexFutures.toArray(new CompletableFuture[0])).join();
   }
 
   private SearchRequest allImportPositionDocuments(
