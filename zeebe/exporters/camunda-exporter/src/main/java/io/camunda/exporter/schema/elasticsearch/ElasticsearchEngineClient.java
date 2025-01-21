@@ -290,7 +290,7 @@ public class ElasticsearchEngineClient implements SearchEngineClient {
 
     } catch (final Exception e) {
       LOG.error(
-          "Failed to retrieve archived indices with prefixes [{}],[{}]",
+          "Failed to migrate archived indices with prefixes [{}],[{}]",
           oldOperatePrefix,
           oldTasklistPrefix,
           e);

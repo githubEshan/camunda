@@ -13,6 +13,7 @@ import io.camunda.application.commons.migration.SchemaManagerHelper;
 import io.camunda.exporter.adapters.ClientAdapter;
 import io.camunda.exporter.config.ExporterConfiguration;
 import io.camunda.operate.property.OperateProperties;
+import io.camunda.search.connect.configuration.DatabaseType;
 import io.camunda.tasklist.property.TasklistProperties;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -49,6 +50,7 @@ public class StandalonePrefixMigration {
     final var tasklistProperties = applicationContext.getBean(TasklistProperties.class);
     final SchemaManagerConnectConfiguration connectConfiguration =
         applicationContext.getBean(SchemaManagerConnectConfiguration.class);
+    final var isElasticsearch = connectConfiguration.getTypeEnum() == DatabaseType.ELASTICSEARCH;
 
     LOG.info("Creating/updating Elasticsearch schema for Camunda ...");
 
@@ -62,8 +64,15 @@ public class StandalonePrefixMigration {
     exporterConfig.setConnect(connectConfiguration);
 
     final var searchEngineClient = ClientAdapter.of(exporterConfig).getSearchEngineClient();
-    final var operatePrefix = operateProperties.getElasticsearch().getIndexPrefix();
-    final var tasklistPrefix = tasklistProperties.getElasticsearch().getIndexPrefix();
+
+    final var operatePrefix =
+        isElasticsearch
+            ? operateProperties.getElasticsearch().getIndexPrefix()
+            : operateProperties.getOpensearch().getIndexPrefix();
+    final var tasklistPrefix =
+        isElasticsearch
+            ? tasklistProperties.getElasticsearch().getIndexPrefix()
+            : tasklistProperties.getOpenSearch().getIndexPrefix();
 
     PrefixMigrationHelper.migrateRuntimeIndices(
         operatePrefix, tasklistPrefix, connectConfiguration, searchEngineClient);
