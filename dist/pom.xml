@@ -780,6 +780,10 @@
               <id>camunda</id>
               <mainClass>io.camunda.application.StandaloneCamunda</mainClass>
             </program>
+            <program>
+              <id>prefix-migration</id>
+              <mainClass>io.camunda.application.StandalonePrefixMigration</mainClass>
+            </program>
           </programs>
           <repositoryLayout>flat</repositoryLayout>
           <repositoryName>lib</repositoryName>
