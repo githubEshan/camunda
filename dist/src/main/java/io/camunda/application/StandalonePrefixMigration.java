@@ -8,6 +8,7 @@
 package io.camunda.application;
 
 import io.camunda.application.StandaloneSchemaManager.SchemaManagerConnectConfiguration;
+import io.camunda.application.commons.migration.PrefixMigrationConfig;
 import io.camunda.application.commons.migration.PrefixMigrationHelper;
 import io.camunda.application.commons.migration.SchemaManagerHelper;
 import io.camunda.exporter.adapters.ClientAdapter;
@@ -40,7 +41,8 @@ public class StandalonePrefixMigration {
                 StandaloneSchemaManager.class,
                 SchemaManagerConnectConfiguration.class,
                 TasklistProperties.class,
-                OperateProperties.class)
+                OperateProperties.class,
+                PrefixMigrationConfig.class)
             .addCommandLineProperties(true)
             .build(args);
 
@@ -74,8 +76,10 @@ public class StandalonePrefixMigration {
             ? tasklistProperties.getElasticsearch().getIndexPrefix()
             : tasklistProperties.getOpenSearch().getIndexPrefix();
 
+    final var executor = applicationContext.getBean(PrefixMigrationConfig.class).getTaskExecutor();
+
     PrefixMigrationHelper.migrateRuntimeIndices(
-        operatePrefix, tasklistPrefix, connectConfiguration, searchEngineClient);
+        operatePrefix, tasklistPrefix, connectConfiguration, searchEngineClient, executor);
 
     LOG.info("... finished migrating runtime indices");
 

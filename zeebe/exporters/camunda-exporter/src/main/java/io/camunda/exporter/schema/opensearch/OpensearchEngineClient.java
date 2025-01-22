@@ -21,6 +21,7 @@ import io.camunda.exporter.schema.IndexMapping;
 import io.camunda.exporter.schema.IndexMappingProperty;
 import io.camunda.exporter.schema.MappingSource;
 import io.camunda.exporter.schema.SearchEngineClient;
+import io.camunda.exporter.utils.ReindexResult;
 import io.camunda.webapps.schema.descriptors.IndexDescriptor;
 import io.camunda.webapps.schema.descriptors.IndexTemplateDescriptor;
 import io.camunda.webapps.schema.descriptors.operate.index.ImportPositionIndex;
@@ -53,6 +54,7 @@ import org.opensearch.client.opensearch.indices.get_index_template.IndexTemplate
 import org.opensearch.client.opensearch.indices.put_index_template.IndexTemplateMapping;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
 
 public class OpensearchEngineClient implements SearchEngineClient {
   private static final Logger LOG = LoggerFactory.getLogger(OpensearchEngineClient.class);
@@ -234,7 +236,10 @@ public class OpensearchEngineClient implements SearchEngineClient {
   }
 
   @Override
-  public void reindex(final Map<String, String> sourceToTargetIndices) {}
+  public List<ReindexResult> reindex(
+      final Map<String, String> sourceToTargetIndices, final ThreadPoolTaskExecutor executor) {
+    return List.of();
+  }
 
   @Override
   public void cloneArchivedIndices(
