@@ -41,6 +41,7 @@ import io.camunda.exporter.schema.IndexMappingProperty;
 import io.camunda.exporter.schema.MappingSource;
 import io.camunda.exporter.schema.SearchEngineClient;
 import io.camunda.exporter.utils.ReindexResult;
+import io.camunda.exporter.utils.SearchEngineClientUtils;
 import io.camunda.webapps.schema.descriptors.IndexDescriptor;
 import io.camunda.webapps.schema.descriptors.IndexTemplateDescriptor;
 import io.camunda.webapps.schema.descriptors.operate.index.ImportPositionIndex;
@@ -52,7 +53,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Set;
-import java.util.concurrent.CompletableFuture;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 import org.slf4j.Logger;
@@ -234,41 +234,23 @@ public class ElasticsearchEngineClient implements SearchEngineClient {
   @Override
   public List<ReindexResult> reindex(
       final Map<String, String> sourceToTargetIndices, final ThreadPoolTaskExecutor executor) {
-    final var reindexFutures =
-        sourceToTargetIndices.entrySet().stream()
-            .map(
-                (ent) -> {
-                  final var src = ent.getKey();
-                  final var dest = ent.getValue();
+    return SearchEngineClientUtils.reindex(
+        sourceToTargetIndices,
+        LOG,
+        executor,
+        (src, dest) -> {
+          final var reindexRequest =
+              new ReindexRequest.Builder()
+                  .source(s -> s.index(src))
+                  .dest(d -> d.index(dest).opType(OpType.Create))
+                  .build();
 
-                  return CompletableFuture.supplyAsync(
-                          () -> {
-                            final var reindexRequest =
-                                new ReindexRequest.Builder()
-                                    .source(s -> s.index(src))
-                                    .dest(d -> d.index(dest).opType(OpType.Create))
-                                    .build();
-
-                            try {
-                              return client.reindex(reindexRequest);
-                            } catch (final IOException e) {
-                              throw new RuntimeException(e);
-                            }
-                          })
-                      .thenAccept(
-                          response -> LOG.info("Successfully re-indexed [{}] to [{}]", src, dest))
-                      .thenApply(response -> new ReindexResult(true, src, dest, null))
-                      .exceptionally(
-                          e -> {
-                            LOG.error("Failed to re-index [{}] to [{}]", src, dest, e);
-                            return new ReindexResult(false, src, dest, e);
-                          });
-                })
-            .toList();
-
-    CompletableFuture.allOf(reindexFutures.toArray(new CompletableFuture[0])).join();
-
-    return reindexFutures.stream().map(CompletableFuture::join).toList();
+          try {
+            client.reindex(reindexRequest);
+          } catch (final IOException e) {
+            throw new RuntimeException(e);
+          }
+        });
   }
 
   @Override

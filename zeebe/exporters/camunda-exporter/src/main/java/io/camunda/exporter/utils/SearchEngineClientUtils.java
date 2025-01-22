@@ -19,9 +19,13 @@ import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.CompletableFuture;
+import java.util.function.BiConsumer;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 import org.apache.commons.io.IOUtils;
+import org.slf4j.Logger;
+import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
 
 public final class SearchEngineClientUtils {
   private static final ObjectMapper MAPPER = new ObjectMapper();
@@ -62,6 +66,44 @@ public final class SearchEngineClientUtils {
               "Failed to serialise settings in PutSettingsRequest [%s]", settingsMap.toString()),
           e);
     }
+  }
+
+  public static List<ReindexResult> reindex(
+      final Map<String, String> sourceToTargetIndices,
+      final Logger LOG,
+      final ThreadPoolTaskExecutor executor,
+      final BiConsumer<String, String> reindexTask) {
+    final var reindexFutures =
+        sourceToTargetIndices.entrySet().stream()
+            .map(
+                (ent) -> {
+                  final var src = ent.getKey();
+                  final var dest = ent.getValue();
+
+                  return CompletableFuture.supplyAsync(
+                          () -> {
+                            try {
+                              reindexTask.accept(src, dest);
+                              return null;
+                            } catch (final Exception e) {
+                              throw new RuntimeException(e);
+                            }
+                          },
+                          executor)
+                      .thenAccept(
+                          response -> LOG.info("Successfully re-indexed [{}] to [{}]", src, dest))
+                      .thenApply(response -> new ReindexResult(true, src, dest, null))
+                      .exceptionally(
+                          e -> {
+                            LOG.error("Failed to re-index [{}] to [{}]", src, dest, e);
+                            return new ReindexResult(false, src, dest, e);
+                          });
+                })
+            .toList();
+
+    CompletableFuture.allOf(reindexFutures.toArray(new CompletableFuture[0])).join();
+
+    return reindexFutures.stream().map(CompletableFuture::join).toList();
   }
 
   public static boolean allImportersCompleted(
