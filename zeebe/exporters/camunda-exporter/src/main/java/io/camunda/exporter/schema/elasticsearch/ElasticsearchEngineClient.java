@@ -260,9 +260,9 @@ public class ElasticsearchEngineClient implements SearchEngineClient {
                             return null;
                           });
                 })
-            .toList();
+            .toArray(CompletableFuture[]::new);
 
-    CompletableFuture.allOf(reindexFutures.toArray(new CompletableFuture[0])).join();
+    CompletableFuture.allOf((new CompletableFuture[0])).join();
   }
 
   @Override

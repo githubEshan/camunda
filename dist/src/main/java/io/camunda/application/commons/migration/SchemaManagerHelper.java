@@ -14,8 +14,12 @@ import io.camunda.exporter.schema.SearchEngineClient;
 import io.camunda.search.connect.configuration.ConnectConfiguration;
 import io.camunda.search.connect.configuration.DatabaseType;
 import io.camunda.webapps.schema.descriptors.IndexDescriptors;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 public final class SchemaManagerHelper {
+  private static final Logger LOG = LoggerFactory.getLogger(SchemaManagerHelper.class);
+
   private SchemaManagerHelper() {}
 
   public static void createSchema(final ConnectConfiguration connectConfig) {
@@ -28,10 +32,16 @@ public final class SchemaManagerHelper {
     final IndexDescriptors indexDescriptors =
         new IndexDescriptors(connectConfig.getIndexPrefix(), isElasticsearch);
 
-    final SearchEngineClient client = ClientAdapter.of(config).getSearchEngineClient();
+    final ClientAdapter clientAdapter = ClientAdapter.of(config);
+    final SearchEngineClient client = clientAdapter.getSearchEngineClient();
     final SchemaManager schemaManager =
         new SchemaManager(client, indexDescriptors.indices(), indexDescriptors.templates(), config);
 
     schemaManager.startup();
+    try {
+      clientAdapter.close();
+    } catch (final Exception e) {
+      LOG.error("Error closing search engine client", e);
+    }
   }
 }
