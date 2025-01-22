@@ -70,7 +70,7 @@ public final class SearchEngineClientUtils {
 
   public static List<ReindexResult> reindex(
       final Map<String, String> sourceToTargetIndices,
-      final Logger LOG,
+      final Logger log,
       final ThreadPoolTaskExecutor executor,
       final BiConsumer<String, String> reindexTask) {
     final var reindexFutures =
@@ -91,11 +91,11 @@ public final class SearchEngineClientUtils {
                           },
                           executor)
                       .thenAccept(
-                          response -> LOG.info("Successfully re-indexed [{}] to [{}]", src, dest))
+                          response -> log.info("Successfully re-indexed [{}] to [{}]", src, dest))
                       .thenApply(response -> new ReindexResult(true, src, dest, null))
                       .exceptionally(
                           e -> {
-                            LOG.error("Failed to re-index [{}] to [{}]", src, dest, e);
+                            log.error("Failed to re-index [{}] to [{}]", src, dest, e);
                             return new ReindexResult(false, src, dest, e);
                           });
                 })
