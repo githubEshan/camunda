@@ -268,32 +268,27 @@ public class ElasticsearchEngineClient implements SearchEngineClient {
   @Override
   public void cloneArchivedIndices(
       final String oldOperatePrefix, final String oldTasklistPrefix, final String newPrefix) {
-
     try {
-      final var operateArchivedIndices = getArchivedIndices(oldOperatePrefix);
-      final var tasklistArchivedIndices = getArchivedIndices(oldTasklistPrefix);
-
-      markIndexReadOnly(operateArchivedIndices);
-      markIndexReadOnly(tasklistArchivedIndices);
-
-      LOG.info("Migrating Operate archived indices");
-      for (final var srcIdx : operateArchivedIndices) {
-        final var targetIdx = srcIdx.replace(oldOperatePrefix, newPrefix + "-operate");
-        cloneIndex(srcIdx, targetIdx);
-      }
-
-      LOG.info("Migrating Tasklist archived indices");
-      for (final var srcIdx : tasklistArchivedIndices) {
-        final var targetIdx = srcIdx.replace(oldOperatePrefix, newPrefix + "-tasklist");
-        cloneIndex(srcIdx, targetIdx);
-      }
-
+      cloneIndicesWithPrefix(oldOperatePrefix, newPrefix + "-operate");
+      cloneIndicesWithPrefix(oldTasklistPrefix, newPrefix + "-tasklist");
     } catch (final Exception e) {
       LOG.error(
           "Failed to migrate archived indices with prefixes [{}],[{}]",
           oldOperatePrefix,
           oldTasklistPrefix,
           e);
+    }
+  }
+
+  private void cloneIndicesWithPrefix(final String oldPrefix, final String newPrefix)
+      throws IOException {
+    final var archivedIndices = getArchivedIndices(oldPrefix);
+    markIndexReadOnly(archivedIndices);
+
+    LOG.info("Migrating archived indices for prefix: {}", oldPrefix);
+    for (final var srcIdx : archivedIndices) {
+      final var targetIdx = srcIdx.replace(oldPrefix, newPrefix);
+      cloneIndex(srcIdx, targetIdx);
     }
   }
 
