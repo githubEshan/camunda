@@ -26,10 +26,8 @@ import java.util.List;
 import org.awaitility.Awaitility;
 import org.junit.jupiter.api.AutoClose;
 import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 
-@Disabled("https://github.com/camunda/camunda/issues/27289")
 @ZeebeIntegration
 public class TasklistProcessDefinitionAuthorizationIT {
 
@@ -118,7 +116,6 @@ public class TasklistProcessDefinitionAuthorizationIT {
     // given
     adminAuthClient.createPermissions(
         testUserKey,
-        TEST_USER_NAME,
         new Permissions(
             ResourceTypeEnum.PROCESS_DEFINITION,
             PermissionTypeEnum.READ_PROCESS_DEFINITION,
@@ -155,7 +152,6 @@ public class TasklistProcessDefinitionAuthorizationIT {
     // given
     adminAuthClient.createPermissions(
         testUserKey,
-        TEST_USER_NAME,
         new Permissions(
             ResourceTypeEnum.PROCESS_DEFINITION,
             PermissionTypeEnum.CREATE_PROCESS_INSTANCE,
@@ -178,7 +174,6 @@ public class TasklistProcessDefinitionAuthorizationIT {
     // given
     adminAuthClient.createPermissions(
         testUserKey,
-        TEST_USER_NAME,
         new Permissions(
             ResourceTypeEnum.PROCESS_DEFINITION,
             PermissionTypeEnum.CREATE_PROCESS_INSTANCE,

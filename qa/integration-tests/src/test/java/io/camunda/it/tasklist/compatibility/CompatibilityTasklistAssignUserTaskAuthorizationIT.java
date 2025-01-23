@@ -29,10 +29,8 @@ import java.util.concurrent.atomic.AtomicLong;
 import org.awaitility.Awaitility;
 import org.junit.jupiter.api.AutoClose;
 import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 
-@Disabled("https://github.com/camunda/camunda/issues/27289")
 @ZeebeIntegration
 public class CompatibilityTasklistAssignUserTaskAuthorizationIT {
 
@@ -160,7 +158,6 @@ public class CompatibilityTasklistAssignUserTaskAuthorizationIT {
     // given
     adminAuthClient.createPermissions(
         testUserKey,
-        TEST_USER_NAME,
         new Permissions(
             ResourceTypeEnum.PROCESS_DEFINITION,
             PermissionTypeEnum.UPDATE_USER_TASK,
