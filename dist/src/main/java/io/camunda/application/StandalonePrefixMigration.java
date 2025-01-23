@@ -79,7 +79,11 @@ public class StandalonePrefixMigration {
     final var executor = applicationContext.getBean(PrefixMigrationConfig.class).getTaskExecutor();
 
     PrefixMigrationHelper.migrateRuntimeIndices(
-        operatePrefix, tasklistPrefix, connectConfiguration, searchEngineClient, executor);
+        operatePrefix,
+        tasklistPrefix,
+        connectConfiguration,
+        clientAdapter.getPrefixMigrationClient(),
+        executor);
 
     LOG.info("... finished migrating runtime indices");
 

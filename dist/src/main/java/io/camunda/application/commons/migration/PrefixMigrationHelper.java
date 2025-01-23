@@ -7,10 +7,9 @@
  */
 package io.camunda.application.commons.migration;
 
-import io.camunda.exporter.schema.SearchEngineClient;
+import io.camunda.exporter.schema.PrefixMigrationClient;
 import io.camunda.exporter.utils.ReindexResult;
 import io.camunda.search.connect.configuration.ConnectConfiguration;
-import io.camunda.search.connect.configuration.DatabaseType;
 import io.camunda.webapps.schema.descriptors.AbstractIndexDescriptor;
 import io.camunda.webapps.schema.descriptors.IndexDescriptors;
 import io.camunda.webapps.schema.descriptors.operate.index.DecisionIndex;
@@ -37,12 +36,15 @@ import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Set;
-import java.util.function.Supplier;
+import java.util.concurrent.CompletableFuture;
 import java.util.stream.Collectors;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
 
 public final class PrefixMigrationHelper {
   private static final Integer RUNTIME_INDICES_MIGRATION_RETRY_COUNT = 3;
+  private static final Logger LOG = LoggerFactory.getLogger(PrefixMigrationHelper.class);
 
   private static final Set<Class<? extends AbstractIndexDescriptor>> TASKLIST_INDICES_TO_MIGRATE =
       new HashSet<>(Arrays.asList(FormIndex.class, TaskTemplate.class));
@@ -73,79 +75,78 @@ public final class PrefixMigrationHelper {
       final String operatePrefix,
       final String tasklistPrefix,
       final ConnectConfiguration connectConfig,
-      final SearchEngineClient searchEngineClient,
+      final PrefixMigrationClient prefixMigrationClient,
       final ThreadPoolTaskExecutor executor) {
-    final var isElasticsearch = connectConfig.getTypeEnum() == DatabaseType.ELASTICSEARCH;
 
-    retryIndexMigration(
-        () ->
-            migrateIndices(
-                operatePrefix,
-                connectConfig.getIndexPrefix(),
-                searchEngineClient,
-                isElasticsearch,
-                OPERATE_INDICES_TO_MIGRATE,
-                executor),
-        searchEngineClient,
-        executor);
+    final var srcToDestOperateMigrationMap =
+        createSrcToDestMigrationMap(
+            operatePrefix, connectConfig.getIndexPrefix(), OPERATE_INDICES_TO_MIGRATE);
+    indexMigrationWithRetry(srcToDestOperateMigrationMap, executor, prefixMigrationClient);
 
-    retryIndexMigration(
-        () ->
-            migrateIndices(
-                tasklistPrefix,
-                connectConfig.getIndexPrefix(),
-                searchEngineClient,
-                isElasticsearch,
-                TASKLIST_INDICES_TO_MIGRATE,
-                executor),
-        searchEngineClient,
-        executor);
+    final var srcToDestTasklistMigrationMap =
+        createSrcToDestMigrationMap(
+            tasklistPrefix, connectConfig.getIndexPrefix(), TASKLIST_INDICES_TO_MIGRATE);
+
+    indexMigrationWithRetry(srcToDestTasklistMigrationMap, executor, prefixMigrationClient);
   }
 
-  private static void retryIndexMigration(
-      final Supplier<List<ReindexResult>> migrationTask,
-      final SearchEngineClient searchEngineClient,
-      final ThreadPoolTaskExecutor executor) {
+  private static void indexMigrationWithRetry(
+      final Map<String, String> srcToDestMigrationMap,
+      final ThreadPoolTaskExecutor executor,
+      final PrefixMigrationClient prefixMigrationClient) {
 
-    var operateMigrationResults = migrationTask.get();
+    var failedReindex =
+        migrateIndices(srcToDestMigrationMap, executor, prefixMigrationClient).stream()
+            .filter(res -> !res.successful())
+            .collect(Collectors.toMap(ReindexResult::source, ReindexResult::destination));
 
     for (int i = 0; i < RUNTIME_INDICES_MIGRATION_RETRY_COUNT; i++) {
-      final var failedReindexSrcToDest =
-          operateMigrationResults.stream()
-              .filter(res -> !res.successful())
-              .collect(Collectors.toMap(ReindexResult::source, ReindexResult::destination));
-
-      if (failedReindexSrcToDest.isEmpty()) {
+      if (failedReindex.isEmpty()) {
         break;
       }
 
-      operateMigrationResults = searchEngineClient.reindex(failedReindexSrcToDest, executor);
+      failedReindex =
+          migrateIndices(failedReindex, executor, prefixMigrationClient).stream()
+              .filter(res -> !res.successful())
+              .collect(Collectors.toMap(ReindexResult::source, ReindexResult::destination));
     }
   }
 
-  private static List<ReindexResult> migrateIndices(
+  private static Map<String, String> createSrcToDestMigrationMap(
       final String oldPrefix,
       final String newPrefix,
-      final SearchEngineClient searchEngineClient,
-      final boolean isElasticsearch,
-      final Set<Class<? extends AbstractIndexDescriptor>> indicesToMigrateClasses,
-      final ThreadPoolTaskExecutor executor) {
-    final var indicesWithNewPrefix = new IndexDescriptors(newPrefix, isElasticsearch);
+      final Set<Class<? extends AbstractIndexDescriptor>> indicesToMigrateClasses) {
+    final var indicesWithNewPrefix = new IndexDescriptors(newPrefix, true);
 
-    final Map<String, String> indicesToMigrateSrcToDest =
-        indicesToMigrateClasses.stream()
+    return indicesToMigrateClasses.stream()
+        .map(
+            descriptorClass -> {
+              final var newIndex = indicesWithNewPrefix.get(descriptorClass);
+              // we can use the new version index as it does not change
+              final var oldIndexName =
+                  String.format(
+                      "%s-%s-%s_", oldPrefix, newIndex.getIndexName(), newIndex.getVersion());
+
+              return Map.entry(oldIndexName, newIndex.getFullQualifiedName());
+            })
+        .collect(Collectors.toMap(Entry::getKey, Entry::getValue));
+  }
+
+  private static List<ReindexResult> migrateIndices(
+      final Map<String, String> indicesToMigrateSrcToDest,
+      final ThreadPoolTaskExecutor executor,
+      final PrefixMigrationClient prefixMigrationClient) {
+    final var reindexFutures =
+        indicesToMigrateSrcToDest.entrySet().stream()
             .map(
-                descriptorClass -> {
-                  final var newIndex = indicesWithNewPrefix.get(descriptorClass);
-                  // we can use the new version index as it does not change
-                  final var oldIndexName =
-                      String.format(
-                          "%s-%s-%s_", oldPrefix, newIndex.getIndexName(), newIndex.getVersion());
+                (ent) ->
+                    CompletableFuture.supplyAsync(
+                        () -> prefixMigrationClient.reindex(ent.getKey(), ent.getValue()),
+                        executor))
+            .toList();
 
-                  return Map.entry(oldIndexName, newIndex.getFullQualifiedName());
-                })
-            .collect(Collectors.toMap(Entry::getKey, Entry::getValue));
+    CompletableFuture.allOf(reindexFutures.toArray(new CompletableFuture[0])).join();
 
-    return searchEngineClient.reindex(indicesToMigrateSrcToDest, executor);
+    return reindexFutures.stream().map(CompletableFuture::join).toList();
   }
 }

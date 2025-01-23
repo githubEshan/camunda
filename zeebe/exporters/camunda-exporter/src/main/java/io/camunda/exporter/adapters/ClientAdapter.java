@@ -10,6 +10,7 @@ package io.camunda.exporter.adapters;
 import io.camunda.exporter.cache.ExporterEntityCacheProvider;
 import io.camunda.exporter.config.ConnectionTypes;
 import io.camunda.exporter.config.ExporterConfiguration;
+import io.camunda.exporter.schema.PrefixMigrationClient;
 import io.camunda.exporter.schema.SearchEngineClient;
 import io.camunda.exporter.store.BatchRequest;
 import java.io.IOException;
@@ -24,6 +25,8 @@ public interface ClientAdapter {
   }
 
   SearchEngineClient getSearchEngineClient();
+
+  PrefixMigrationClient getPrefixMigrationClient();
 
   BatchRequest createBatchRequest();
 

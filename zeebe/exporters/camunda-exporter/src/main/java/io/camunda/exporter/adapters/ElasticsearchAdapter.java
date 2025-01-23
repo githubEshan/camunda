@@ -16,8 +16,10 @@ import io.camunda.exporter.cache.form.ElasticSearchFormCacheLoader;
 import io.camunda.exporter.cache.process.CachedProcessEntity;
 import io.camunda.exporter.cache.process.ElasticSearchProcessCacheLoader;
 import io.camunda.exporter.config.ExporterConfiguration;
+import io.camunda.exporter.schema.PrefixMigrationClient;
 import io.camunda.exporter.schema.SearchEngineClient;
 import io.camunda.exporter.schema.elasticsearch.ElasticsearchEngineClient;
+import io.camunda.exporter.schema.elasticsearch.ElasticsearchPrefixMigrationClient;
 import io.camunda.exporter.store.BatchRequest;
 import io.camunda.exporter.store.ElasticsearchBatchRequest;
 import io.camunda.exporter.utils.ElasticsearchScriptBuilder;
@@ -27,6 +29,7 @@ import java.io.IOException;
 class ElasticsearchAdapter implements ClientAdapter {
   private final ElasticsearchClient client;
   private final ElasticsearchEngineClient searchEngineClient;
+  private final ElasticsearchPrefixMigrationClient prefixMigrationClient;
   private final ElasticsearchExporterEntityCacheProvider entityCacheLoader;
 
   ElasticsearchAdapter(final ExporterConfiguration configuration) {
@@ -34,11 +37,17 @@ class ElasticsearchAdapter implements ClientAdapter {
     client = connector.createClient();
     searchEngineClient = new ElasticsearchEngineClient(client);
     entityCacheLoader = new ElasticsearchExporterEntityCacheProvider(client);
+    prefixMigrationClient = new ElasticsearchPrefixMigrationClient(client);
   }
 
   @Override
   public SearchEngineClient getSearchEngineClient() {
     return searchEngineClient;
+  }
+
+  @Override
+  public PrefixMigrationClient getPrefixMigrationClient() {
+    return prefixMigrationClient;
   }
 
   @Override
