@@ -19,7 +19,7 @@ import co.elastic.clients.transport.rest_client.RestClientTransport;
 import io.camunda.client.CamundaClient;
 import io.camunda.it.utils.MultiDbConfigurator;
 import io.camunda.management.backups.TakeBackupHistoryResponse;
-import io.camunda.qa.util.cluster.TestRestManagementClient;
+import io.camunda.qa.util.cluster.HistoryBackupClient;
 import io.camunda.qa.util.cluster.TestSimpleCamundaApplication;
 import io.camunda.search.connect.configuration.DatabaseType;
 import io.camunda.webapps.backup.BackupStateDto;
@@ -63,7 +63,7 @@ public class BackupRestoreIT {
   @AutoClose private RestClient restClient;
   private ElasticsearchClient esClient;
   private BackupRestoreTestConfig config;
-  private TestRestManagementClient backupClient;
+  private HistoryBackupClient historyBackupClient;
 
   private void setup(final BackupRestoreTestConfig config) throws IOException {
     final String dbUrl;
@@ -96,7 +96,7 @@ public class BackupRestoreIT {
 
     this.config = config;
     testStandaloneCamunda.start().awaitCompleteTopology();
-    backupClient = TestRestManagementClient.of(testStandaloneCamunda);
+    historyBackupClient = HistoryBackupClient.of(testStandaloneCamunda);
     createSearchClient();
     createRepository();
   }
@@ -116,7 +116,7 @@ public class BackupRestoreIT {
     // given
     setup(config);
 
-    final var takeResponse = backupClient.takeBackup(1L);
+    final var takeResponse = historyBackupClient.takeBackup(1L);
     assertThat(takeResponse)
         .extracting(TakeBackupHistoryResponse::getScheduledSnapshots)
         .asInstanceOf(InstanceOfAssertFactories.LIST)
@@ -127,7 +127,7 @@ public class BackupRestoreIT {
         .atMost(Duration.ofSeconds(600))
         .untilAsserted(
             () -> {
-              final var backupResponse = backupClient.getBackup(1L);
+              final var backupResponse = historyBackupClient.getBackup(1L);
               assertThat(backupResponse.getState()).isEqualTo(BackupStateDto.COMPLETED);
               assertThat(backupResponse.getDetails()).allMatch(d -> d.getState().equals("SUCCESS"));
             });
@@ -153,7 +153,7 @@ public class BackupRestoreIT {
             .delete(
                 DeleteIndexRequest.of(b -> b.index(indices).expandWildcards(ExpandWildcard.All)));
       }
-      case OPENSEARCH -> {
+      default -> {
         throw new UnsupportedOperationException("Opensearch is not yet supported");
       }
     }
@@ -169,7 +169,7 @@ public class BackupRestoreIT {
         esClient =
             new ElasticsearchClient(new RestClientTransport(restClient, new JacksonJsonpMapper()));
         break;
-      case OPENSEARCH:
+      default:
     }
   }
 
@@ -184,6 +184,7 @@ public class BackupRestoreIT {
                 .createRepository(b -> b.repository(repository).name(REPOSITORY_NAME));
         assertThat(response.acknowledged()).isTrue();
       }
+      default -> {}
     }
   }
 
@@ -202,6 +203,7 @@ public class BackupRestoreIT {
           final var response = esClient.snapshot().restore(request);
           assertThat(response.snapshot().snapshot()).isEqualTo(snapshot);
         }
+        default -> {}
       }
     }
   }
