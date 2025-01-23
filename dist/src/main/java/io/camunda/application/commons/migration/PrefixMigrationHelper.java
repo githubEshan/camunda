@@ -8,6 +8,7 @@
 package io.camunda.application.commons.migration;
 
 import io.camunda.exporter.schema.PrefixMigrationClient;
+import io.camunda.exporter.utils.CloneResult;
 import io.camunda.exporter.utils.ReindexResult;
 import io.camunda.search.connect.configuration.ConnectConfiguration;
 import io.camunda.webapps.schema.descriptors.AbstractIndexDescriptor;
@@ -38,13 +39,10 @@ import java.util.Map.Entry;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.stream.Collectors;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
 
 public final class PrefixMigrationHelper {
-  private static final Integer RUNTIME_INDICES_MIGRATION_RETRY_COUNT = 3;
-  private static final Logger LOG = LoggerFactory.getLogger(PrefixMigrationHelper.class);
+  private static final Integer MIGRATION_MAX_RETRIES = 3;
 
   private static final Set<Class<? extends AbstractIndexDescriptor>> TASKLIST_INDICES_TO_MIGRATE =
       new HashSet<>(Arrays.asList(FormIndex.class, TaskTemplate.class));
@@ -81,16 +79,54 @@ public final class PrefixMigrationHelper {
     final var srcToDestOperateMigrationMap =
         createSrcToDestMigrationMap(
             operatePrefix, connectConfig.getIndexPrefix(), OPERATE_INDICES_TO_MIGRATE);
-    indexMigrationWithRetry(srcToDestOperateMigrationMap, executor, prefixMigrationClient);
+    migrateIndicesWithRetry(srcToDestOperateMigrationMap, executor, prefixMigrationClient);
 
     final var srcToDestTasklistMigrationMap =
         createSrcToDestMigrationMap(
             tasklistPrefix, connectConfig.getIndexPrefix(), TASKLIST_INDICES_TO_MIGRATE);
-
-    indexMigrationWithRetry(srcToDestTasklistMigrationMap, executor, prefixMigrationClient);
+    migrateIndicesWithRetry(srcToDestTasklistMigrationMap, executor, prefixMigrationClient);
   }
 
-  private static void indexMigrationWithRetry(
+  public static void migrateHistoricIndices(
+      final String operatePrefix,
+      final String tasklistPrefix,
+      final ConnectConfiguration connectConfig,
+      final PrefixMigrationClient prefixMigrationClient,
+      final ThreadPoolTaskExecutor executor) {
+    final var srcToDestOperateCloneMap =
+        createSrcToDestCloneMap(
+            operatePrefix, connectConfig.getIndexPrefix() + "-operate", prefixMigrationClient);
+    cloneHistoricIndicesWithRetry(srcToDestOperateCloneMap, prefixMigrationClient, executor);
+
+    final var srcToDestTasklistCloneMap =
+        createSrcToDestCloneMap(
+            tasklistPrefix, connectConfig.getIndexPrefix() + "-tasklist", prefixMigrationClient);
+    cloneHistoricIndicesWithRetry(srcToDestTasklistCloneMap, prefixMigrationClient, executor);
+  }
+
+  private static void cloneHistoricIndicesWithRetry(
+      final Map<String, String> srcToDestCloneMap,
+      final PrefixMigrationClient prefixMigrationClient,
+      final ThreadPoolTaskExecutor executor) {
+
+    var failedClones =
+        cloneIndices(srcToDestCloneMap, prefixMigrationClient, executor).stream()
+            .filter(res -> !res.successful())
+            .collect(Collectors.toMap(CloneResult::source, CloneResult::destination));
+
+    for (int i = 0; i < MIGRATION_MAX_RETRIES; i++) {
+      if (failedClones.isEmpty()) {
+        break;
+      }
+
+      failedClones =
+          cloneIndices(srcToDestCloneMap, prefixMigrationClient, executor).stream()
+              .filter(res -> !res.successful())
+              .collect(Collectors.toMap(CloneResult::source, CloneResult::destination));
+    }
+  }
+
+  private static void migrateIndicesWithRetry(
       final Map<String, String> srcToDestMigrationMap,
       final ThreadPoolTaskExecutor executor,
       final PrefixMigrationClient prefixMigrationClient) {
@@ -100,7 +136,7 @@ public final class PrefixMigrationHelper {
             .filter(res -> !res.successful())
             .collect(Collectors.toMap(ReindexResult::source, ReindexResult::destination));
 
-    for (int i = 0; i < RUNTIME_INDICES_MIGRATION_RETRY_COUNT; i++) {
+    for (int i = 0; i < MIGRATION_MAX_RETRIES; i++) {
       if (failedReindex.isEmpty()) {
         break;
       }
@@ -132,6 +168,14 @@ public final class PrefixMigrationHelper {
         .collect(Collectors.toMap(Entry::getKey, Entry::getValue));
   }
 
+  private static Map<String, String> createSrcToDestCloneMap(
+      final String oldPrefix,
+      final String newPrefix,
+      final PrefixMigrationClient prefixMigrationClient) {
+    return prefixMigrationClient.getAllHistoricIndices(oldPrefix).stream()
+        .collect(Collectors.toMap(idx -> idx, idx -> idx.replace(oldPrefix, newPrefix)));
+  }
+
   private static List<ReindexResult> migrateIndices(
       final Map<String, String> indicesToMigrateSrcToDest,
       final ThreadPoolTaskExecutor executor,
@@ -148,5 +192,21 @@ public final class PrefixMigrationHelper {
     CompletableFuture.allOf(reindexFutures.toArray(new CompletableFuture[0])).join();
 
     return reindexFutures.stream().map(CompletableFuture::join).toList();
+  }
+
+  private static List<CloneResult> cloneIndices(
+      final Map<String, String> srcToDestCloneMap,
+      final PrefixMigrationClient prefixMigrationClient,
+      final ThreadPoolTaskExecutor executor) {
+    final var cloneFutures =
+        srcToDestCloneMap.entrySet().stream()
+            .map(
+                (ent) ->
+                    CompletableFuture.supplyAsync(
+                        () -> prefixMigrationClient.clone(ent.getKey(), ent.getValue()), executor))
+            .toList();
+    CompletableFuture.allOf(cloneFutures.toArray(new CompletableFuture[0])).join();
+
+    return cloneFutures.stream().map(CompletableFuture::join).toList();
   }
 }

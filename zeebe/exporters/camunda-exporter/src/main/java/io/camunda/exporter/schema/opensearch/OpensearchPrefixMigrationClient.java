@@ -10,6 +10,7 @@ package io.camunda.exporter.schema.opensearch;
 import io.camunda.exporter.schema.PrefixMigrationClient;
 import io.camunda.exporter.utils.CloneResult;
 import io.camunda.exporter.utils.ReindexResult;
+import java.util.List;
 
 public class OpensearchPrefixMigrationClient implements PrefixMigrationClient {
 
@@ -21,5 +22,10 @@ public class OpensearchPrefixMigrationClient implements PrefixMigrationClient {
   @Override
   public CloneResult clone(final String source, final String destination) {
     return null;
+  }
+
+  @Override
+  public List<String> getAllHistoricIndices(final String prefix) {
+    return List.of();
   }
 }

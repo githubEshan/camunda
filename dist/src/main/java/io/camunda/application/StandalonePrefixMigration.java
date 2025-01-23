@@ -85,8 +85,12 @@ public class StandalonePrefixMigration {
 
     LOG.info("Migrating historic indices");
 
-    searchEngineClient.cloneArchivedIndices(
-        operatePrefix, tasklistPrefix, connectConfiguration.getIndexPrefix());
+    PrefixMigrationHelper.migrateHistoricIndices(
+        operatePrefix,
+        tasklistPrefix,
+        connectConfiguration,
+        clientAdapter.getPrefixMigrationClient(),
+        executor);
 
     LOG.info("... finished migrating historic indices");
 

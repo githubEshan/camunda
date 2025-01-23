@@ -9,9 +9,12 @@ package io.camunda.exporter.schema;
 
 import io.camunda.exporter.utils.CloneResult;
 import io.camunda.exporter.utils.ReindexResult;
+import java.util.List;
 
 public interface PrefixMigrationClient {
   ReindexResult reindex(String source, String destination);
 
   CloneResult clone(String source, String destination);
+
+  List<String> getAllHistoricIndices(String prefix);
 }
