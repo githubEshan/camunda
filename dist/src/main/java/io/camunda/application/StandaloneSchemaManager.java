@@ -11,6 +11,7 @@ import io.camunda.application.commons.migration.SchemaManagerHelper;
 import io.camunda.application.listeners.ApplicationErrorListener;
 import io.camunda.exporter.schema.SchemaManager;
 import io.camunda.search.connect.configuration.ConnectConfiguration;
+import java.io.IOException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.SpringApplication;
@@ -49,7 +50,7 @@ public class StandaloneSchemaManager {
 
   private static final boolean IS_ELASTICSEARCH = true;
 
-  public static void main(final String[] args) {
+  public static void main(final String[] args) throws IOException {
 
     // To ensure that debug logging performed using java.util.logging is routed into Log4j 2
     MainSupport.putSystemPropertyIfAbsent(
@@ -86,9 +87,11 @@ public class StandaloneSchemaManager {
 
     LOG.info("Creating/updating Elasticsearch schema for Camunda ...");
 
-    SchemaManagerHelper.createSchema(connectConfiguration);
+    final var clientAdapter = SchemaManagerHelper.createClientAdapter(connectConfiguration);
+    SchemaManagerHelper.createSchema(connectConfiguration, clientAdapter.getSearchEngineClient());
 
     LOG.info("... finished creating/updating schema for Camunda");
+    clientAdapter.close();
     System.exit(0);
   }
 

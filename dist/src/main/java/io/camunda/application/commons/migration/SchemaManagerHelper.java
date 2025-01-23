@@ -22,26 +22,31 @@ public final class SchemaManagerHelper {
 
   private SchemaManagerHelper() {}
 
-  public static void createSchema(final ConnectConfiguration connectConfig) {
-    final var config = new ExporterConfiguration();
-    config.setConnect(connectConfig);
-    config.getIndex().setPrefix(connectConfig.getIndexPrefix());
-
+  public static void createSchema(
+      final ConnectConfiguration connectConfig, final SearchEngineClient client) {
+    final var config = createExporterConfig(connectConfig);
     final var isElasticsearch = connectConfig.getTypeEnum() == DatabaseType.ELASTICSEARCH;
 
     final IndexDescriptors indexDescriptors =
         new IndexDescriptors(connectConfig.getIndexPrefix(), isElasticsearch);
 
-    final ClientAdapter clientAdapter = ClientAdapter.of(config);
-    final SearchEngineClient client = clientAdapter.getSearchEngineClient();
     final SchemaManager schemaManager =
         new SchemaManager(client, indexDescriptors.indices(), indexDescriptors.templates(), config);
 
     schemaManager.startup();
-    try {
-      clientAdapter.close();
-    } catch (final Exception e) {
-      LOG.error("Error closing search engine client", e);
-    }
+  }
+
+  public static ClientAdapter createClientAdapter(final ConnectConfiguration connectConfig) {
+    final var config = createExporterConfig(connectConfig);
+    return ClientAdapter.of(config);
+  }
+
+  private static ExporterConfiguration createExporterConfig(
+      final ConnectConfiguration connectConfig) {
+    final var config = new ExporterConfiguration();
+    config.setConnect(connectConfig);
+    config.getIndex().setPrefix(connectConfig.getIndexPrefix());
+
+    return config;
   }
 }

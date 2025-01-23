@@ -11,11 +11,10 @@ import io.camunda.application.StandaloneSchemaManager.SchemaManagerConnectConfig
 import io.camunda.application.commons.migration.PrefixMigrationConfig;
 import io.camunda.application.commons.migration.PrefixMigrationHelper;
 import io.camunda.application.commons.migration.SchemaManagerHelper;
-import io.camunda.exporter.adapters.ClientAdapter;
-import io.camunda.exporter.config.ExporterConfiguration;
 import io.camunda.operate.property.OperateProperties;
 import io.camunda.search.connect.configuration.DatabaseType;
 import io.camunda.tasklist.property.TasklistProperties;
+import java.io.IOException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.SpringApplication;
@@ -28,7 +27,7 @@ import org.springframework.context.ConfigurableApplicationContext;
 public class StandalonePrefixMigration {
   private static final Logger LOG = LoggerFactory.getLogger(StandalonePrefixMigration.class);
 
-  public static void main(final String[] args) {
+  public static void main(final String[] args) throws IOException {
     // To ensure that debug logging performed using java.util.logging is routed into Log4j 2
     MainSupport.putSystemPropertyIfAbsent(
         "java.util.logging.manager", "org.apache.logging.log4j.jul.LogManager");
@@ -56,16 +55,13 @@ public class StandalonePrefixMigration {
 
     LOG.info("Creating/updating Elasticsearch schema for Camunda ...");
 
-    SchemaManagerHelper.createSchema(connectConfiguration);
+    final var clientAdapter = SchemaManagerHelper.createClientAdapter(connectConfiguration);
+
+    SchemaManagerHelper.createSchema(connectConfiguration, clientAdapter.getSearchEngineClient());
 
     LOG.info("... finished creating/updating schema for Camunda");
 
     LOG.info("Migrating runtime indices");
-
-    final var exporterConfig = new ExporterConfiguration();
-    exporterConfig.setConnect(connectConfiguration);
-
-    final var searchEngineClient = ClientAdapter.of(exporterConfig).getSearchEngineClient();
 
     final var operatePrefix =
         isElasticsearch
@@ -94,6 +90,7 @@ public class StandalonePrefixMigration {
 
     LOG.info("... finished migrating historic indices");
 
+    clientAdapter.close();
     System.exit(0);
   }
 }
