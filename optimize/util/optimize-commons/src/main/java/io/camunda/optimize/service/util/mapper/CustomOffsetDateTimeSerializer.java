@@ -17,34 +17,47 @@ import java.time.OffsetDateTime;
 import java.time.ZoneId;
 import java.time.ZonedDateTime;
 import java.time.format.DateTimeFormatter;
+import java.util.Optional;
 import java.util.Set;
-import lombok.extern.slf4j.Slf4j;
+import org.slf4j.Logger;
+import org.springframework.web.context.request.RequestAttributes;
+import org.springframework.web.context.request.RequestContextHolder;
 
-@Slf4j
 public class CustomOffsetDateTimeSerializer extends JsonSerializer<OffsetDateTime> {
 
-  private final DateTimeFormatter formatter;
+  private static final Logger LOG =
+      org.slf4j.LoggerFactory.getLogger(CustomOffsetDateTimeSerializer.class);
   private static final Set<String> AVAILABLE_ZONE_IDS = ZoneId.getAvailableZoneIds();
+  private final DateTimeFormatter formatter;
 
-  public CustomOffsetDateTimeSerializer(DateTimeFormatter formatter) {
+  public CustomOffsetDateTimeSerializer(final DateTimeFormatter formatter) {
     this.formatter = formatter;
   }
 
   @Override
-  public void serialize(OffsetDateTime value, JsonGenerator gen, SerializerProvider provider)
+  public void serialize(
+      final OffsetDateTime value, final JsonGenerator gen, final SerializerProvider provider)
       throws IOException {
-    final String timezone = (String) provider.getAttribute(X_OPTIMIZE_CLIENT_TIMEZONE);
+    final String timezone =
+        (String)
+            Optional.ofNullable(RequestContextHolder.getRequestAttributes())
+                .map(
+                    attrs ->
+                        attrs.getAttribute(
+                            X_OPTIMIZE_CLIENT_TIMEZONE, RequestAttributes.SCOPE_REQUEST))
+                .orElse(null);
+
     OffsetDateTime timeZoneAdjustedDateTime = value;
     if (timezone != null) {
       if (AVAILABLE_ZONE_IDS.contains(timezone)) {
         final ZonedDateTime zonedDateTime = value.atZoneSameInstant(ZoneId.of(timezone));
         timeZoneAdjustedDateTime = zonedDateTime.toOffsetDateTime();
       } else {
-        log.warn(
+        LOG.warn(
             "The provided timezone [{}] not recognized. Falling back to server timezone instead.",
             timezone);
       }
     }
-    gen.writeString(timeZoneAdjustedDateTime.format(this.formatter));
+    gen.writeString(timeZoneAdjustedDateTime.format(formatter));
   }
 }

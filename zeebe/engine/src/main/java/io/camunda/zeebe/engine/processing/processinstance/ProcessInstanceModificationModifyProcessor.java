@@ -9,10 +9,11 @@ package io.camunda.zeebe.engine.processing.processinstance;
 
 import static java.util.function.Predicate.not;
 
-import io.camunda.zeebe.auth.impl.TenantAuthorizationCheckerImpl;
+import io.camunda.zeebe.engine.processing.Rejection;
 import io.camunda.zeebe.engine.processing.bpmn.behavior.BpmnBehaviors;
 import io.camunda.zeebe.engine.processing.bpmn.behavior.BpmnIncidentBehavior;
 import io.camunda.zeebe.engine.processing.bpmn.behavior.BpmnJobBehavior;
+import io.camunda.zeebe.engine.processing.bpmn.behavior.BpmnUserTaskBehavior;
 import io.camunda.zeebe.engine.processing.common.CatchEventBehavior;
 import io.camunda.zeebe.engine.processing.common.ElementActivationBehavior;
 import io.camunda.zeebe.engine.processing.common.ElementActivationBehavior.ActivatedElementKeys;
@@ -22,6 +23,8 @@ import io.camunda.zeebe.engine.processing.common.UnsupportedMultiInstanceBodyAct
 import io.camunda.zeebe.engine.processing.deployment.model.element.AbstractFlowElement;
 import io.camunda.zeebe.engine.processing.deployment.model.element.ExecutableCatchEventElement;
 import io.camunda.zeebe.engine.processing.deployment.model.element.ExecutableFlowElement;
+import io.camunda.zeebe.engine.processing.identity.AuthorizationCheckBehavior;
+import io.camunda.zeebe.engine.processing.identity.AuthorizationCheckBehavior.AuthorizationRequest;
 import io.camunda.zeebe.engine.processing.streamprocessor.TypedRecordProcessor;
 import io.camunda.zeebe.engine.processing.streamprocessor.writers.StateWriter;
 import io.camunda.zeebe.engine.processing.streamprocessor.writers.TypedRejectionWriter;
@@ -39,7 +42,9 @@ import io.camunda.zeebe.protocol.impl.record.value.processinstance.ProcessInstan
 import io.camunda.zeebe.protocol.record.RejectionType;
 import io.camunda.zeebe.protocol.record.intent.ProcessInstanceIntent;
 import io.camunda.zeebe.protocol.record.intent.ProcessInstanceModificationIntent;
+import io.camunda.zeebe.protocol.record.value.AuthorizationResourceType;
 import io.camunda.zeebe.protocol.record.value.BpmnElementType;
+import io.camunda.zeebe.protocol.record.value.PermissionType;
 import io.camunda.zeebe.protocol.record.value.ProcessInstanceModificationRecordValue.ProcessInstanceModificationActivateInstructionValue;
 import io.camunda.zeebe.protocol.record.value.ProcessInstanceModificationRecordValue.ProcessInstanceModificationTerminateInstructionValue;
 import io.camunda.zeebe.protocol.record.value.ProcessInstanceModificationRecordValue.ProcessInstanceModificationVariableInstructionValue;
@@ -143,12 +148,15 @@ public final class ProcessInstanceModificationModifyProcessor
   private final CatchEventBehavior catchEventBehavior;
   private final ElementActivationBehavior elementActivationBehavior;
   private final VariableBehavior variableBehavior;
+  private final BpmnUserTaskBehavior userTaskBehavior;
+  private final AuthorizationCheckBehavior authCheckBehavior;
 
   public ProcessInstanceModificationModifyProcessor(
       final Writers writers,
       final ElementInstanceState elementInstanceState,
       final ProcessState processState,
-      final BpmnBehaviors bpmnBehaviors) {
+      final BpmnBehaviors bpmnBehaviors,
+      final AuthorizationCheckBehavior authCheckBehavior) {
     stateWriter = writers.state();
     responseWriter = writers.response();
     rejectionWriter = writers.rejection();
@@ -159,6 +167,8 @@ public final class ProcessInstanceModificationModifyProcessor
     catchEventBehavior = bpmnBehaviors.catchEventBehavior();
     elementActivationBehavior = bpmnBehaviors.elementActivationBehavior();
     variableBehavior = bpmnBehaviors.variableBehavior();
+    userTaskBehavior = bpmnBehaviors.userTaskBehavior();
+    this.authCheckBehavior = authCheckBehavior;
   }
 
   @Override
@@ -179,11 +189,25 @@ public final class ProcessInstanceModificationModifyProcessor
       return;
     }
 
-    if (!TenantAuthorizationCheckerImpl.fromAuthorizationMap(command.getAuthorizations())
-        .isAuthorized(processInstance.getValue().getTenantId())) {
-      final String reason = String.format(ERROR_MESSAGE_PROCESS_INSTANCE_NOT_FOUND, eventKey);
-      responseWriter.writeRejectionOnCommand(command, RejectionType.NOT_FOUND, reason);
-      rejectionWriter.appendRejection(command, RejectionType.NOT_FOUND, reason);
+    final var authRequest =
+        new AuthorizationRequest(
+                command,
+                AuthorizationResourceType.PROCESS_DEFINITION,
+                PermissionType.UPDATE_PROCESS_INSTANCE,
+                processInstance.getValue().getTenantId())
+            .addResourceId(processInstance.getValue().getBpmnProcessId());
+    final var isAuthorized = authCheckBehavior.isAuthorized(authRequest);
+    if (isAuthorized.isLeft()) {
+      final var rejection = isAuthorized.getLeft();
+      final String errorMessage =
+          RejectionType.NOT_FOUND.equals(rejection.type())
+              ? AuthorizationCheckBehavior.NOT_FOUND_ERROR_MESSAGE.formatted(
+                  "modify a process instance",
+                  processInstance.getValue().getProcessInstanceKey(),
+                  "such process instance")
+              : rejection.reason();
+      responseWriter.writeRejectionOnCommand(command, rejection.type(), errorMessage);
+      rejectionWriter.appendRejection(command, rejection.type(), errorMessage);
       return;
     }
 
@@ -699,6 +723,7 @@ public final class ProcessInstanceModificationModifyProcessor
       elementInstancesToTerminate.push(currentElement);
 
       jobBehavior.cancelJob(currentElement);
+      userTaskBehavior.cancelUserTask(currentElement);
       incidentBehavior.resolveIncidents(elementInstanceKey);
       catchEventBehavior.unsubscribeFromEvents(elementInstanceKey);
 
@@ -775,8 +800,6 @@ public final class ProcessInstanceModificationModifyProcessor
         // no activate instruction requires this element instance
         && !requiredKeysForActivation.contains(elementInstance.getKey());
   }
-
-  private record Rejection(RejectionType type, String reason) {}
 
   /**
    * Exception that can be thrown when child instance is being modified. If all active element

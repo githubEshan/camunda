@@ -10,13 +10,16 @@ package io.camunda.tasklist.zeebeimport;
 import static io.camunda.tasklist.util.ThreadUtil.sleepFor;
 
 import io.camunda.tasklist.Metrics;
-import io.camunda.tasklist.entities.meta.ImportPositionEntity;
 import io.camunda.tasklist.exceptions.NoSuchIndexException;
 import io.camunda.tasklist.exceptions.TasklistRuntimeException;
 import io.camunda.tasklist.property.TasklistProperties;
-import io.camunda.tasklist.schema.indices.ImportPositionIndex;
+import io.camunda.tasklist.util.BackoffIdleStrategy;
 import io.camunda.tasklist.zeebe.ImportValueType;
+import io.camunda.webapps.schema.descriptors.tasklist.index.TasklistImportPositionIndex;
+import io.camunda.webapps.schema.entities.operate.ImportPositionEntity;
 import io.camunda.zeebe.protocol.Protocol;
+import jakarta.annotation.PostConstruct;
+import java.io.IOException;
 import java.time.Duration;
 import java.time.OffsetDateTime;
 import java.time.temporal.ChronoUnit;
@@ -35,7 +38,7 @@ import org.springframework.scheduling.concurrent.ThreadPoolTaskScheduler;
 
 public abstract class RecordsReaderAbstract implements RecordsReader, Runnable {
 
-  public static final String PARTITION_ID_FIELD_NAME = ImportPositionIndex.PARTITION_ID;
+  public static final String PARTITION_ID_FIELD_NAME = TasklistImportPositionIndex.PARTITION_ID;
   private static final Logger LOGGER = LoggerFactory.getLogger(RecordsReaderAbstract.class);
 
   @Autowired protected TasklistProperties tasklistProperties;
@@ -48,6 +51,7 @@ public abstract class RecordsReaderAbstract implements RecordsReader, Runnable {
   protected int countEmptyRuns;
   @Autowired private ImportPositionHolder importPositionHolder;
   @Autowired private BeanFactory beanFactory;
+  private BackoffIdleStrategy errorStrategy;
 
   @Autowired
   @Qualifier("tasklistRecordsReaderThreadPoolExecutor")
@@ -56,6 +60,8 @@ public abstract class RecordsReaderAbstract implements RecordsReader, Runnable {
   @Autowired
   @Qualifier("tasklistImportThreadPoolExecutor")
   private ThreadPoolTaskExecutor importExecutor;
+
+  @Autowired private RecordsReaderHolder recordsReaderHolder;
 
   private ImportJob pendingImportJob;
   private final ReentrantLock schedulingImportJobLock;
@@ -73,6 +79,26 @@ public abstract class RecordsReaderAbstract implements RecordsReader, Runnable {
     maxPossibleSequence = Protocol.encodePartitionId(partitionId + 1, 0) - 1;
   }
 
+  @PostConstruct
+  public void postConstruct() {
+    errorStrategy =
+        new BackoffIdleStrategy(tasklistProperties.getImporter().getReaderBackoff(), 1.2f, 10_000);
+
+    try {
+      final var latestPosition =
+          importPositionHolder.getLatestLoadedPosition(
+              importValueType.getAliasTemplate(), partitionId);
+
+      importPositionHolder.recordLatestLoadedPosition(latestPosition);
+    } catch (final IOException e) {
+      LOGGER.error(
+          "Failed to write initial import position index document for value type [{}] and partition [{}]",
+          importValueType,
+          partitionId,
+          e);
+    }
+  }
+
   @Override
   public void run() {
     readAndScheduleNextBatch();
@@ -80,7 +106,7 @@ public abstract class RecordsReaderAbstract implements RecordsReader, Runnable {
 
   @Override
   public int readAndScheduleNextBatch(final boolean autoContinue) {
-    final var readerBackoff = tasklistProperties.getImporter().getReaderBackoff();
+    final var readerBackoff = (long) tasklistProperties.getImporter().getReaderBackoff();
     final boolean useOnlyPosition = tasklistProperties.getImporter().isUseOnlyPosition();
     try {
       final ImportBatch importBatch;
@@ -94,8 +120,9 @@ public abstract class RecordsReaderAbstract implements RecordsReader, Runnable {
         LOGGER.debug("Use import for {} ( {} ) by position", importValueType.name(), partitionId);
         importBatch = readNextBatchByPositionAndPartition(latestPosition.getPosition(), null);
       }
-      Integer nextRunDelay = null;
+      Long nextRunDelay = null;
       if (importBatch.getHits().size() == 0) {
+        markRecordReaderCompletedIfMinimumEmptyBatchesReceived();
         nextRunDelay = readerBackoff;
       } else {
         final var importJob = createImportJob(latestPosition, importBatch);
@@ -109,11 +136,13 @@ public abstract class RecordsReaderAbstract implements RecordsReader, Runnable {
           return 0;
         }
       }
+      errorStrategy.reset();
       if (autoContinue) {
         rescheduleReader(nextRunDelay);
       }
       return importBatch.getHits().size();
     } catch (final NoSuchIndexException ex) {
+      markRecordReaderCompletedIfMinimumEmptyBatchesReceived();
       // if no index found, we back off current reader
       if (autoContinue) {
         rescheduleReader(readerBackoff);
@@ -121,7 +150,8 @@ public abstract class RecordsReaderAbstract implements RecordsReader, Runnable {
     } catch (final Exception ex) {
       LOGGER.error(ex.getMessage(), ex);
       if (autoContinue) {
-        rescheduleReader(null);
+        errorStrategy.idle();
+        rescheduleReader(errorStrategy.idleTime());
       }
     }
 
@@ -179,7 +209,7 @@ public abstract class RecordsReaderAbstract implements RecordsReader, Runnable {
     return beanFactory.getBean(ImportJob.class, importBatch, latestPosition);
   }
 
-  private void rescheduleReader(final Integer readerDelay) {
+  private void rescheduleReader(final Long readerDelay) {
     if (readerDelay != null) {
       readersExecutor.schedule(
           this, OffsetDateTime.now().plus(readerDelay, ChronoUnit.MILLIS).toInstant());
@@ -270,6 +300,25 @@ public abstract class RecordsReaderAbstract implements RecordsReader, Runnable {
             completeRescheduling();
             rescheduleReader(null);
           });
+    }
+  }
+
+  private void markRecordReaderCompletedIfMinimumEmptyBatchesReceived() {
+    if (recordsReaderHolder.hasPartitionCompletedImporting(partitionId)) {
+      recordsReaderHolder.incrementEmptyBatches(partitionId, importValueType);
+    }
+
+    if (recordsReaderHolder.isRecordReaderCompletedImporting(partitionId, importValueType)) {
+      try {
+        recordsReaderHolder.recordLatestLoadedPositionAsCompleted(
+            importPositionHolder, importValueType.getAliasTemplate(), partitionId);
+      } catch (final IOException e) {
+        LOGGER.error(
+            "Failed when trying to mark record reader [{}-{}] as completed",
+            importValueType.getAliasTemplate(),
+            partitionId,
+            e);
+      }
     }
   }
 

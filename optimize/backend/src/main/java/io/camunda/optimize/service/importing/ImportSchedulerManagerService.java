@@ -9,6 +9,7 @@ package io.camunda.optimize.service.importing;
 
 import static io.camunda.optimize.service.util.configuration.EnvironmentPropertiesConstants.INTEGRATION_TESTS;
 
+import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 import io.camunda.optimize.dto.optimize.SchedulerConfig;
 import io.camunda.optimize.dto.optimize.ZeebeConfigDto;
 import io.camunda.optimize.dto.optimize.datasource.ZeebeDataSourceDto;
@@ -29,18 +30,18 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.Optional;
 import java.util.stream.Collectors;
-import lombok.Getter;
-import lombok.extern.slf4j.Slf4j;
+import org.slf4j.Logger;
 import org.springframework.beans.factory.BeanFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.ApplicationContext;
 import org.springframework.core.env.Environment;
 import org.springframework.stereotype.Component;
 
-@Slf4j
 @Component
 public class ImportSchedulerManagerService implements ConfigurationReloadable {
 
+  private static final Logger LOG =
+      org.slf4j.LoggerFactory.getLogger(ImportSchedulerManagerService.class);
   private final ImportIndexHandlerRegistry importIndexHandlerRegistry;
   private final BeanFactory beanFactory;
   private final ConfigurationService configurationService;
@@ -49,7 +50,7 @@ public class ImportSchedulerManagerService implements ConfigurationReloadable {
 
   @Autowired private Environment environment;
 
-  @Getter
+  @SuppressFBWarnings(value = "IS2_INCONSISTENT_SYNC", justification = "False positives")
   private List<AbstractImportScheduler<? extends SchedulerConfig>> importSchedulers =
       new ArrayList<>();
 
@@ -87,7 +88,7 @@ public class ImportSchedulerManagerService implements ConfigurationReloadable {
       if (configurationService.isImportEnabled(scheduler.getDataImportSourceDto())) {
         scheduler.startImportScheduling();
       } else {
-        log.info(
+        LOG.info(
             "Import was disabled by config for import source {}.",
             scheduler.getDataImportSourceDto());
       }
@@ -175,5 +176,9 @@ public class ImportSchedulerManagerService implements ConfigurationReloadable {
         .flatMap(Collection::stream)
         .sorted(Comparator.comparing(ImportMediator::getRank))
         .collect(Collectors.toList());
+  }
+
+  public List<AbstractImportScheduler<? extends SchedulerConfig>> getImportSchedulers() {
+    return importSchedulers;
   }
 }

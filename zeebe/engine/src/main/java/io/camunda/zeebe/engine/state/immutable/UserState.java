@@ -7,14 +7,18 @@
  */
 package io.camunda.zeebe.engine.state.immutable;
 
-import io.camunda.zeebe.protocol.impl.record.value.user.UserRecord;
-import org.agrona.DirectBuffer;
+import io.camunda.zeebe.engine.state.user.PersistedUser;
+import java.util.Optional;
 
 public interface UserState {
 
-  UserRecord getUser(final DirectBuffer username);
+  Optional<PersistedUser> getUser(final String username);
 
-  UserRecord getUser(final String username);
-
-  void updateUser(final UserRecord user);
+  /**
+   * Returns a user by its key. If no user was found, an empty optional is returned.
+   *
+   * @param userKey the key of the user
+   * @return An optional containing the user if it was found, otherwise an empty optional
+   */
+  Optional<PersistedUser> getUser(final long userKey);
 }

@@ -8,7 +8,7 @@
 package io.camunda.zeebe.it.management;
 
 import io.atomix.cluster.MemberId;
-import io.camunda.zeebe.client.ZeebeClient;
+import io.camunda.client.CamundaClient;
 import io.camunda.zeebe.qa.util.actuator.JobStreamActuator;
 import io.camunda.zeebe.qa.util.cluster.TestCluster;
 import io.camunda.zeebe.qa.util.cluster.TestGateway;
@@ -16,22 +16,24 @@ import io.camunda.zeebe.qa.util.jobstream.JobStreamActuatorAssert;
 import io.camunda.zeebe.qa.util.jobstream.JobStreamActuatorAssert.RemoteJobStreamsAssert;
 import io.camunda.zeebe.qa.util.junit.ZeebeIntegration;
 import io.camunda.zeebe.qa.util.junit.ZeebeIntegration.TestZeebe;
-import io.camunda.zeebe.test.util.junit.AutoCloseResources;
-import io.camunda.zeebe.test.util.junit.AutoCloseResources.AutoCloseResource;
 import java.time.Duration;
 import org.awaitility.Awaitility;
 import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.AutoClose;
 import org.junit.jupiter.api.Test;
 
 @ZeebeIntegration
-@AutoCloseResources
 final class JobStreamEndpointIT {
-  @TestZeebe
-  private static final TestCluster CLUSTER =
-      TestCluster.builder().withGatewaysCount(2).withEmbeddedGateway(false).build();
+  @TestZeebe(initMethod = "initTestCluster")
+  private static TestCluster cluster;
 
-  private final TestGateway<?> gateway = CLUSTER.availableGateway();
-  @AutoCloseResource private final ZeebeClient client = gateway.newClientBuilder().build();
+  private final TestGateway<?> gateway = cluster.availableGateway();
+  @AutoClose private final CamundaClient client = gateway.newClientBuilder().build();
+
+  @SuppressWarnings("unused")
+  static void initTestCluster() {
+    cluster = TestCluster.builder().withGatewaysCount(2).withEmbeddedGateway(false).build();
+  }
 
   @AfterEach
   void afterEach() {
@@ -69,7 +71,7 @@ final class JobStreamEndpointIT {
         .send();
 
     // then
-    final var brokerActuator = JobStreamActuator.of(CLUSTER.brokers().get(MemberId.from("0")));
+    final var brokerActuator = JobStreamActuator.of(cluster.brokers().get(MemberId.from("0")));
     Awaitility.await("until foo stream is registered")
         .untilAsserted(
             () ->
@@ -99,7 +101,7 @@ final class JobStreamEndpointIT {
     // given
     //noinspection resource
     final var otherGateway =
-        CLUSTER.gateways().values().stream()
+        cluster.gateways().values().stream()
             .filter(g -> !g.nodeId().equals(gateway.nodeId()))
             .findAny()
             .orElseThrow();
@@ -122,7 +124,7 @@ final class JobStreamEndpointIT {
           .send();
 
       // then
-      final var brokerActuator = JobStreamActuator.of(CLUSTER.brokers().get(MemberId.from("0")));
+      final var brokerActuator = JobStreamActuator.of(cluster.brokers().get(MemberId.from("0")));
       Awaitility.await("until all streams are registered")
           .untilAsserted(
               () ->

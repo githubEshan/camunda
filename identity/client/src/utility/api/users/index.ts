@@ -1,39 +1,46 @@
-import { ApiDefinition, apiDelete, apiGet, apiPost, apiPut } from "../request";
+import { ApiDefinition, apiDelete, apiPatch, apiPost } from "../request";
 import { SearchResponse } from "src/utility/api";
+import { EntityData } from "src/components/entityList/EntityList";
 
 export const USERS_ENDPOINT = "/users";
 
-export type User = {
-  id: string;
+export type User = EntityData & {
+  key: number;
   name: string;
   username: string;
   password: string;
   email: string;
-  enabled: boolean;
 };
 
 export const searchUser: ApiDefinition<SearchResponse<User>> = () =>
   apiPost(`${USERS_ENDPOINT}/search`);
 
 type GetUserParams = {
-  id: string;
+  username: string;
 };
 
-export const getUserDetails: ApiDefinition<User, GetUserParams> = ({ id }) =>
-  apiGet(`${USERS_ENDPOINT}/${id}`);
+export const getUserDetails: ApiDefinition<
+  SearchResponse<User>,
+  GetUserParams
+> = ({ username }) =>
+  apiPost(`${USERS_ENDPOINT}/search`, { filter: { username } });
 
-type CreateUserParams = Omit<User, "id" | "enabled">;
+type CreateUserParams = Omit<User, "key">;
 
 export const createUser: ApiDefinition<undefined, CreateUserParams> = (user) =>
   apiPost(USERS_ENDPOINT, { ...user, enabled: true });
 
-type UpdateUserParams = Omit<User, "enabled">;
+export const updateUser: ApiDefinition<undefined, User> = (user) => {
+  const { name, email, username, password } = user;
+  return apiPatch(`${USERS_ENDPOINT}/${username}`, {
+    changeset: { name, email, password: password ?? "" },
+  });
+};
 
-export const updateUser: ApiDefinition<undefined, UpdateUserParams> = (user) =>
-  apiPut(`${USERS_ENDPOINT}/${user.id}`, { ...user, enabled: true });
-
-type DeleteUserParams = GetUserParams;
+type DeleteUserParams = {
+  username: string;
+};
 
 export const deleteUser: ApiDefinition<undefined, DeleteUserParams> = ({
-  id,
-}) => apiDelete(`${USERS_ENDPOINT}/${id}`);
+  username,
+}) => apiDelete(`${USERS_ENDPOINT}/${username}`);

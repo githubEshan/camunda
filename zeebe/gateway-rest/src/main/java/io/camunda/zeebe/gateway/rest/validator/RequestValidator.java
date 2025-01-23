@@ -8,11 +8,12 @@
 package io.camunda.zeebe.gateway.rest.validator;
 
 import static io.camunda.zeebe.gateway.rest.validator.ErrorMessages.ERROR_MESSAGE_DATE_PARSING;
+import static io.camunda.zeebe.gateway.rest.validator.ErrorMessages.ERROR_MESSAGE_INVALID_ATTRIBUTE_VALUE;
 import static io.camunda.zeebe.protocol.record.RejectionType.INVALID_ARGUMENT;
 
 import io.camunda.zeebe.gateway.protocol.rest.Changeset;
 import io.camunda.zeebe.gateway.rest.RestErrorMapper;
-import java.time.ZonedDateTime;
+import java.time.OffsetDateTime;
 import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
 import java.util.List;
@@ -36,7 +37,7 @@ public final class RequestValidator {
       final String dateString, final String attributeName, final List<String> violations) {
     if (dateString != null && !dateString.isEmpty()) {
       try {
-        ZonedDateTime.parse(dateString);
+        OffsetDateTime.parse(dateString);
       } catch (final DateTimeParseException ex) {
         violations.add(ERROR_MESSAGE_DATE_PARSING.formatted(attributeName, dateString));
       }
@@ -52,11 +53,20 @@ public final class RequestValidator {
             && changeset.getPriority() == null);
   }
 
-  public static Optional<ProblemDetail> validate(Consumer<List<String>> customValidation) {
+  public static Optional<ProblemDetail> validate(final Consumer<List<String>> customValidation) {
     final List<String> violations = new ArrayList<>();
 
     customValidation.accept(violations);
 
     return createProblemDetail(violations);
+  }
+
+  public static void validateOperationReference(
+      final Long operationReference, final List<String> violations) {
+    if (operationReference != null && operationReference < 1) {
+      violations.add(
+          ERROR_MESSAGE_INVALID_ATTRIBUTE_VALUE.formatted(
+              "operationReference", operationReference, "> 0"));
+    }
   }
 }

@@ -11,26 +11,31 @@ import io.camunda.identity.sdk.authentication.dto.AuthCodeDto;
 import io.camunda.optimize.dto.optimize.query.security.CredentialsRequestDto;
 import io.camunda.optimize.service.security.AuthCookieService;
 import io.camunda.optimize.service.security.SessionService;
-import jakarta.ws.rs.container.ContainerRequestContext;
-import jakarta.ws.rs.core.Context;
-import jakarta.ws.rs.core.Response;
-import lombok.RequiredArgsConstructor;
+import jakarta.servlet.http.Cookie;
+import jakarta.servlet.http.HttpServletResponse;
+import java.io.IOException;
+import java.net.URI;
 
-@RequiredArgsConstructor
 public abstract class AbstractAuthenticationService {
 
   protected final SessionService sessionService;
   protected final AuthCookieService authCookieService;
 
-  public abstract Response authenticateUser(
-      @Context ContainerRequestContext requestContext, CredentialsRequestDto credentials);
+  public AbstractAuthenticationService(
+      final SessionService sessionService, final AuthCookieService authCookieService) {
+    this.sessionService = sessionService;
+    this.authCookieService = authCookieService;
+  }
 
-  public abstract Response loginCallback(
-      @Context ContainerRequestContext requestContext, AuthCodeDto authCode);
+  public abstract void authenticateUser(CredentialsRequestDto credentials);
 
-  public abstract Response logout(@Context ContainerRequestContext requestContext);
+  public abstract void loginCallback(
+      final AuthCodeDto authCode, final URI uri, final HttpServletResponse response)
+      throws IOException;
 
-  public Response testAuthentication() {
-    return Response.status(Response.Status.OK).entity("OK").build();
+  public abstract void logout(final Cookie[] cookies, final HttpServletResponse response);
+
+  public String testAuthentication() {
+    return "OK";
   }
 }

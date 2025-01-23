@@ -7,16 +7,21 @@
  */
 package io.camunda.exporter.schema;
 
-import io.camunda.exporter.config.ElasticsearchProperties.IndexSettings;
-import io.camunda.exporter.schema.ElasticsearchEngineClient.MappingSource;
-import io.camunda.exporter.schema.descriptors.IndexDescriptor;
-import io.camunda.exporter.schema.descriptors.IndexTemplateDescriptor;
+import io.camunda.exporter.config.ExporterConfiguration.IndexSettings;
+import io.camunda.webapps.schema.descriptors.IndexDescriptor;
+import io.camunda.webapps.schema.descriptors.IndexTemplateDescriptor;
+import java.util.Collection;
+import java.util.List;
 import java.util.Map;
-import java.util.Set;
 
 public interface SearchEngineClient {
-  void createIndex(final IndexDescriptor indexDescriptor);
+  void createIndex(final IndexDescriptor indexDescriptor, final IndexSettings settings);
 
+  /**
+   * @param indexDescriptor indexDescriptor
+   * @param settings settings
+   * @param create If true, this request cannot replace or update existing index templates.
+   */
   void createIndexTemplate(
       final IndexTemplateDescriptor indexDescriptor,
       final IndexSettings settings,
@@ -27,8 +32,16 @@ public interface SearchEngineClient {
    * @param newProperties New properties to be appended to the index
    */
   void putMapping(
-      final IndexDescriptor indexDescriptor, final Set<IndexMappingProperty> newProperties);
+      final IndexDescriptor indexDescriptor, final Collection<IndexMappingProperty> newProperties);
 
   Map<String, IndexMapping> getMappings(
       final String namePattern, final MappingSource mappingSource);
+
+  void putSettings(
+      final List<IndexDescriptor> indexDescriptors, final Map<String, String> toAppendSettings);
+
+  void putIndexLifeCyclePolicy(final String policyName, final String deletionMinAge);
+
+  boolean importersCompleted(
+      final int partitionId, final List<IndexDescriptor> importPositionIndices);
 }

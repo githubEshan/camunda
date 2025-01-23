@@ -19,9 +19,11 @@ import io.camunda.zeebe.dynamic.config.state.ClusterChangePlan.CompletedOperatio
 import io.camunda.zeebe.dynamic.config.state.ClusterChangePlan.Status;
 import io.camunda.zeebe.dynamic.config.state.ClusterConfiguration;
 import io.camunda.zeebe.dynamic.config.state.ClusterConfigurationChangeOperation;
+import io.camunda.zeebe.dynamic.config.state.ClusterConfigurationChangeOperation.DeleteHistoryOperation;
 import io.camunda.zeebe.dynamic.config.state.ClusterConfigurationChangeOperation.MemberJoinOperation;
 import io.camunda.zeebe.dynamic.config.state.ClusterConfigurationChangeOperation.MemberLeaveOperation;
 import io.camunda.zeebe.dynamic.config.state.ClusterConfigurationChangeOperation.MemberRemoveOperation;
+import io.camunda.zeebe.dynamic.config.state.ClusterConfigurationChangeOperation.PartitionChangeOperation.PartitionBootstrapOperation;
 import io.camunda.zeebe.dynamic.config.state.ClusterConfigurationChangeOperation.PartitionChangeOperation.PartitionDisableExporterOperation;
 import io.camunda.zeebe.dynamic.config.state.ClusterConfigurationChangeOperation.PartitionChangeOperation.PartitionEnableExporterOperation;
 import io.camunda.zeebe.dynamic.config.state.ClusterConfigurationChangeOperation.PartitionChangeOperation.PartitionForceReconfigureOperation;
@@ -33,7 +35,10 @@ import io.camunda.zeebe.dynamic.config.state.DynamicPartitionConfig;
 import io.camunda.zeebe.dynamic.config.state.ExporterState;
 import io.camunda.zeebe.dynamic.config.state.MemberState;
 import io.camunda.zeebe.dynamic.config.state.PartitionState.State;
+import io.camunda.zeebe.dynamic.config.state.RoutingState;
 import io.camunda.zeebe.dynamic.config.state.RoutingState.MessageCorrelation.HashMod;
+import io.camunda.zeebe.dynamic.config.state.RoutingState.RequestHandling.ActivePartitions;
+import io.camunda.zeebe.dynamic.config.state.RoutingState.RequestHandling.AllPartitions;
 import io.camunda.zeebe.management.cluster.BrokerState;
 import io.camunda.zeebe.management.cluster.BrokerStateCode;
 import io.camunda.zeebe.management.cluster.Error;
@@ -42,6 +47,7 @@ import io.camunda.zeebe.management.cluster.ExporterStateCode;
 import io.camunda.zeebe.management.cluster.ExporterStatus;
 import io.camunda.zeebe.management.cluster.ExportingConfig;
 import io.camunda.zeebe.management.cluster.GetTopologyResponse;
+import io.camunda.zeebe.management.cluster.MessageCorrelation;
 import io.camunda.zeebe.management.cluster.MessageCorrelationHashMod;
 import io.camunda.zeebe.management.cluster.Operation;
 import io.camunda.zeebe.management.cluster.Operation.OperationEnum;
@@ -49,6 +55,9 @@ import io.camunda.zeebe.management.cluster.PartitionConfig;
 import io.camunda.zeebe.management.cluster.PartitionState;
 import io.camunda.zeebe.management.cluster.PartitionStateCode;
 import io.camunda.zeebe.management.cluster.PlannedOperationsResponse;
+import io.camunda.zeebe.management.cluster.RequestHandling;
+import io.camunda.zeebe.management.cluster.RequestHandlingActivePartitions;
+import io.camunda.zeebe.management.cluster.RequestHandlingAllPartitions;
 import io.camunda.zeebe.management.cluster.TopologyChange;
 import io.camunda.zeebe.management.cluster.TopologyChange.StatusEnum;
 import io.camunda.zeebe.management.cluster.TopologyChangeCompletedInner;
@@ -57,6 +66,7 @@ import java.net.ConnectException;
 import java.time.Instant;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
@@ -180,7 +190,7 @@ final class ClusterApiUtils {
                   partitionForceReconfigureOperation.members().stream()
                       .map(MemberId::id)
                       .map(Integer::parseInt)
-                      .collect(Collectors.toList()));
+                      .collect(toList()));
       case final MemberRemoveOperation memberRemoveOperation ->
           new Operation()
               .operation(OperationEnum.BROKER_REMOVE)
@@ -198,6 +208,14 @@ final class ClusterApiUtils {
               .brokerId(Integer.parseInt(enableExporterOperation.memberId().id()))
               .partitionId(enableExporterOperation.partitionId())
               .exporterId(enableExporterOperation.exporterId());
+      case final PartitionBootstrapOperation bootstrapOperation ->
+          new Operation()
+              .operation(OperationEnum.PARTITION_BOOTSTRAP)
+              .brokerId(Integer.parseInt(bootstrapOperation.memberId().id()))
+              .partitionId(bootstrapOperation.partitionId())
+              .priority(bootstrapOperation.priority());
+      case final DeleteHistoryOperation deleteHistoryOperation ->
+          new Operation().operation(OperationEnum.DELETE_HISTORY);
       default -> new Operation().operation(OperationEnum.UNKNOWN);
     };
   }
@@ -291,16 +309,31 @@ final class ClusterApiUtils {
   }
 
   private static io.camunda.zeebe.management.cluster.RoutingState mapRoutingState(
-      final io.camunda.zeebe.dynamic.config.state.RoutingState routingState) {
+      final RoutingState routingState) {
     return new io.camunda.zeebe.management.cluster.RoutingState()
         .version(routingState.version())
-        .activePartitions(routingState.activePartitions().stream().toList())
+        .requestHandling(mapRequestHanding(routingState.requestHandling()))
         .messageCorrelation(mapMessageCorrelation(routingState.messageCorrelation()));
   }
 
-  private static io.camunda.zeebe.management.cluster.MessageCorrelation mapMessageCorrelation(
-      final io.camunda.zeebe.dynamic.config.state.RoutingState.MessageCorrelation
-          messageCorrelation) {
+  private static RequestHandling mapRequestHanding(
+      final RoutingState.RequestHandling requestHandling) {
+    return switch (requestHandling) {
+      case ActivePartitions(
+              final var basePartitionCount,
+              final var additionalActivePartitions,
+              final var inactivePartitions) ->
+          new RequestHandlingActivePartitions(
+              basePartitionCount,
+              new ArrayList<>(additionalActivePartitions),
+              new ArrayList<>(inactivePartitions));
+      case AllPartitions(final var partitionCount) ->
+          new RequestHandlingAllPartitions(partitionCount);
+    };
+  }
+
+  private static MessageCorrelation mapMessageCorrelation(
+      final RoutingState.MessageCorrelation messageCorrelation) {
     return switch (messageCorrelation) {
       case HashMod(final var partitionCount) ->
           new MessageCorrelationHashMod().partitionCount(partitionCount);

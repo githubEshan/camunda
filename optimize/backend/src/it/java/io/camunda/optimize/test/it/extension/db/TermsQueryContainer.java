@@ -7,11 +7,11 @@
  */
 package io.camunda.optimize.test.it.extension.db;
 
-import io.camunda.optimize.service.db.os.externalcode.client.dsl.QueryDSL;
+import co.elastic.clients.elasticsearch._types.FieldValue;
+import co.elastic.clients.elasticsearch._types.query_dsl.Query;
+import io.camunda.optimize.service.db.os.client.dsl.QueryDSL;
 import java.util.HashMap;
 import java.util.List;
-import org.elasticsearch.index.query.BoolQueryBuilder;
-import org.elasticsearch.index.query.QueryBuilders;
 import org.opensearch.client.opensearch._types.query_dsl.BoolQuery;
 
 public class TermsQueryContainer {
@@ -21,25 +21,39 @@ public class TermsQueryContainer {
     termQueries = new HashMap<>();
   }
 
-  public void addTermQuery(String term, List<String> values) {
+  public void addTermQuery(final String term, final List<String> values) {
     termQueries.put(term, values);
   }
 
-  public void addTermQuery(String term, String value) {
+  public void addTermQuery(final String term, final String value) {
     termQueries.put(term, List.of(value));
   }
 
-  BoolQueryBuilder toElasticSearchQuery() {
-    BoolQueryBuilder query = new BoolQueryBuilder();
-    for (String term : termQueries.keySet()) {
-      query.must(QueryBuilders.termsQuery(term, termQueries.get(term)));
-    }
-    return query;
+  Query toElasticSearchQuery() {
+    return Query.of(
+        q ->
+            q.bool(
+                b -> {
+                  for (final String term : termQueries.keySet()) {
+                    b.must(
+                        m ->
+                            m.terms(
+                                t ->
+                                    t.field(term)
+                                        .terms(
+                                            tt ->
+                                                tt.value(
+                                                    termQueries.get(term).stream()
+                                                        .map(FieldValue::of)
+                                                        .toList()))));
+                  }
+                  return b;
+                }));
   }
 
   BoolQuery toOpenSearchQuery() {
-    BoolQuery.Builder query = new BoolQuery.Builder();
-    for (String term : termQueries.keySet()) {
+    final BoolQuery.Builder query = new BoolQuery.Builder();
+    for (final String term : termQueries.keySet()) {
       query.must(QueryDSL.stringTerms(term, termQueries.get(term)));
     }
     return query.build();

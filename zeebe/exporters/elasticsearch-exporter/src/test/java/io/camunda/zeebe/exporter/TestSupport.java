@@ -10,45 +10,13 @@ package io.camunda.zeebe.exporter;
 import io.camunda.zeebe.exporter.ElasticsearchExporterConfiguration.IndexConfiguration;
 import io.camunda.zeebe.protocol.record.RecordType;
 import io.camunda.zeebe.protocol.record.ValueType;
-import java.time.Duration;
 import java.util.EnumSet;
 import java.util.stream.Stream;
-import org.elasticsearch.client.RestClient;
-import org.testcontainers.containers.BindMode;
-import org.testcontainers.elasticsearch.ElasticsearchContainer;
-import org.testcontainers.utility.DockerImageName;
 
 /** Collection of utilities for unit and integration tests. */
 final class TestSupport {
-  private static final DockerImageName ELASTIC_IMAGE =
-      DockerImageName.parse("docker.elastic.co/elasticsearch/elasticsearch")
-          .withTag(RestClient.class.getPackage().getImplementationVersion());
 
   private TestSupport() {}
-
-  /**
-   * Returns an Elasticsearch container pointing at the same version as the {@link RestClient}.
-   *
-   * <p>The container is configured to use 512m of heap and 512m of direct memory. This is required
-   * because Elasticsearch 7.x, by default, will grab all the RAM available otherwise.
-   *
-   * <p>Additionally, security is explicitly disabled to avoid having tons of warning printed out.
-   */
-  @SuppressWarnings("resource")
-  static ElasticsearchContainer createDefaultContainer() {
-    return new ElasticsearchContainer(ELASTIC_IMAGE)
-        // use JVM option files to avoid overwriting default options set by the ES container class
-        .withClasspathResourceMapping(
-            "elasticsearch-fast-startup.options",
-            "/usr/share/elasticsearch/config/jvm.options.d/ elasticsearch-fast-startup.options",
-            BindMode.READ_ONLY)
-        // can be slow in CI
-        .withStartupTimeout(Duration.ofMinutes(5))
-        .withEnv("action.auto_create_index", "true")
-        .withEnv("xpack.security.enabled", "false")
-        .withEnv("xpack.watcher.enabled", "false")
-        .withEnv("xpack.ml.enabled", "false");
-  }
 
   /**
    * Sets the correct indexing configuration field for the given value type. This is particularly
@@ -94,8 +62,6 @@ final class TestSupport {
       case USER_TASK -> config.userTask = value;
       case COMPENSATION_SUBSCRIPTION -> config.compensationSubscription = value;
       case MESSAGE_CORRELATION -> config.messageCorrelation = value;
-      case USER -> config.user = value;
-      case AUTHORIZATION -> config.authorization = value;
       default ->
           throw new IllegalArgumentException(
               "No known indexing configuration option for value type " + valueType);
@@ -132,7 +98,18 @@ final class TestSupport {
             ValueType.SBE_UNKNOWN,
             ValueType.NULL_VAL,
             ValueType.PROCESS_INSTANCE_RESULT,
-            ValueType.CLOCK);
+            ValueType.CLOCK,
+            ValueType.SCALE,
+            ValueType.REDISTRIBUTION,
+            // these are not yet supported
+            ValueType.AUTHORIZATION,
+            ValueType.USER,
+            ValueType.ROLE,
+            ValueType.TENANT,
+            ValueType.GROUP,
+            ValueType.MAPPING,
+            ValueType.IDENTITY_SETUP,
+            ValueType.RESOURCE);
     return EnumSet.complementOf(excludedValueTypes).stream();
   }
 }

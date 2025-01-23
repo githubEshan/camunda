@@ -24,7 +24,6 @@ import com.fasterxml.jackson.annotation.JsonTypeInfo;
 import io.camunda.optimize.dto.optimize.query.report.Combinable;
 import io.camunda.optimize.dto.optimize.query.report.single.configuration.DistributedByType;
 import io.camunda.optimize.dto.optimize.query.report.single.process.distributed.value.ProcessReportDistributedByValueDto;
-import lombok.Data;
 
 /**
  * Abstract class that contains a hidden "type" field to distinguish which distributed by type the
@@ -47,17 +46,13 @@ import lombok.Data;
   @JsonSubTypes.Type(value = EndDateDistributedByDto.class, name = DISTRIBUTED_BY_END_DATE),
   @JsonSubTypes.Type(value = ProcessDistributedByDto.class, name = DISTRIBUTED_BY_PROCESS)
 })
-@Data
 public class ProcessReportDistributedByDto<VALUE extends ProcessReportDistributedByValueDto>
     implements Combinable {
 
   @JsonProperty protected DistributedByType type = DistributedByType.NONE;
   protected VALUE value;
 
-  @Override
-  public String toString() {
-    return type.getId();
-  }
+  public ProcessReportDistributedByDto() {}
 
   @JsonIgnore
   public String createCommandKey() {
@@ -70,6 +65,43 @@ public class ProcessReportDistributedByDto<VALUE extends ProcessReportDistribute
         && DistributedByType.NONE.equals(((ProcessReportDistributedByDto<?>) o).getType());
   }
 
+  public DistributedByType getType() {
+    return type;
+  }
+
+  @JsonProperty
+  public void setType(final DistributedByType type) {
+    this.type = type;
+  }
+
+  public VALUE getValue() {
+    return value;
+  }
+
+  public void setValue(final VALUE value) {
+    this.value = value;
+  }
+
+  protected boolean canEqual(final Object other) {
+    return other instanceof ProcessReportDistributedByDto;
+  }
+
+  @Override
+  public int hashCode() {
+    return org.apache.commons.lang3.builder.HashCodeBuilder.reflectionHashCode(this);
+  }
+
+  @Override
+  public boolean equals(final Object o) {
+    return org.apache.commons.lang3.builder.EqualsBuilder.reflectionEquals(this, o);
+  }
+
+  @Override
+  public String toString() {
+    return type.getId();
+  }
+
+  @SuppressWarnings("checkstyle:ConstantName")
   public static final class Fields {
 
     public static final String type = "type";

@@ -13,12 +13,15 @@ import co.elastic.clients.elasticsearch._types.Refresh;
 import co.elastic.clients.elasticsearch.core.BulkRequest;
 import co.elastic.clients.elasticsearch.core.BulkResponse;
 import co.elastic.clients.elasticsearch.core.bulk.BulkResponseItem;
-import io.camunda.exporter.entities.ExporterEntity;
+import io.camunda.exporter.errorhandling.Error;
 import io.camunda.exporter.exceptions.PersistenceException;
 import io.camunda.exporter.utils.ElasticsearchScriptBuilder;
+import io.camunda.webapps.schema.entities.ExporterEntity;
 import java.io.IOException;
 import java.util.List;
 import java.util.Map;
+import java.util.function.BiConsumer;
+import java.util.stream.Collectors;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -206,16 +209,34 @@ public class ElasticsearchBatchRequest implements BatchRequest {
   }
 
   @Override
-  public void execute() throws PersistenceException {
-    execute(false);
+  public BatchRequest delete(final String index, final String id) {
+    LOGGER.debug("Add delete request for index {} and id {}", index, id);
+    bulkRequestBuilder.operations(op -> op.delete(del -> del.index(index).id(id)));
+    return this;
+  }
+
+  @Override
+  public BatchRequest deleteWithRouting(final String index, final String id, final String routing) {
+    LOGGER.debug(
+        "Add delete index request with routing {} for index {} and entity {} ", routing, index, id);
+    bulkRequestBuilder.operations(op -> op.delete(idx -> idx.index(index).id(id).routing(routing)));
+    return this;
+  }
+
+  @Override
+  public void execute(final BiConsumer<String, Error> customErrorHandlers)
+      throws PersistenceException {
+    execute(customErrorHandlers, false);
   }
 
   @Override
   public void executeWithRefresh() throws PersistenceException {
-    execute(true);
+    execute(null, true);
   }
 
-  private void execute(final boolean shouldRefresh) throws PersistenceException {
+  private void execute(
+      final BiConsumer<String, Error> customErrorHandlers, final boolean shouldRefresh)
+      throws PersistenceException {
     if (shouldRefresh) {
       bulkRequestBuilder.refresh(Refresh.True);
     }
@@ -226,15 +247,43 @@ public class ElasticsearchBatchRequest implements BatchRequest {
     try {
       final BulkResponse bulkResponse = esClient.bulk(bulkRequest);
       final List<BulkResponseItem> items = bulkResponse.items();
-      for (final BulkResponseItem item : items) {
-        if (item.error() != null) {
-          LOGGER.warn("Bulk request execution failed. {}. Cause: {}.", item, item.error().reason());
-          throw new PersistenceException("Operation failed: " + item.error().reason());
-        }
-      }
+      validateNoErrors(items, customErrorHandlers);
     } catch (final IOException | ElasticsearchException ex) {
+
       throw new PersistenceException(
           "Error when processing bulk request against Elasticsearch: " + ex.getMessage(), ex);
     }
+  }
+
+  private void validateNoErrors(
+      final List<BulkResponseItem> items, final BiConsumer<String, Error> customErrorHandlers) {
+    final var errorItems = items.stream().filter(item -> item.error() != null).toList();
+    if (errorItems.isEmpty()) {
+      return;
+    }
+
+    final String errorMessages =
+        errorItems.stream()
+            .map(
+                item ->
+                    String.format(
+                        "%s failed for type [%s] and id [%s]: %s",
+                        item.operationType(), item.index(), item.id(), item.error().reason()))
+            .collect(Collectors.joining(", \n"));
+    LOGGER.warn("Bulk request execution failed: \n[{}]", errorMessages);
+
+    errorItems.forEach(
+        item -> {
+          final String message =
+              String.format(
+                  "%s failed for type [%s] and id [%s]: %s",
+                  item.operationType(), item.index(), item.id(), item.error().reason());
+          if (customErrorHandlers != null) {
+            final Error error = new Error(message, item.error().type(), item.status());
+            customErrorHandlers.accept(item.index(), error);
+          } else {
+            throw new PersistenceException(message);
+          }
+        });
   }
 }

@@ -10,6 +10,7 @@ package io.camunda.zeebe.broker.system.partitions;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.Mockito.atLeast;
 import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.inOrder;
@@ -26,6 +27,7 @@ import io.atomix.primitive.partition.PartitionId;
 import io.atomix.raft.RaftServer.Role;
 import io.atomix.raft.partition.RaftPartition;
 import io.atomix.raft.partition.impl.RaftPartitionServer;
+import io.camunda.zeebe.broker.system.monitoring.BrokerHealthCheckService;
 import io.camunda.zeebe.broker.system.partitions.impl.PartitionTransitionImpl;
 import io.camunda.zeebe.broker.system.partitions.impl.RecoverablePartitionTransitionException;
 import io.camunda.zeebe.scheduler.future.ActorFuture;
@@ -33,11 +35,13 @@ import io.camunda.zeebe.scheduler.future.CompletableActorFuture;
 import io.camunda.zeebe.scheduler.health.CriticalComponentsHealthMonitor;
 import io.camunda.zeebe.scheduler.testing.ControlledActorSchedulerRule;
 import io.camunda.zeebe.util.exception.UnrecoverableException;
+import io.camunda.zeebe.util.health.ComponentTreeListener;
 import io.camunda.zeebe.util.health.FailureListener;
 import io.camunda.zeebe.util.health.HealthIssue;
 import io.camunda.zeebe.util.health.HealthReport;
 import io.camunda.zeebe.util.health.HealthStatus;
 import java.time.Duration;
+import java.time.Instant;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CountDownLatch;
@@ -77,6 +81,10 @@ public class ZeebePartitionTest {
     when(ctx.getPartitionContext()).thenReturn(ctx);
     when(ctx.getComponentHealthMonitor()).thenReturn(healthMonitor);
     when(ctx.createTransitionContext()).thenReturn(ctx);
+    final BrokerHealthCheckService brokerCheckMock = mock();
+    when(brokerCheckMock.componentName()).thenReturn("Broker-0");
+    when(ctx.brokerHealthCheckService()).thenReturn(brokerCheckMock);
+    when(ctx.getComponentTreeListener()).thenReturn(ComponentTreeListener.noop());
 
     partition = new ZeebePartition(ctx, transition, List.of(new NoopStartupStep()));
   }
@@ -188,7 +196,7 @@ public class ZeebePartitionTest {
     final var report = mock(HealthReport.class);
     when(report.getStatus()).thenReturn(HealthStatus.HEALTHY);
     final FailureListener failureListener = mock(FailureListener.class);
-    doNothing().when(failureListener).onRecovered();
+    doNothing().when(failureListener).onRecovered(argThat(HealthReport::isHealthy));
 
     // make partition healthy
     when(healthMonitor.getHealthReport()).thenReturn(report);
@@ -200,7 +208,7 @@ public class ZeebePartitionTest {
     schedulerRule.workUntilDone();
 
     // then
-    verify(failureListener, only()).onRecovered();
+    verify(failureListener, only()).onRecovered(any());
   }
 
   @Test
@@ -412,7 +420,7 @@ public class ZeebePartitionTest {
 
     // then
     final var captor = ArgumentCaptor.forClass(ZeebePartitionHealth.class);
-    verify(healthMonitor).registerComponent(any(), captor.capture());
+    verify(healthMonitor).registerComponent(captor.capture());
     final var healthReport = captor.getValue().getHealthReport();
     assertThat(healthReport.getStatus()).isEqualTo(HealthStatus.UNHEALTHY);
     assertThat(healthReport.getIssue().message())
@@ -429,7 +437,7 @@ public class ZeebePartitionTest {
     schedulerRule.workUntilDone();
 
     // then
-    verify(healthMonitor).registerComponent(any(), captor.capture());
+    verify(healthMonitor).registerComponent(captor.capture());
 
     final var zeebePartitionHealth = captor.getValue();
     final HealthReport healthReport = zeebePartitionHealth.getHealthReport();
@@ -448,11 +456,12 @@ public class ZeebePartitionTest {
     doNothing().when(failureListener).onFailure(any());
 
     final var captor = ArgumentCaptor.forClass(ZeebePartitionHealth.class);
-    verify(healthMonitor).registerComponent(any(), captor.capture());
+    verify(healthMonitor).registerComponent(captor.capture());
     final var zeebePartitionHealth = captor.getValue();
     zeebePartitionHealth.addFailureListener(failureListener);
 
-    when(transition.getHealthIssue()).thenReturn(HealthIssue.of("it's over"));
+    when(transition.getHealthIssue())
+        .thenReturn(HealthIssue.of("it's over", Instant.ofEpochMilli(1029381923L)));
 
     // when
     final HealthReport healthReport1 = zeebePartitionHealth.getHealthReport();
@@ -462,7 +471,7 @@ public class ZeebePartitionTest {
 
     // then
     assertThat(healthReport1).isEqualTo(healthReport2);
-    verify(failureListener, times(1)).onFailure(any());
+    verify(failureListener, times(1)).onHealthReport(argThat(HealthReport::isUnhealthy));
   }
 
   @Test
@@ -475,23 +484,25 @@ public class ZeebePartitionTest {
     doNothing().when(failureListener).onFailure(any());
 
     final var captor = ArgumentCaptor.forClass(ZeebePartitionHealth.class);
-    verify(healthMonitor).registerComponent(any(), captor.capture());
+    verify(healthMonitor).registerComponent(captor.capture());
     final var zeebePartitionHealth = captor.getValue();
     zeebePartitionHealth.addFailureListener(failureListener);
 
-    when(transition.getHealthIssue()).thenReturn(HealthIssue.of("it's over"));
+    when(transition.getHealthIssue())
+        .thenReturn(HealthIssue.of("it's over", Instant.ofEpochMilli(1029381923L)));
 
     // when
     final HealthReport healthReport1 = zeebePartitionHealth.getHealthReport();
     assertThat(healthReport1.getStatus()).isEqualTo(HealthStatus.UNHEALTHY);
 
-    when(transition.getHealthIssue()).thenReturn(HealthIssue.of("it's something else"));
+    when(transition.getHealthIssue())
+        .thenReturn(HealthIssue.of("it's something else", Instant.ofEpochMilli(1029381923L)));
     final HealthReport healthReport2 = zeebePartitionHealth.getHealthReport();
     assertThat(healthReport2.getStatus()).isEqualTo(HealthStatus.UNHEALTHY);
 
     // then
     assertThat(healthReport1).isNotEqualTo(healthReport2);
-    verify(failureListener, times(2)).onFailure(any());
+    verify(failureListener, times(2)).onHealthReport(argThat(HealthReport::isUnhealthy));
   }
 
   @Test
@@ -502,10 +513,10 @@ public class ZeebePartitionTest {
 
     final FailureListener failureListener = mock(FailureListener.class);
     doNothing().when(failureListener).onFailure(any());
-    doNothing().when(failureListener).onRecovered();
+    doNothing().when(failureListener).onRecovered(any());
 
     final var captor = ArgumentCaptor.forClass(ZeebePartitionHealth.class);
-    verify(healthMonitor).registerComponent(any(), captor.capture());
+    verify(healthMonitor).registerComponent(captor.capture());
     final var zeebePartitionHealth = captor.getValue();
     zeebePartitionHealth.addFailureListener(failureListener);
 
@@ -520,7 +531,7 @@ public class ZeebePartitionTest {
     assertThat(healthReport2.getStatus()).isEqualTo(HealthStatus.HEALTHY);
     // then
     assertThat(healthReport1).isEqualTo(healthReport2);
-    verify(failureListener, times(1)).onRecovered();
+    verify(failureListener, times(1)).onHealthReport(argThat(HealthReport::isHealthy));
   }
 
   @Test
@@ -534,7 +545,7 @@ public class ZeebePartitionTest {
     schedulerRule.workUntilDone();
 
     // then
-    verify(healthMonitor).registerComponent(any(), captor.capture());
+    verify(healthMonitor).registerComponent(captor.capture());
 
     final var zeebePartitionHealth = captor.getValue();
     final HealthReport healthReport = zeebePartitionHealth.getHealthReport();
@@ -554,7 +565,7 @@ public class ZeebePartitionTest {
     schedulerRule.workUntilDone();
 
     // then
-    verify(healthMonitor).registerComponent(any(), captor.capture());
+    verify(healthMonitor).registerComponent(captor.capture());
 
     final var zeebePartitionHealth = captor.getValue();
     final HealthReport healthReport = zeebePartitionHealth.getHealthReport();
@@ -576,7 +587,7 @@ public class ZeebePartitionTest {
     schedulerRule.workUntilDone();
 
     // then
-    verify(healthMonitor).registerComponent(any(), captor.capture());
+    verify(healthMonitor).registerComponent(captor.capture());
 
     final var zeebePartitionHealth = captor.getValue();
     final HealthReport healthReport = zeebePartitionHealth.getHealthReport();

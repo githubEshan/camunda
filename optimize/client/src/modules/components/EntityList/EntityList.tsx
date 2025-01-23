@@ -215,6 +215,10 @@ export default function EntityList({
             }),
           };
 
+          const batchVisible = batchActionProps.shouldShowBatchActions;
+          const batchTabIndex = batchVisible ? 0 : -1;
+          const tabIndex = batchVisible ? -1 : 0;
+
           return (
             <TableContainer
               title={title}
@@ -231,7 +235,8 @@ export default function EntityList({
                     {Children.map(bulkActions, (child, idx) =>
                       cloneElement(child, {
                         key: idx,
-                        tabIndex: batchActionProps.shouldShowBatchActions ? 0 : -1,
+                        tabIndex: batchTabIndex,
+                        disabled: !batchVisible,
                         onDelete: onChange,
                         selectedEntries: rows.filter((row) =>
                           selectedRows.some((selectedRow) => selectedRow.id === row.id)
@@ -240,8 +245,10 @@ export default function EntityList({
                     )}
                   </TableBatchActions>
                 )}
-                <TableToolbarContent aria-hidden={batchActionProps.shouldShowBatchActions}>
+                <TableToolbarContent aria-hidden={batchVisible} tabIndex={tabIndex}>
                   <TableToolbarSearch
+                    tabIndex={tabIndex}
+                    disabled={batchVisible}
                     onChange={(e) => {
                       if (e) {
                         setQuery(e.target.value);
@@ -250,37 +257,43 @@ export default function EntityList({
                     }}
                     persistent
                   />
-                  {action}
+                  {isValidElement<{tabIndex?: number; disabled?: boolean}>(action)
+                    ? cloneElement(action, {
+                        tabIndex,
+                        disabled: batchVisible,
+                      })
+                    : action}
                 </TableToolbarContent>
               </TableToolbar>
               <Table {...getTableProps()}>
                 <TableHead>
                   <TableRow>
-                    {/* @ts-ignore */}
                     {bulkActions && <TableSelectAll {...getSelectionProps()} />}
                     {formattedHeaders.map((formattedHeader, idx) => {
                       const header = headers[idx];
                       const isHeaderSortable =
                         !!header && typeof header === 'object' && 'key' in header && !!header.key;
 
+                      const {key, ...headerProps} = getHeaderProps({
+                        header: formattedHeader,
+                        isSortable: isHeaderSortable,
+                        onClick: () => {
+                          if (isObjectHeader(header)) {
+                            if (header.key === sorting?.key) {
+                              const {key, order} =
+                                getNextSorting(sorting, header.defaultOrder) || {};
+                              onChange?.(key, order);
+                            } else {
+                              onChange?.(header.key, header.defaultOrder);
+                            }
+                          }
+                        },
+                      });
+
                       return (
-                        // @ts-ignore
                         <TableHeader
-                          {...getHeaderProps({
-                            header: formattedHeader,
-                            isSortable: isHeaderSortable,
-                            onClick: () => {
-                              if (isObjectHeader(header)) {
-                                if (header.key === sorting?.key) {
-                                  const {key, order} =
-                                    getNextSorting(sorting, header.defaultOrder) || {};
-                                  onChange?.(key, order);
-                                } else {
-                                  onChange?.(header.key, header.defaultOrder);
-                                }
-                              }
-                            },
-                          })}
+                          key={key}
+                          {...headerProps}
                           isSortHeader={formattedHeader.key === sorting?.key}
                           sortDirection={sorting?.order?.toUpperCase()}
                           className="tableHeader"
@@ -293,25 +306,26 @@ export default function EntityList({
                   </TableRow>
                 </TableHead>
                 <TableBody>
-                  {formattedRows.map((row, idx) => (
-                    <TableRow {...getRowProps({row})}>
-                      {bulkActions && (
-                        // @ts-ignore
-                        <TableSelectRow {...getSelectionProps({row})} />
-                      )}
-                      {row.cells.map((cell) => (
-                        <TableCell key={cell.id}>{cell.value}</TableCell>
-                      ))}
-                      <TableCell className="cds--table-column-menu">
-                        <ListItemAction
-                          actions={rows[idx]?.actions}
-                          // carbon recommend using inline buttons if actions are less than three
-                          // see https://carbondesignsystem.com/components/data-table/usage/#inline-actions
-                          showInlineIconButtons={hasLessThanThreeActions}
-                        />
-                      </TableCell>
-                    </TableRow>
-                  ))}
+                  {formattedRows.map((row, idx) => {
+                    const {key, ...rowProps} = getRowProps({row});
+
+                    return (
+                      <TableRow key={key} {...rowProps}>
+                        {bulkActions && <TableSelectRow {...getSelectionProps({row})} />}
+                        {row.cells.map((cell) => (
+                          <TableCell key={cell.id}>{cell.value}</TableCell>
+                        ))}
+                        <TableCell className="cds--table-column-menu">
+                          <ListItemAction
+                            actions={rows[idx]?.actions}
+                            // carbon recommend using inline buttons if actions are less than three
+                            // see https://carbondesignsystem.com/components/data-table/usage/#inline-actions
+                            showInlineIconButtons={hasLessThanThreeActions}
+                          />
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
                 </TableBody>
               </Table>
             </TableContainer>

@@ -17,25 +17,29 @@ import io.camunda.optimize.service.util.configuration.ConfigurationService;
 import io.camunda.optimize.service.util.configuration.condition.OpenSearchCondition;
 import java.util.Objects;
 import java.util.Optional;
-import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
 import org.opensearch.client.opensearch.core.GetRequest;
 import org.opensearch.client.opensearch.core.GetResponse;
+import org.slf4j.Logger;
 import org.springframework.context.annotation.Conditional;
 import org.springframework.stereotype.Component;
 
-@RequiredArgsConstructor
 @Component
-@Slf4j
 @Conditional(OpenSearchCondition.class)
 public class SettingsReaderOS implements SettingsReader {
 
+  private static final Logger LOG = org.slf4j.LoggerFactory.getLogger(SettingsReaderOS.class);
   private final OptimizeOpenSearchClient osClient;
   private final ConfigurationService configurationService;
 
+  public SettingsReaderOS(
+      final OptimizeOpenSearchClient osClient, final ConfigurationService configurationService) {
+    this.osClient = osClient;
+    this.configurationService = configurationService;
+  }
+
   @Override
   public Optional<SettingsDto> getSettings() {
-    log.debug("Fetching Optimize Settings");
+    LOG.debug("Fetching Optimize Settings");
 
     final GetRequest.Builder getReqBuilder =
         new GetRequest.Builder().index(SETTINGS_INDEX_NAME).id(SettingsIndex.ID);
@@ -44,16 +48,16 @@ public class SettingsReaderOS implements SettingsReader {
     final GetResponse<SettingsDto> getResponse =
         osClient.get(getReqBuilder, SettingsDto.class, errorMessage);
     if (getResponse.found()) {
-      SettingsDto result = getResponse.source();
+      final SettingsDto result = getResponse.source();
       if (Objects.nonNull(result)) {
         if (result.getSharingEnabled().isEmpty()) {
           result.setSharingEnabled(configurationService.getSharingEnabled());
         }
-        log.debug("Finished Fetching Optimize Settings");
+        LOG.debug("Finished Fetching Optimize Settings");
         return Optional.of(result);
       }
     } else {
-      log.debug("No Settings found");
+      LOG.debug("No Settings found");
     }
     return Optional.empty();
   }

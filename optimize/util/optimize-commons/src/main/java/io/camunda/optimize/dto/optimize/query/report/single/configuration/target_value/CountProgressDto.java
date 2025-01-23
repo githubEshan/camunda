@@ -7,14 +7,6 @@
  */
 package io.camunda.optimize.dto.optimize.query.report.single.configuration.target_value;
 
-import java.util.Objects;
-import lombok.Getter;
-import lombok.Setter;
-import lombok.ToString;
-
-@Getter
-@Setter
-@ToString
 public class CountProgressDto {
 
   private String baseline = "0";
@@ -23,22 +15,50 @@ public class CountProgressDto {
 
   @Override
   public int hashCode() {
-    return Objects.hash(baseline, target);
+    return org.apache.commons.lang3.builder.HashCodeBuilder.reflectionHashCode(this);
   }
 
   @Override
   public boolean equals(final Object o) {
-    if (this == o) {
-      return true;
-    }
-    if (!(o instanceof final CountProgressDto that)) {
-      return false;
-    }
-    return Objects.equals(baseline, that.baseline)
-        && Objects.equals(isBelow, that.isBelow)
-        && Objects.equals(target, that.target);
+    return org.apache.commons.lang3.builder.EqualsBuilder.reflectionEquals(this, o);
   }
 
+  @Override
+  public String toString() {
+    return "CountProgressDto(baseline="
+        + getBaseline()
+        + ", target="
+        + getTarget()
+        + ", isBelow="
+        + getIsBelow()
+        + ")";
+  }
+
+  public String getBaseline() {
+    return baseline;
+  }
+
+  public void setBaseline(final String baseline) {
+    this.baseline = baseline;
+  }
+
+  public String getTarget() {
+    return target;
+  }
+
+  public void setTarget(final String target) {
+    this.target = target;
+  }
+
+  public Boolean getIsBelow() {
+    return isBelow;
+  }
+
+  public void setIsBelow(final Boolean isBelow) {
+    this.isBelow = isBelow;
+  }
+
+  @SuppressWarnings("checkstyle:ConstantName")
   public static final class Fields {
 
     public static final String baseline = "baseline";

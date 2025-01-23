@@ -17,8 +17,6 @@ import io.camunda.operate.JacksonConfig;
 import io.camunda.operate.OperateProfileService;
 import io.camunda.operate.conditions.DatabaseInfo;
 import io.camunda.operate.connect.OperateDateTimeFormatter;
-import io.camunda.operate.entities.BatchOperationEntity;
-import io.camunda.operate.entities.dmn.definition.DecisionDefinitionEntity;
 import io.camunda.operate.property.OperateProperties;
 import io.camunda.operate.util.OperateAbstractIT;
 import io.camunda.operate.util.apps.nobeans.TestApplicationWithNoBeans;
@@ -26,8 +24,10 @@ import io.camunda.operate.webapp.reader.DecisionReader;
 import io.camunda.operate.webapp.rest.DecisionRestService;
 import io.camunda.operate.webapp.rest.exception.NotFoundException;
 import io.camunda.operate.webapp.security.identity.IdentityPermission;
-import io.camunda.operate.webapp.security.identity.PermissionsService;
+import io.camunda.operate.webapp.security.permission.PermissionsService;
 import io.camunda.operate.webapp.writer.BatchOperationWriter;
+import io.camunda.webapps.schema.entities.operate.dmn.definition.DecisionDefinitionEntity;
+import io.camunda.webapps.schema.entities.operation.BatchOperationEntity;
 import org.junit.Test;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.mock.mockito.MockBean;
@@ -62,7 +62,9 @@ public class DecisionRestServiceIT extends OperateAbstractIT {
     // when
     when(decisionReader.getDecision(decisionDefinitionKey))
         .thenReturn(new DecisionDefinitionEntity().setDecisionId(decisionId));
-    when(permissionsService.hasPermissionForDecision(decisionId, IdentityPermission.READ))
+    when(permissionsService.permissionsEnabled()).thenReturn(true);
+    when(permissionsService.hasPermissionForDecision(
+            decisionId, IdentityPermission.READ_DECISION_INSTANCE))
         .thenReturn(false);
     final MvcResult mvcResult =
         getRequestShouldFailWithNoAuthorization(
@@ -79,7 +81,9 @@ public class DecisionRestServiceIT extends OperateAbstractIT {
     // when
     when(decisionReader.getDecision(decisionDefinitionKey))
         .thenReturn(new DecisionDefinitionEntity().setDecisionId(decisionId));
-    when(permissionsService.hasPermissionForDecision(decisionId, IdentityPermission.DELETE))
+    when(permissionsService.permissionsEnabled()).thenReturn(true);
+    when(permissionsService.hasPermissionForDecision(
+            decisionId, IdentityPermission.DELETE_DECISION_INSTANCE))
         .thenReturn(true);
     when(batchOperationWriter.scheduleDeleteDecisionDefinition(any()))
         .thenReturn(new BatchOperationEntity());
@@ -128,7 +132,9 @@ public class DecisionRestServiceIT extends OperateAbstractIT {
     // when
     when(decisionReader.getDecision(decisionDefinitionKey))
         .thenReturn(new DecisionDefinitionEntity().setDecisionId(decisionId));
-    when(permissionsService.hasPermissionForDecision(decisionId, IdentityPermission.DELETE))
+    when(permissionsService.permissionsEnabled()).thenReturn(true);
+    when(permissionsService.hasPermissionForDecision(
+            decisionId, IdentityPermission.DELETE_DECISION_INSTANCE))
         .thenReturn(false);
     when(batchOperationWriter.scheduleDeleteDecisionDefinition(any()))
         .thenReturn(new BatchOperationEntity());

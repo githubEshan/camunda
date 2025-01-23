@@ -10,7 +10,7 @@ package io.camunda.zeebe.it.clustering;
 import static io.camunda.zeebe.test.StableValuePredicate.hasStableValue;
 import static org.assertj.core.api.Assertions.assertThat;
 
-import io.camunda.zeebe.client.ZeebeClient;
+import io.camunda.client.CamundaClient;
 import io.camunda.zeebe.qa.util.actuator.PartitionsActuator;
 import io.camunda.zeebe.qa.util.cluster.TestStandaloneBroker;
 import io.camunda.zeebe.qa.util.junit.ZeebeIntegration;
@@ -28,7 +28,7 @@ import org.junit.jupiter.api.Test;
 @ZeebeIntegration
 final class SnapshotWithExportersTest {
 
-  private void publishMessages(final ZeebeClient client) {
+  private void publishMessages(final CamundaClient client) {
     IntStream.range(0, 10)
         .forEach(
             (i) ->
@@ -66,6 +66,8 @@ final class SnapshotWithExportersTest {
                           .flatMap(FileBasedSnapshotId::ofFileName),
                   Optional::isPresent)
               .orElseThrow();
+      // pause processing to avoid new processing to cause a new snapshot after restart
+      PartitionsActuator.of(zeebe).pauseProcessing();
       zeebe.stop();
 
       // when -- taking snapshot on broker with exporters configured
@@ -125,36 +127,45 @@ final class SnapshotWithExportersTest {
       // then
       assertThat(snapshotId).returns(exporterPosition, FileBasedSnapshotId::getExportedPosition);
     }
+  }
+
+  @Nested
+  final class WithPassiveExporter {
 
     @Test
     void shouldTakeSnapshotWhenExporterPositionIsMinusOne() {
       // given -- broker with exporter that does not acknowledge anything
       RecordingExporter.autoAcknowledge(false);
-      try (final var client = zeebe.newClientBuilder().build()) {
-        publishMessages(client);
+      try (final var zeebe =
+          new TestStandaloneBroker().withRecordingExporter(true).start().awaitCompleteTopology()) {
+
+        final var partitions = PartitionsActuator.of(zeebe);
+        try (final var client = zeebe.newClientBuilder().build()) {
+          publishMessages(client);
+        }
+
+        Awaitility.await("Processed position is stable")
+            .atMost(Duration.ofSeconds(60))
+            .during(Duration.ofSeconds(5))
+            .until(() -> partitions.query().get(1).processedPosition(), hasStableValue());
+
+        partitions.takeSnapshot();
+
+        // then -- snapshot has exported position 0
+        final var snapshotWithExporters =
+            Awaitility.await("Snapshot is taken")
+                .atMost(Duration.ofSeconds(60))
+                .during(Duration.ofSeconds(5))
+                .until(
+                    () ->
+                        Optional.ofNullable(partitions.query().get(1).snapshotId())
+                            .flatMap(FileBasedSnapshotId::ofFileName),
+                    hasStableValue())
+                .orElseThrow();
+
+        Assertions.assertThat(snapshotWithExporters)
+            .returns(0L, FileBasedSnapshotId::getExportedPosition);
       }
-
-      Awaitility.await("Processed position is stable")
-          .atMost(Duration.ofSeconds(60))
-          .during(Duration.ofSeconds(5))
-          .until(() -> partitions.query().get(1).processedPosition(), hasStableValue());
-
-      partitions.takeSnapshot();
-
-      // then -- snapshot has exported position 0
-      final var snapshotWithExporters =
-          Awaitility.await("Snapshot is taken")
-              .atMost(Duration.ofSeconds(60))
-              .during(Duration.ofSeconds(5))
-              .until(
-                  () ->
-                      Optional.ofNullable(partitions.query().get(1).snapshotId())
-                          .flatMap(FileBasedSnapshotId::ofFileName),
-                  hasStableValue())
-              .orElseThrow();
-
-      Assertions.assertThat(snapshotWithExporters)
-          .returns(0L, FileBasedSnapshotId::getExportedPosition);
     }
   }
 }

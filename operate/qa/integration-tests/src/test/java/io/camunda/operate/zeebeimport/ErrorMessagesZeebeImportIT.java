@@ -13,7 +13,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 import io.camunda.operate.util.OperateZeebeAbstractIT;
 import io.camunda.operate.webapp.reader.IncidentReader;
 import io.camunda.operate.webapp.reader.ListViewReader;
-import io.camunda.operate.webapp.rest.dto.listview.ListViewProcessInstanceDto;
 import io.camunda.operate.webapp.rest.dto.listview.ListViewRequestDto;
 import io.camunda.operate.webapp.rest.dto.listview.ListViewResponseDto;
 import io.camunda.operate.webapp.zeebe.operation.CancelProcessInstanceHandler;
@@ -40,40 +39,13 @@ public class ErrorMessagesZeebeImportIT extends OperateZeebeAbstractIT {
   @Before
   public void before() {
     super.before();
-    injectZeebeClientIntoOperationHandler();
+    injectCamundaClientIntoOperationHandler();
   }
 
-  private void injectZeebeClientIntoOperationHandler() {
-    cancelProcessInstanceHandler.setZeebeClient(zeebeClient);
-    updateRetriesHandler.setZeebeClient(zeebeClient);
-    updateVariableHandler.setZeebeClient(zeebeClient);
-  }
-
-  // OPE-453
-  @Test
-  public void testErrorMessageIsTrimmedBeforeSave() throws Exception {
-    // Given
-    final String errorMessageWithWhitespaces = "   Error message with white spaces   ";
-    final String errorMessageWithoutWhiteSpaces = "Error message with white spaces";
-
-    // when
-    final Long processInstanceKey = setupIncidentWith(errorMessageWithWhitespaces);
-    tester.updateVariableOperation("a", "wrong value").waitUntil().operationIsFailed();
-
-    // then
-    assertThat(
-            incidentReader
-                .getAllIncidentsByProcessInstanceKey(processInstanceKey)
-                .get(0)
-                .getErrorMessage())
-        .isEqualTo(errorMessageWithoutWhiteSpaces);
-    final ListViewResponseDto response =
-        listViewReader.queryProcessInstances(createGetAllProcessInstancesRequest());
-    final ListViewProcessInstanceDto processInstances = response.getProcessInstances().get(0);
-    assertThat(processInstances).isNotNull();
-    assertThat(processInstances.getOperations().get(0).getErrorMessage())
-        .doesNotStartWith(" ")
-        .doesNotEndWith(" ");
+  private void injectCamundaClientIntoOperationHandler() {
+    cancelProcessInstanceHandler.setCamundaClient(camundaClient);
+    updateRetriesHandler.setCamundaClient(camundaClient);
+    updateVariableHandler.setCamundaClient(camundaClient);
   }
 
   // OPE-619

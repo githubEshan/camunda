@@ -7,31 +7,38 @@
  */
 package io.camunda.service.search.core;
 
-import io.camunda.search.clients.CamundaSearchClient;
+import io.camunda.search.exception.CamundaSearchException;
+import io.camunda.search.exception.NotFoundException;
+import io.camunda.search.query.SearchQueryBase;
+import io.camunda.search.query.SearchQueryResult;
+import io.camunda.security.auth.Authentication;
 import io.camunda.service.ApiServices;
-import io.camunda.service.search.query.SearchQueryBase;
-import io.camunda.service.search.query.SearchQueryResult;
-import io.camunda.service.security.auth.Authentication;
-import io.camunda.service.transformers.ServiceTransformers;
+import io.camunda.service.security.SecurityContextProvider;
 import io.camunda.zeebe.broker.client.api.BrokerClient;
 
 public abstract class SearchQueryService<T extends ApiServices<T>, Q extends SearchQueryBase, D>
     extends ApiServices<T> {
 
-  protected final SearchClientBasedQueryExecutor executor;
-
   protected SearchQueryService(
       final BrokerClient brokerClient,
-      final CamundaSearchClient searchClient,
-      final ServiceTransformers transformers,
+      final SecurityContextProvider securityContextProvider,
       final Authentication authentication) {
-    super(brokerClient, searchClient, transformers, authentication);
-    executor = initiateExecutor();
-  }
-
-  private SearchClientBasedQueryExecutor initiateExecutor() {
-    return new SearchClientBasedQueryExecutor(searchClient, transformers, authentication);
+    super(brokerClient, securityContextProvider, authentication);
   }
 
   public abstract SearchQueryResult<D> search(final Q query);
+
+  protected <E> E getSingleResultOrThrow(
+      final SearchQueryResult<E> searchQueryResult,
+      final Object key,
+      final String entityTypeLabel) {
+    if (searchQueryResult.total() < 1) {
+      throw new NotFoundException(String.format("%s with key %s not found", entityTypeLabel, key));
+    } else if (searchQueryResult.total() > 1) {
+      throw new CamundaSearchException(
+          String.format("Found %s with key %s more than once", entityTypeLabel, key));
+    } else {
+      return searchQueryResult.items().stream().findFirst().orElseThrow();
+    }
+  }
 }

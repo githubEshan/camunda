@@ -12,11 +12,15 @@ export class Diagram {
   private page: Page;
   readonly diagram: Locator;
   readonly popover: Locator;
+  readonly resetDiagramZoomButton: Locator;
 
   constructor(page: Page) {
     this.page = page;
     this.diagram = this.page.getByTestId('diagram');
     this.popover = this.page.getByTestId('popover');
+    this.resetDiagramZoomButton = this.page.getByRole('button', {
+      name: /Reset diagram zoom/i,
+    });
   }
 
   async moveCanvasHorizontally(dx: number) {
@@ -44,10 +48,48 @@ export class Diagram {
     return this.getFlowNode(flowNodeName).click();
   }
 
+  clickSubProcess(subProcessName: string) {
+    // Click on the top left corner of the sub process.
+    // This avoids clicking on child elements inside the sub process.
+    return this.getFlowNode(subProcessName).click({
+      position: {x: 5, y: 5},
+      force: true,
+    });
+  }
+
   getFlowNode(flowNodeName: string) {
     return this.diagram
       .locator('.djs-element')
       .filter({hasText: new RegExp(`^${flowNodeName}$`, 'i')});
+  }
+
+  clickGateway(gatewayName: string) {
+    return this.clickLabeledElement(gatewayName);
+  }
+
+  clickEvent(eventName: string) {
+    return this.clickLabeledElement(eventName);
+  }
+
+  async clickLabeledElement(label: string) {
+    const element = await this.getLabeledElement(label);
+    return element.click();
+  }
+
+  async getLabeledElement(eventName: string) {
+    const eventLabel = this.diagram
+      .locator('.djs-element')
+      .filter({hasText: new RegExp(`${eventName}`, 'i')});
+
+    const labelId = await eventLabel.getAttribute('data-element-id');
+    const eventId = labelId?.split(/_label$/)[0];
+    return this.diagram.locator(`[data-element-id="${eventId}"]`);
+  }
+
+  showMetaData() {
+    return this.popover
+      .getByRole('button', {name: /show more metadata/i})
+      .click();
   }
 
   getExecutionCount(elementId: string) {

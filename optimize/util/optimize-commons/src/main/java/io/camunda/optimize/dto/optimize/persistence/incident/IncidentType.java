@@ -12,14 +12,8 @@ import static io.camunda.optimize.service.util.importing.ZeebeConstants.FAILED_J
 
 import com.fasterxml.jackson.annotation.JsonValue;
 import io.camunda.optimize.service.exceptions.OptimizeRuntimeException;
-import lombok.AccessLevel;
-import lombok.EqualsAndHashCode;
-import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
+import org.slf4j.Logger;
 
-@Slf4j
-@EqualsAndHashCode
-@RequiredArgsConstructor(access = AccessLevel.PROTECTED)
 public class IncidentType {
 
   public static final IncidentType FAILED_EXTERNAL_TASK =
@@ -31,16 +25,16 @@ public class IncidentType {
    https://docs.camunda.org/manual/latest/user-guide/process-engine/incidents/#incident-types
   */
   private static final IncidentType FAILED_JOB = new IncidentType(FAILED_JOB_INCIDENT_TYPE);
+  private static final Logger LOG = org.slf4j.LoggerFactory.getLogger(IncidentType.class);
   private final String id;
+
+  protected IncidentType(final String id) {
+    this.id = id;
+  }
 
   @JsonValue
   public String getId() {
     return id;
-  }
-
-  @Override
-  public String toString() {
-    return getId();
   }
 
   public static IncidentType valueOfId(final String incidentTypeId) {
@@ -49,8 +43,27 @@ public class IncidentType {
     }
     if (!FAILED_JOB.getId().equals(incidentTypeId)
         && !FAILED_EXTERNAL_TASK.getId().equals(incidentTypeId)) {
-      log.debug("Importing custom incident type [{}]", incidentTypeId);
+      LOG.debug("Importing custom incident type [{}]", incidentTypeId);
     }
     return new IncidentType(incidentTypeId);
+  }
+
+  protected boolean canEqual(final Object other) {
+    return other instanceof IncidentType;
+  }
+
+  @Override
+  public int hashCode() {
+    return org.apache.commons.lang3.builder.HashCodeBuilder.reflectionHashCode(this);
+  }
+
+  @Override
+  public boolean equals(final Object o) {
+    return org.apache.commons.lang3.builder.EqualsBuilder.reflectionEquals(this, o);
+  }
+
+  @Override
+  public String toString() {
+    return getId();
   }
 }

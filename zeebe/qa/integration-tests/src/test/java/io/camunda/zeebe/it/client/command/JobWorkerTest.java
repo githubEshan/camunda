@@ -9,9 +9,9 @@ package io.camunda.zeebe.it.client.command;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import io.camunda.zeebe.client.api.response.ActivatedJob;
-import io.camunda.zeebe.client.api.worker.JobWorker;
-import io.camunda.zeebe.client.api.worker.JobWorkerBuilderStep1.JobWorkerBuilderStep3;
+import io.camunda.client.api.response.ActivatedJob;
+import io.camunda.client.api.worker.JobWorker;
+import io.camunda.client.api.worker.JobWorkerBuilderStep1.JobWorkerBuilderStep3;
 import io.camunda.zeebe.it.util.GrpcClientRule;
 import io.camunda.zeebe.it.util.RecordingJobHandler;
 import io.camunda.zeebe.model.bpmn.Bpmn;
@@ -25,8 +25,6 @@ import io.camunda.zeebe.qa.util.jobstream.JobStreamActuatorAssert;
 import io.camunda.zeebe.qa.util.junit.ZeebeIntegration;
 import io.camunda.zeebe.qa.util.junit.ZeebeIntegration.TestZeebe;
 import io.camunda.zeebe.test.util.Strings;
-import io.camunda.zeebe.test.util.junit.AutoCloseResources;
-import io.camunda.zeebe.test.util.junit.AutoCloseResources.AutoCloseResource;
 import io.camunda.zeebe.test.util.record.RecordingExporter;
 import io.grpc.internal.AbstractStream.TransportState;
 import java.time.Duration;
@@ -40,6 +38,7 @@ import java.util.stream.Stream;
 import org.assertj.core.data.Offset;
 import org.awaitility.Awaitility;
 import org.junit.jupiter.api.AfterAll;
+import org.junit.jupiter.api.AutoClose;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Named;
@@ -51,17 +50,20 @@ import org.junit.jupiter.params.provider.MethodSource;
 @ZeebeIntegration
 final class JobWorkerTest {
 
-  @TestZeebe
-  private static final TestStandaloneBroker ZEEBE =
-      new TestStandaloneBroker().withRecordingExporter(true);
+  @TestZeebe(initMethod = "initTestStandaloneBroker")
+  private static TestStandaloneBroker zeebe;
 
   private static GrpcClientRule client;
-
   private final String jobType = Strings.newRandomValidBpmnId();
+
+  @SuppressWarnings("unused")
+  static void initTestStandaloneBroker() {
+    zeebe = new TestStandaloneBroker().withRecordingExporter(true);
+  }
 
   @BeforeAll
   static void beforeAll() {
-    client = new GrpcClientRule(ZEEBE.newClientBuilder().build());
+    client = new GrpcClientRule(zeebe.newClientBuilder().build());
   }
 
   @AfterAll
@@ -210,7 +212,7 @@ final class JobWorkerTest {
     // when
     try (final var ignored = builder.open()) {
       awaitStreamRegistered(jobType);
-      ZEEBE.stop().start().awaitCompleteTopology();
+      zeebe.stop().start().awaitCompleteTopology();
       // need to stream being registered, as otherwise the job will be polled, not streamed
       awaitStreamRegistered(jobType);
       client.createSingleJob(jobType, b -> {});
@@ -292,7 +294,7 @@ final class JobWorkerTest {
   }
 
   private static void awaitStreamRegistered(final String jobType) {
-    final var actuator = JobStreamActuator.of(ZEEBE);
+    final var actuator = JobStreamActuator.of(zeebe);
     Awaitility.await("until stream is registered")
         .untilAsserted(
             () ->
@@ -302,7 +304,7 @@ final class JobWorkerTest {
   }
 
   private void awaitStreamRemoved(final String jobType) {
-    final var actuator = JobStreamActuator.of(ZEEBE);
+    final var actuator = JobStreamActuator.of(zeebe);
     Awaitility.await("until no streams are registered")
         .untilAsserted(
             () ->
@@ -312,7 +314,6 @@ final class JobWorkerTest {
   }
 
   @Nested
-  @AutoCloseResources
   final class SlowWorkerTest {
     private final String uniqueId = Strings.newRandomValidBpmnId();
     private final CountDownLatch latch = new CountDownLatch(1);
@@ -330,7 +331,7 @@ final class JobWorkerTest {
     private final RecordingJobHandler jobHandler = new RecordingJobHandler();
 
     @SuppressWarnings({"FieldCanBeLocal", "unused"})
-    @AutoCloseResource
+    @AutoClose
     private JobWorker worker;
 
     @BeforeEach

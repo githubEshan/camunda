@@ -7,35 +7,36 @@
  */
 package io.camunda.operate.util;
 
-import static io.camunda.operate.entities.ErrorType.JOB_NO_RETRIES;
 import static io.camunda.operate.property.OperationExecutorProperties.LOCK_TIMEOUT_DEFAULT;
 import static io.camunda.operate.schema.SchemaManager.OPERATE_DELETE_ARCHIVED_INDICES;
-import static io.camunda.operate.schema.indices.IndexDescriptor.DEFAULT_TENANT_ID;
 import static io.camunda.operate.util.OperateAbstractIT.DEFAULT_USER;
+import static io.camunda.webapps.schema.entities.AbstractExporterEntity.DEFAULT_TENANT_ID;
+import static io.camunda.webapps.schema.entities.operate.ErrorType.JOB_NO_RETRIES;
 
-import io.camunda.operate.entities.BatchOperationEntity;
-import io.camunda.operate.entities.EventEntity;
-import io.camunda.operate.entities.FlowNodeState;
-import io.camunda.operate.entities.FlowNodeType;
-import io.camunda.operate.entities.IncidentEntity;
-import io.camunda.operate.entities.IncidentState;
-import io.camunda.operate.entities.OperationEntity;
-import io.camunda.operate.entities.OperationState;
-import io.camunda.operate.entities.OperationType;
-import io.camunda.operate.entities.ProcessEntity;
-import io.camunda.operate.entities.VariableEntity;
-import io.camunda.operate.entities.dmn.DecisionInstanceEntity;
-import io.camunda.operate.entities.dmn.DecisionInstanceInputEntity;
-import io.camunda.operate.entities.dmn.DecisionInstanceOutputEntity;
-import io.camunda.operate.entities.dmn.DecisionInstanceState;
-import io.camunda.operate.entities.dmn.DecisionType;
-import io.camunda.operate.entities.listview.FlowNodeInstanceForListViewEntity;
-import io.camunda.operate.entities.listview.ProcessInstanceForListViewEntity;
-import io.camunda.operate.entities.listview.ProcessInstanceState;
-import io.camunda.operate.entities.listview.VariableForListViewEntity;
 import io.camunda.operate.store.opensearch.client.sync.OpenSearchIndexOperations;
 import io.camunda.operate.store.opensearch.client.sync.OpenSearchTemplateOperations;
 import io.camunda.operate.store.opensearch.client.sync.RichOpenSearchClient;
+import io.camunda.webapps.operate.TreePath;
+import io.camunda.webapps.schema.entities.operate.EventEntity;
+import io.camunda.webapps.schema.entities.operate.FlowNodeState;
+import io.camunda.webapps.schema.entities.operate.FlowNodeType;
+import io.camunda.webapps.schema.entities.operate.IncidentEntity;
+import io.camunda.webapps.schema.entities.operate.IncidentState;
+import io.camunda.webapps.schema.entities.operate.ProcessEntity;
+import io.camunda.webapps.schema.entities.operate.VariableEntity;
+import io.camunda.webapps.schema.entities.operate.dmn.DecisionInstanceEntity;
+import io.camunda.webapps.schema.entities.operate.dmn.DecisionInstanceInputEntity;
+import io.camunda.webapps.schema.entities.operate.dmn.DecisionInstanceOutputEntity;
+import io.camunda.webapps.schema.entities.operate.dmn.DecisionInstanceState;
+import io.camunda.webapps.schema.entities.operate.dmn.DecisionType;
+import io.camunda.webapps.schema.entities.operate.listview.FlowNodeInstanceForListViewEntity;
+import io.camunda.webapps.schema.entities.operate.listview.ProcessInstanceForListViewEntity;
+import io.camunda.webapps.schema.entities.operate.listview.ProcessInstanceState;
+import io.camunda.webapps.schema.entities.operate.listview.VariableForListViewEntity;
+import io.camunda.webapps.schema.entities.operation.BatchOperationEntity;
+import io.camunda.webapps.schema.entities.operation.OperationEntity;
+import io.camunda.webapps.schema.entities.operation.OperationState;
+import io.camunda.webapps.schema.entities.operation.OperationType;
 import java.io.IOException;
 import java.time.OffsetDateTime;
 import java.time.temporal.ChronoUnit;
@@ -548,14 +549,15 @@ public abstract class TestUtil {
       final OperationState state,
       final String username,
       final boolean lockExpired) {
-    final OperationEntity oe = new OperationEntity();
-    oe.generateId();
-    oe.setProcessInstanceKey(processInstanceKey);
-    oe.setScopeKey(processInstanceKey);
-    oe.setProcessDefinitionKey(processDefinitionKey);
-    oe.setBpmnProcessId(bpmnProcessId);
-    oe.setIncidentKey(incidentKey);
-    oe.setVariableName(varName);
+    final OperationEntity oe =
+        new OperationEntity()
+            .withGeneratedId()
+            .setProcessInstanceKey(processInstanceKey)
+            .setScopeKey(processInstanceKey)
+            .setProcessDefinitionKey(processDefinitionKey)
+            .setBpmnProcessId(bpmnProcessId)
+            .setIncidentKey(incidentKey)
+            .setVariableName(varName);
     if (varName != null) {
       oe.setType(OperationType.UPDATE_VARIABLE);
       oe.setVariableValue(varName);
@@ -593,7 +595,7 @@ public abstract class TestUtil {
   public static BatchOperationEntity createBatchOperationEntity(
       final OffsetDateTime startDate, final OffsetDateTime endDate, final String username) {
     return new BatchOperationEntity()
-        .setId(UUID.randomUUID().toString())
+        .withGeneratedId()
         .setStartDate(startDate)
         .setEndDate(endDate)
         .setUsername(username)

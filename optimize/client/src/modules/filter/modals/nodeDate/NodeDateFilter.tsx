@@ -7,7 +7,7 @@
  */
 
 import {useEffect, useState} from 'react';
-import {Button, Form} from '@carbon/react';
+import {Button, Form, Stack} from '@carbon/react';
 import classnames from 'classnames';
 
 import {
@@ -115,7 +115,7 @@ export function NodeDateFilter({
     >
       <Modal.Header
         title={t('common.filter.modalHeader', {
-          type: t(`common.filter.types.${filterType}`),
+          type: t(`common.filter.types.${filterType}`).toString(),
         })}
       />
       <Modal.Content>
@@ -127,17 +127,19 @@ export function NodeDateFilter({
         {xml ? (
           <>
             <Form>
-              <p className="info">
-                {t('common.filter.nodeDateModal.info.' + filterType + '.' + filterLevel)}
-              </p>
-              <DateRangeInput
-                type={type}
-                unit={unit}
-                startDate={startDate}
-                endDate={endDate}
-                customNum={customNum}
-                onChange={(change) => setDateRange({...dateRange, ...change} as FilterState)}
-              />
+              <Stack gap={4}>
+                <p className="info">
+                  {t('common.filter.nodeDateModal.info.' + filterType + '.' + filterLevel)}
+                </p>
+                <DateRangeInput
+                  type={type}
+                  unit={unit}
+                  startDate={startDate}
+                  endDate={endDate}
+                  customNum={customNum}
+                  onChange={(change) => setDateRange({...dateRange, ...change} as FilterState)}
+                />
+              </Stack>
             </Form>
             {isInstanceFilter && (
               <div className="diagramContainer">

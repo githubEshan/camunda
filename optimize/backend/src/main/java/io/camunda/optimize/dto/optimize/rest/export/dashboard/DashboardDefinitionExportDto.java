@@ -21,13 +21,7 @@ import jakarta.validation.constraints.NotNull;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
-import lombok.Data;
-import lombok.EqualsAndHashCode;
-import lombok.NoArgsConstructor;
 
-@NoArgsConstructor
-@Data
-@EqualsAndHashCode(callSuper = true)
 public class DashboardDefinitionExportDto extends OptimizeEntityExportDto {
 
   @NotNull private List<DashboardReportTileDto> tiles = new ArrayList<>();
@@ -47,6 +41,8 @@ public class DashboardDefinitionExportDto extends OptimizeEntityExportDto {
     collectionId = dashboardDefinition.getCollectionId();
   }
 
+  public DashboardDefinitionExportDto() {}
+
   @JsonIgnore
   public Set<String> getTileIds() {
     return tiles.stream()
@@ -63,6 +59,67 @@ public class DashboardDefinitionExportDto extends OptimizeEntityExportDto {
         .collect(toSet());
   }
 
+  public @NotNull List<DashboardReportTileDto> getTiles() {
+    return tiles;
+  }
+
+  public void setTiles(@NotNull final List<DashboardReportTileDto> tiles) {
+    this.tiles = tiles;
+  }
+
+  public @NotNull List<DashboardFilterDto<?>> getAvailableFilters() {
+    return availableFilters;
+  }
+
+  public void setAvailableFilters(@NotNull final List<DashboardFilterDto<?>> availableFilters) {
+    this.availableFilters = availableFilters;
+  }
+
+  public String getCollectionId() {
+    return collectionId;
+  }
+
+  public void setCollectionId(final String collectionId) {
+    this.collectionId = collectionId;
+  }
+
+  public boolean isInstantPreviewDashboard() {
+    return isInstantPreviewDashboard;
+  }
+
+  public void setInstantPreviewDashboard(final boolean isInstantPreviewDashboard) {
+    this.isInstantPreviewDashboard = isInstantPreviewDashboard;
+  }
+
+  @Override
+  protected boolean canEqual(final Object other) {
+    return other instanceof DashboardDefinitionExportDto;
+  }
+
+  @Override
+  public int hashCode() {
+    return org.apache.commons.lang3.builder.HashCodeBuilder.reflectionHashCode(this);
+  }
+
+  @Override
+  public boolean equals(final Object o) {
+    return org.apache.commons.lang3.builder.EqualsBuilder.reflectionEquals(this, o);
+  }
+
+  @Override
+  public String toString() {
+    return "DashboardDefinitionExportDto(tiles="
+        + getTiles()
+        + ", availableFilters="
+        + getAvailableFilters()
+        + ", collectionId="
+        + getCollectionId()
+        + ", isInstantPreviewDashboard="
+        + isInstantPreviewDashboard()
+        + ")";
+  }
+
+  @SuppressWarnings("checkstyle:ConstantName")
   public static final class Fields {
 
     public static final String tiles = "tiles";

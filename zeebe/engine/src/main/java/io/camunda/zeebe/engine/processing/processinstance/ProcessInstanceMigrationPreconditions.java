@@ -7,7 +7,6 @@
  */
 package io.camunda.zeebe.engine.processing.processinstance;
 
-import io.camunda.zeebe.auth.impl.TenantAuthorizationCheckerImpl;
 import io.camunda.zeebe.engine.processing.deployment.model.element.AbstractFlowElement;
 import io.camunda.zeebe.engine.processing.deployment.model.element.ExecutableActivity;
 import io.camunda.zeebe.engine.processing.deployment.model.element.ExecutableBoundaryEvent;
@@ -15,6 +14,9 @@ import io.camunda.zeebe.engine.processing.deployment.model.element.ExecutableCat
 import io.camunda.zeebe.engine.processing.deployment.model.element.ExecutableCatchEventElement;
 import io.camunda.zeebe.engine.processing.deployment.model.element.ExecutableCatchEventSupplier;
 import io.camunda.zeebe.engine.processing.deployment.model.element.ExecutableFlowElement;
+import io.camunda.zeebe.engine.processing.deployment.model.element.ExecutableFlowNode;
+import io.camunda.zeebe.engine.processing.deployment.model.element.ExecutableMultiInstanceBody;
+import io.camunda.zeebe.engine.processing.deployment.model.element.ExecutableSequenceFlow;
 import io.camunda.zeebe.engine.processing.deployment.model.element.ExecutableStartEvent;
 import io.camunda.zeebe.engine.processing.deployment.model.element.ExecutableUserTask;
 import io.camunda.zeebe.engine.state.deployment.DeployedProcess;
@@ -55,7 +57,10 @@ public final class ProcessInstanceMigrationPreconditions {
           BpmnElementType.EVENT_BASED_GATEWAY,
           BpmnElementType.BUSINESS_RULE_TASK,
           BpmnElementType.SCRIPT_TASK,
-          BpmnElementType.SEND_TASK);
+          BpmnElementType.SEND_TASK,
+          BpmnElementType.MULTI_INSTANCE_BODY,
+          BpmnElementType.PARALLEL_GATEWAY,
+          BpmnElementType.INCLUSIVE_GATEWAY);
   private static final Set<BpmnElementType> UNSUPPORTED_ELEMENT_TYPES =
       EnumSet.complementOf(SUPPORTED_ELEMENT_TYPES);
   private static final Set<BpmnEventType> SUPPORTED_INTERMEDIATE_CATCH_EVENT_TYPES =
@@ -160,6 +165,34 @@ public final class ProcessInstanceMigrationPreconditions {
       but a concurrent command was executed on the process instance. \
       Please retry the migration.""";
 
+  private static final String ERROR_UPDATED_LOOP_CHARACTERISTICS =
+      """
+      Expected to migrate process instance '%s' \
+      but active element with id '%s' has a different loop characteristics \
+      than the target element with id '%s'. \
+      Both elements must have either sequential or parallel loop characteristics.""";
+
+  private static final String ERROR_GATEWAY_NOT_MAPPED =
+      """
+      Expected to migrate process instance '%s' \
+      but gateway '%s' has at least one incoming sequence flow taken. \
+      Joining gateways with at least one incoming sequence flow taken must be mapped \
+      to a gateway of the same type in the target process definition.""";
+
+  private static final String ERROR_SEQUENCE_FLOW_NOT_CONNECTED_TO_TARGET_GATEWAY =
+      """
+      Expected to migrate process instance '%s' \
+      but gateway with id '%s' has a taken incoming sequence flow mismatch. \
+      Taken sequence flow with id '%s' must connect to the mapped target gateway \
+      with id '%s' in the target process definition.""";
+
+  private static final String ERROR_TARGET_GATEWAY_HAS_LESS_INCOMING_SEQUENCE_FLOWS =
+      """
+      Expected to migrate process instance '%s' \
+      but target gateway with id '%s' has less incoming sequence flows \
+      than the source gateway with id '%s'. \
+      Target gateway must have at least the same number of incoming sequence flows as the source gateway.""";
+
   private static final String ZEEBE_USER_TASK_IMPLEMENTATION = "zeebe user task";
   private static final String JOB_WORKER_IMPLEMENTATION = "job worker";
 
@@ -173,27 +206,6 @@ public final class ProcessInstanceMigrationPreconditions {
   public static void requireNonNullProcessInstance(
       final ElementInstance record, final long processInstanceKey) {
     if (record == null) {
-      final String reason =
-          String.format(ERROR_MESSAGE_PROCESS_INSTANCE_NOT_FOUND, processInstanceKey);
-      throw new ProcessInstanceMigrationPreconditionFailedException(
-          reason, RejectionType.NOT_FOUND);
-    }
-  }
-
-  /**
-   * Checks whether given tenant is authorized for the process given instance.
-   *
-   * @param authorizations list of authorizations available
-   * @param tenantId tenant id to be checked
-   * @param processInstanceKey process instance key to be logged
-   */
-  public static void requireAuthorizedTenant(
-      final Map<String, Object> authorizations,
-      final String tenantId,
-      final long processInstanceKey) {
-    final boolean isTenantAuthorized =
-        TenantAuthorizationCheckerImpl.fromAuthorizationMap(authorizations).isAuthorized(tenantId);
-    if (!isTenantAuthorized) {
       final String reason =
           String.format(ERROR_MESSAGE_PROCESS_INSTANCE_NOT_FOUND, processInstanceKey);
       throw new ProcessInstanceMigrationPreconditionFailedException(
@@ -443,28 +455,49 @@ public final class ProcessInstanceMigrationPreconditions {
    *
    * @param targetProcessDefinition target process definition to retrieve the target element type
    * @param targetElementId target element id
-   * @param elementInstanceRecord element instance to do the check
+   * @param elementInstance element instance to do the check
    * @param processInstanceKey process instance key to be logged
    */
   public static void requireSameElementType(
       final DeployedProcess targetProcessDefinition,
       final String targetElementId,
-      final ProcessInstanceRecord elementInstanceRecord,
+      final ElementInstance elementInstance,
       final long processInstanceKey) {
-    final BpmnElementType targetElementType =
+    final ProcessInstanceRecord elementInstanceRecord = elementInstance.getValue();
+    BpmnElementType targetElementType =
         targetProcessDefinition.getProcess().getElementById(targetElementId).getElementType();
-    if (elementInstanceRecord.getBpmnElementType() != targetElementType) {
-      final String reason =
-          String.format(
-              ERROR_ELEMENT_TYPE_CHANGED,
-              processInstanceKey,
-              elementInstanceRecord.getElementId(),
-              elementInstanceRecord.getBpmnElementType(),
-              targetElementId,
-              targetElementType);
-      throw new ProcessInstanceMigrationPreconditionFailedException(
-          reason, RejectionType.INVALID_STATE);
+
+    if (elementInstanceRecord.getBpmnElementType() == targetElementType) {
+      return;
     }
+
+    // if target element is a multi instance body, we should check the inner activity element type
+    // because the inner activity of the multi instance body can still match the source element's
+    // type. Also, multi instance loop counter indicates that the element instance is inside a multi
+    // instance body.
+    if (elementInstance.getMultiInstanceLoopCounter() > 0
+        && targetElementType == BpmnElementType.MULTI_INSTANCE_BODY) {
+      final ExecutableMultiInstanceBody targetElement =
+          targetProcessDefinition
+              .getProcess()
+              .getElementById(targetElementId, ExecutableMultiInstanceBody.class);
+
+      targetElementType = targetElement.getInnerActivity().getElementType();
+      if (elementInstanceRecord.getBpmnElementType() == targetElementType) {
+        return;
+      }
+    }
+
+    final String reason =
+        String.format(
+            ERROR_ELEMENT_TYPE_CHANGED,
+            processInstanceKey,
+            elementInstanceRecord.getElementId(),
+            elementInstanceRecord.getBpmnElementType(),
+            targetElementId,
+            targetElementType);
+    throw new ProcessInstanceMigrationPreconditionFailedException(
+        reason, RejectionType.INVALID_STATE);
   }
 
   /**
@@ -540,24 +573,39 @@ public final class ProcessInstanceMigrationPreconditions {
     if (sourceFlowScopeElement != null) {
       final DirectBuffer expectedFlowScopeId =
           sourceFlowScopeElement.getValue().getElementIdBuffer();
-      final DirectBuffer actualFlowScopeId =
-          targetProcessDefinition
-              .getProcess()
-              .getElementById(targetElementId)
-              .getFlowScope()
-              .getId();
+      final AbstractFlowElement targetFlowElement =
+          targetProcessDefinition.getProcess().getElementById(targetElementId);
+      DirectBuffer actualFlowScopeId;
 
-      if (!expectedFlowScopeId.equals(actualFlowScopeId)) {
-        final String reason =
-            String.format(
-                ERROR_MESSAGE_ELEMENT_FLOW_SCOPE_CHANGED,
-                elementInstanceRecord.getProcessInstanceKey(),
-                elementInstanceRecord.getElementId(),
-                BufferUtil.bufferAsString(expectedFlowScopeId),
-                BufferUtil.bufferAsString(actualFlowScopeId));
-        throw new ProcessInstanceMigrationPreconditionFailedException(
-            reason, RejectionType.INVALID_STATE);
+      // if target element is a multi instance body, we should check the inner activity flow scope
+      // because the inner activity of the multi instance body can still match the source element's
+      // flow scope
+      if (targetFlowElement.getElementType() == BpmnElementType.MULTI_INSTANCE_BODY) {
+        final ExecutableMultiInstanceBody targetElement =
+            targetProcessDefinition
+                .getProcess()
+                .getElementById(targetElementId, ExecutableMultiInstanceBody.class);
+
+        actualFlowScopeId = targetElement.getInnerActivity().getFlowScope().getId();
+        if (expectedFlowScopeId.equals(actualFlowScopeId)) {
+          return;
+        }
       }
+
+      actualFlowScopeId = targetFlowElement.getFlowScope().getId();
+      if (expectedFlowScopeId.equals(actualFlowScopeId)) {
+        return;
+      }
+
+      final String reason =
+          String.format(
+              ERROR_MESSAGE_ELEMENT_FLOW_SCOPE_CHANGED,
+              elementInstanceRecord.getProcessInstanceKey(),
+              elementInstanceRecord.getElementId(),
+              BufferUtil.bufferAsString(expectedFlowScopeId),
+              BufferUtil.bufferAsString(actualFlowScopeId));
+      throw new ProcessInstanceMigrationPreconditionFailedException(
+          reason, RejectionType.INVALID_STATE);
     }
   }
 
@@ -813,11 +861,13 @@ public final class ProcessInstanceMigrationPreconditions {
    * migration in between.
    *
    * @param eventScopeInstanceState event scope instance state to retrieve the event trigger
+   * @param elementInstanceState element instance state to retrieve taken sequence flows count
    * @param elementInstance element instance to do the check active sequence flows
    * @param processInstanceKey process instance key to be logged
    */
   public static void requireNoConcurrentCommand(
       final EventScopeInstanceState eventScopeInstanceState,
+      final ElementInstanceState elementInstanceState,
       final ElementInstance elementInstance,
       final long processInstanceKey) {
     final EventTrigger eventTrigger =
@@ -828,10 +878,129 @@ public final class ProcessInstanceMigrationPreconditions {
     // or
     // An active sequence flow indicates a concurrent command. It is created when taking a
     // sequence flow and writing an ACTIVATE command for the next element.
-    if (eventTrigger != null || elementInstance.getActiveSequenceFlows() > 0) {
+    // We allow migrating joining parallel gateway with at least one incoming sequence flow is taken
+    if (eventTrigger != null) {
       final String reason = String.format(ERROR_CONCURRENT_COMMAND, processInstanceKey);
       throw new ProcessInstanceMigrationPreconditionFailedException(
           reason, RejectionType.INVALID_STATE);
+    }
+
+    final long activeSequenceFlows = elementInstance.getActiveSequenceFlows();
+    if (activeSequenceFlows > 0) {
+      final int takenSequenceFlowsToGateways =
+          elementInstanceState.getNumberOfTakenSequenceFlows(elementInstance.getKey());
+      // if there is a sequence flow that is flowing to an element rather than parallel or inclusive
+      // gateway
+      if (takenSequenceFlowsToGateways < activeSequenceFlows) {
+        final String reason = String.format(ERROR_CONCURRENT_COMMAND, processInstanceKey);
+        throw new ProcessInstanceMigrationPreconditionFailedException(
+            reason, RejectionType.INVALID_STATE);
+      }
+    }
+  }
+
+  /**
+   * While processing commands, `ACTIVATE_ELEMENT` command for the source gateway might not fit into
+   * the existing command batch and can be deferred to be processed later. In the meantime, if an
+   * instance migration command is executed, the migrate command will end up changing the instance
+   * that is not stable. E.g. the gateway should be activated/completed but the execution is
+   * deferred.
+   *
+   * <p>If we do not prevent such migration execution, it will lead process instance records will be
+   * written to the log stream and processed with wrong process definition key, bpmn process id or
+   * other process related information. That breaks the data integrity of the log stream.
+   *
+   * <p>To prevent that, we need to make sure the joining parallel gateway is in a stable state.
+   * E.g. incoming sequence flows to it is only partially taken, so valid for migration.
+   *
+   * @param elementInstanceState element instance state to retrieve the taken sequence flow count
+   * @param sourceGateway source gateway to check the number of taken sequence flows
+   * @param flowScopeKey flow scope key of the source gateway
+   * @param processInstanceKey process instance key to be logged
+   */
+  public static void requireNoConcurrentCommandForGateway(
+      final ElementInstanceState elementInstanceState,
+      final ExecutableFlowNode sourceGateway,
+      final long flowScopeKey,
+      final long processInstanceKey) {
+    final int numberOfTakenSequenceFlows =
+        elementInstanceState.getNumberOfTakenSequenceFlows(flowScopeKey, sourceGateway.getId());
+
+    if (numberOfTakenSequenceFlows == sourceGateway.getIncoming().size()) {
+      final String reason = String.format(ERROR_CONCURRENT_COMMAND, processInstanceKey);
+      throw new ProcessInstanceMigrationPreconditionFailedException(
+          reason, RejectionType.INVALID_STATE);
+    }
+  }
+
+  public static void requireValidGatewayMapping(
+      final ExecutableFlowNode sourceGateway,
+      final String targetGatewayId,
+      final DeployedProcess targetProcessDefinition,
+      final long processInstanceKey) {
+    if (targetGatewayId == null) {
+      final var reason =
+          String.format(
+              ERROR_GATEWAY_NOT_MAPPED,
+              processInstanceKey,
+              BufferUtil.bufferAsString(sourceGateway.getId()));
+      throw new ProcessInstanceMigrationPreconditionFailedException(
+          reason, RejectionType.INVALID_ARGUMENT);
+    }
+
+    // no need to check if the target gateway exists because it is already validated
+    final var targetGateway = targetProcessDefinition.getProcess().getElementById(targetGatewayId);
+
+    if (targetGateway.getElementType() != sourceGateway.getElementType()) {
+      final var reason =
+          String.format(
+              ERROR_ELEMENT_TYPE_CHANGED,
+              processInstanceKey,
+              BufferUtil.bufferAsString(sourceGateway.getId()),
+              sourceGateway.getElementType(),
+              targetGatewayId,
+              targetGateway.getElementType());
+      throw new ProcessInstanceMigrationPreconditionFailedException(
+          reason, RejectionType.INVALID_ARGUMENT);
+    }
+  }
+
+  public static void requireSequenceFlowExistsInTarget(
+      final DirectBuffer activeSequenceFlowId,
+      final ExecutableFlowNode sourceGateway,
+      final ExecutableFlowNode targetGateway,
+      final long processInstanceKey) {
+    final boolean sequenceFLowExistsInTarget =
+        targetGateway.getIncoming().stream()
+            .map(ExecutableSequenceFlow::getId)
+            .anyMatch(activeSequenceFlowId::equals);
+
+    if (!sequenceFLowExistsInTarget) {
+      final var reason =
+          String.format(
+              ERROR_SEQUENCE_FLOW_NOT_CONNECTED_TO_TARGET_GATEWAY,
+              processInstanceKey,
+              BufferUtil.bufferAsString(sourceGateway.getId()),
+              BufferUtil.bufferAsString(activeSequenceFlowId),
+              BufferUtil.bufferAsString(targetGateway.getId()));
+      throw new ProcessInstanceMigrationPreconditionFailedException(
+          reason, RejectionType.INVALID_ARGUMENT);
+    }
+  }
+
+  public static void requireValidTargetIncomingFlowCount(
+      final ExecutableFlowNode sourceGateway,
+      final ExecutableFlowNode targetGateway,
+      final long processInstanceKey) {
+    if (targetGateway.getIncoming().size() < sourceGateway.getIncoming().size()) {
+      final var reason =
+          String.format(
+              ERROR_TARGET_GATEWAY_HAS_LESS_INCOMING_SEQUENCE_FLOWS,
+              processInstanceKey,
+              BufferUtil.bufferAsString(targetGateway.getId()),
+              BufferUtil.bufferAsString(sourceGateway.getId()));
+      throw new ProcessInstanceMigrationPreconditionFailedException(
+          reason, RejectionType.INVALID_ARGUMENT);
     }
   }
 
@@ -860,10 +1029,10 @@ public final class ProcessInstanceMigrationPreconditions {
       throw new ProcessInstanceMigrationPreconditionFailedException(
           """
           Expected to migrate process instance '%s' but active element with id '%s' \
-          attempts to subscribe to a message it is already subscribed to with name '%s'. \
-          Migrating active elements that subscribe to a message they are already \
-          subscribed to is not possible yet. Please provide a mapping instruction to \
-          message catch event with id '%s' to migrate the respective message subscription.\
+          is already subscribed to the same message name '%s'. Currently, migrating message \
+          subscriptions to the same message name isn't supported without a mapping. \
+          Please provide a mapping instruction between message catch event with id '%s' \
+          and the target message catch event. \
           """
               .formatted(processInstanceKey, elementId, messageNameString, targetCatchEventId),
           RejectionType.INVALID_STATE);
@@ -889,6 +1058,41 @@ public final class ProcessInstanceMigrationPreconditions {
     final String message =
         ERROR_PENDING_DISTRIBUTION.formatted(processInstanceKey, elementId, eventElementId);
     requireNoPendingMigrationDistribution(distributionState, distributionKey, message);
+  }
+
+  public static void requireSameMultiInstanceLoopCharacteristics(
+      final DeployedProcess sourceProcessDefinition,
+      final String sourceElementId,
+      final DeployedProcess targetProcessDefinition,
+      final String targetElementId,
+      final long processInstanceKey) {
+    final BpmnElementType targetElementType =
+        targetProcessDefinition.getProcess().getElementById(targetElementId).getElementType();
+    final BpmnElementType sourceElementType =
+        sourceProcessDefinition.getProcess().getElementById(sourceElementId).getElementType();
+    if (sourceElementType == BpmnElementType.MULTI_INSTANCE_BODY
+        && targetElementType == BpmnElementType.MULTI_INSTANCE_BODY) {
+      final var targetElement =
+          targetProcessDefinition
+              .getProcess()
+              .getElementById(targetElementId, ExecutableMultiInstanceBody.class);
+      final var sourceElement =
+          sourceProcessDefinition
+              .getProcess()
+              .getElementById(sourceElementId, ExecutableMultiInstanceBody.class);
+
+      if (targetElement.getLoopCharacteristics().isSequential()
+          != sourceElement.getLoopCharacteristics().isSequential()) {
+        final String reason =
+            String.format(
+                ERROR_UPDATED_LOOP_CHARACTERISTICS,
+                processInstanceKey,
+                sourceElementId,
+                targetElementId);
+        throw new ProcessInstanceMigrationPreconditionFailedException(
+            reason, RejectionType.INVALID_STATE);
+      }
+    }
   }
 
   /**

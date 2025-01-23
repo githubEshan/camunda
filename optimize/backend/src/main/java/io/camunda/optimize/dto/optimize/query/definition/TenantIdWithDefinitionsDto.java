@@ -9,16 +9,59 @@ package io.camunda.optimize.dto.optimize.query.definition;
 
 import io.camunda.optimize.dto.optimize.SimpleDefinitionDto;
 import java.util.List;
-import lombok.AccessLevel;
-import lombok.AllArgsConstructor;
-import lombok.Data;
-import lombok.NoArgsConstructor;
-import lombok.NonNull;
 
-@AllArgsConstructor
-@NoArgsConstructor(access = AccessLevel.PROTECTED)
-@Data
 public class TenantIdWithDefinitionsDto {
+
   private String id;
-  @NonNull private List<SimpleDefinitionDto> definitions;
+  private List<SimpleDefinitionDto> definitions;
+
+  public TenantIdWithDefinitionsDto(final String id, final List<SimpleDefinitionDto> definitions) {
+    if (definitions == null) {
+      throw new IllegalArgumentException("definitions cannot be null");
+    }
+
+    this.id = id;
+    this.definitions = definitions;
+  }
+
+  protected TenantIdWithDefinitionsDto() {}
+
+  public String getId() {
+    return id;
+  }
+
+  public void setId(final String id) {
+    this.id = id;
+  }
+
+  public List<SimpleDefinitionDto> getDefinitions() {
+    return definitions;
+  }
+
+  public void setDefinitions(final List<SimpleDefinitionDto> definitions) {
+    if (definitions == null) {
+      throw new IllegalArgumentException("definitions cannot be null");
+    }
+
+    this.definitions = definitions;
+  }
+
+  protected boolean canEqual(final Object other) {
+    return other instanceof TenantIdWithDefinitionsDto;
+  }
+
+  @Override
+  public int hashCode() {
+    return org.apache.commons.lang3.builder.HashCodeBuilder.reflectionHashCode(this);
+  }
+
+  @Override
+  public boolean equals(final Object o) {
+    return org.apache.commons.lang3.builder.EqualsBuilder.reflectionEquals(this, o);
+  }
+
+  @Override
+  public String toString() {
+    return "TenantIdWithDefinitionsDto(id=" + getId() + ", definitions=" + getDefinitions() + ")";
+  }
 }

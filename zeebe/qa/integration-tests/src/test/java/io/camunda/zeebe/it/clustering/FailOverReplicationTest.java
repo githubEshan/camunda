@@ -9,9 +9,9 @@ package io.camunda.zeebe.it.clustering;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import io.camunda.client.CamundaClient;
 import io.camunda.zeebe.broker.Broker;
 import io.camunda.zeebe.broker.system.configuration.BrokerCfg;
-import io.camunda.zeebe.client.ZeebeClient;
 import io.camunda.zeebe.it.util.GrpcClientRule;
 import io.camunda.zeebe.model.bpmn.Bpmn;
 import io.camunda.zeebe.model.bpmn.BpmnModelInstance;
@@ -45,7 +45,7 @@ public class FailOverReplicationTest {
       new ClusteringRule(PARTITION_COUNT, 3, 3, FailOverReplicationTest::configureBroker);
   public final GrpcClientRule clientRule = new GrpcClientRule(clusteringRule);
   @Rule public RuleChain ruleChain = RuleChain.outerRule(clusteringRule).around(clientRule);
-  private ZeebeClient client;
+  private CamundaClient client;
 
   @Before
   public void init() {
@@ -126,9 +126,14 @@ public class FailOverReplicationTest {
     // when
     clusteringRule.connect(previousLeader);
 
-    // then
-    final var receivedSnapshot = clusteringRule.waitForSnapshotAtBroker(previousLeader);
-    assertThat(receivedSnapshot).isEqualTo(snapshotMetadata);
+    // then -- reconnected member is forced to receive a snapshot because leader has compacted the
+    // log after taking the snapshot.
+    Awaitility.await("snapshot received")
+        .pollInterval(Duration.ofMillis(100))
+        .atMost(Duration.ofSeconds(30))
+        .untilAsserted(
+            () ->
+                assertThat(clusteringRule.getSnapshot(previousLeader)).hasValue(snapshotMetadata));
   }
 
   // regression test for https://github.com/zeebe-io/zeebe/issues/4810

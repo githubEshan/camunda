@@ -7,27 +7,38 @@
  */
 package io.camunda.optimize;
 
-import static io.camunda.optimize.jetty.OptimizeResourceConstants.ACTUATOR_PORT_PROPERTY_KEY;
+import static io.camunda.optimize.tomcat.OptimizeResourceConstants.ACTUATOR_PORT_PROPERTY_KEY;
 
 import io.camunda.optimize.service.util.configuration.ConfigurationService;
-import java.util.Collections;
-import lombok.extern.slf4j.Slf4j;
+import java.util.HashMap;
+import java.util.Map;
+import org.slf4j.Logger;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.boot.autoconfigure.freemarker.FreeMarkerAutoConfiguration;
 import org.springframework.context.annotation.ComponentScan;
 
-@Slf4j
 @ComponentScan(excludeFilters = @ComponentScan.Filter(IgnoreDuringScan.class))
 @SpringBootApplication(exclude = {FreeMarkerAutoConfiguration.class})
 public class Main {
-  public static void main(String[] args) {
-    SpringApplication optimize = new SpringApplication(Main.class);
+
+  private static final Logger LOG = org.slf4j.LoggerFactory.getLogger(Main.class);
+
+  public static void main(final String[] args) {
+    // Temporarily hardcoding this property until we merge into a singleapp
+    System.setProperty(
+        "spring.web.resources.static-locations", "classpath:/META-INF/resources/optimize/");
+    final SpringApplication optimize = new SpringApplication(Main.class);
 
     final ConfigurationService configurationService = ConfigurationService.createDefault();
-    optimize.setDefaultProperties(
-        Collections.singletonMap(
-            ACTUATOR_PORT_PROPERTY_KEY, configurationService.getActuatorPort()));
+
+    final Map<String, Object> defaultProperties = new HashMap<>();
+    defaultProperties.put(ACTUATOR_PORT_PROPERTY_KEY, configurationService.getActuatorPort());
+
+    // TODO: Remove once we read the configuration from the single application
+    defaultProperties.put("useLegacyPort", "true");
+
+    optimize.setDefaultProperties(defaultProperties);
 
     optimize.run(args);
   }

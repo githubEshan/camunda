@@ -13,6 +13,8 @@ import io.camunda.zeebe.dynamic.config.api.ClusterConfigurationRequestFailedExce
 import io.camunda.zeebe.dynamic.config.api.ClusterConfigurationRequestFailedException.ConcurrentModificationException;
 import io.camunda.zeebe.dynamic.config.api.ClusterConfigurationRequestFailedException.InvalidRequest;
 import io.camunda.zeebe.dynamic.config.api.ClusterConfigurationRequestFailedException.OperationNotAllowed;
+import io.camunda.zeebe.dynamic.config.changes.ClusterChangeExecutor.NoopClusterChangeExecutor;
+import io.camunda.zeebe.dynamic.config.changes.PartitionScalingChangeExecutor.NoopPartitionScalingChangeExecutor;
 import io.camunda.zeebe.dynamic.config.state.ClusterChangePlan;
 import io.camunda.zeebe.dynamic.config.state.ClusterConfiguration;
 import io.camunda.zeebe.dynamic.config.state.ClusterConfigurationChangeOperation;
@@ -106,7 +108,7 @@ public class ConfigurationChangeCoordinatorImpl implements ConfigurationChangeCo
                         // the default coordinator
                         failFuture(
                             future,
-                            new InternalError(
+                            new ClusterConfigurationRequestFailedException.InternalError(
                                 String.format(
                                     "Cannot process request to change the configuration. The broker '%s' is not the coordinator.",
                                     localMemberId)));
@@ -205,7 +207,10 @@ public class ConfigurationChangeCoordinatorImpl implements ConfigurationChangeCo
       // simulate applying changes to validate the operations
       final var topologyChangeSimulator =
           new ConfigurationChangeAppliersImpl(
-              new NoopPartitionChangeExecutor(), new NoopClusterMembershipChangeExecutor());
+              new NoopPartitionChangeExecutor(),
+              new NoopClusterMembershipChangeExecutor(),
+              new NoopPartitionScalingChangeExecutor(),
+              new NoopClusterChangeExecutor());
       final var topologyWithPendingOperations =
           currentClusterConfiguration.startConfigurationChange(operations);
 

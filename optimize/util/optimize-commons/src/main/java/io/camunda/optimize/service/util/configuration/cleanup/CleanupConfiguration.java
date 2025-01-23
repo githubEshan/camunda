@@ -16,14 +16,10 @@ import io.camunda.optimize.service.exceptions.OptimizeConfigurationException;
 import io.camunda.optimize.service.util.CronNormalizerUtil;
 import java.time.Period;
 import java.util.Optional;
-import lombok.AccessLevel;
-import lombok.Data;
-import lombok.NoArgsConstructor;
 
-@Data
-@NoArgsConstructor(access = AccessLevel.PROTECTED)
 @JsonIgnoreProperties(ignoreUnknown = true)
 public class CleanupConfiguration {
+
   @JsonProperty("cronTrigger")
   private String cronTrigger;
 
@@ -54,6 +50,8 @@ public class CleanupConfiguration {
     this.decisionCleanupConfiguration = decisionCleanupConfiguration;
   }
 
+  protected CleanupConfiguration() {}
+
   public void validate() {
     if (ttl == null) {
       throw new OptimizeConfigurationException(HISTORY_CLEANUP + ".ttl must be set");
@@ -69,11 +67,6 @@ public class CleanupConfiguration {
   @JsonIgnore
   public boolean isEnabled() {
     return processDataCleanupConfiguration.isEnabled() || decisionCleanupConfiguration.isEnabled();
-  }
-
-  public final void setCronTrigger(String cronTrigger) {
-    this.cronTrigger =
-        Optional.ofNullable(cronTrigger).map(CronNormalizerUtil::normalizeToSixParts).orElse(null);
   }
 
   public ProcessDefinitionCleanupConfiguration getProcessDefinitionCleanupConfigurationForKey(
@@ -99,5 +92,82 @@ public class CleanupConfiguration {
 
     return new DecisionDefinitionCleanupConfiguration(
         keySpecificConfig.flatMap(config -> Optional.ofNullable(config.getTtl())).orElse(getTtl()));
+  }
+
+  public String getCronTrigger() {
+    return cronTrigger;
+  }
+
+  public final void setCronTrigger(final String cronTrigger) {
+    this.cronTrigger =
+        Optional.ofNullable(cronTrigger).map(CronNormalizerUtil::normalizeToSixParts).orElse(null);
+  }
+
+  public Period getTtl() {
+    return ttl;
+  }
+
+  @JsonProperty("ttl")
+  public void setTtl(final Period ttl) {
+    this.ttl = ttl;
+  }
+
+  public ProcessCleanupConfiguration getProcessDataCleanupConfiguration() {
+    return processDataCleanupConfiguration;
+  }
+
+  @JsonProperty("processDataCleanup")
+  public void setProcessDataCleanupConfiguration(
+      final ProcessCleanupConfiguration processDataCleanupConfiguration) {
+    this.processDataCleanupConfiguration = processDataCleanupConfiguration;
+  }
+
+  public DecisionCleanupConfiguration getDecisionCleanupConfiguration() {
+    return decisionCleanupConfiguration;
+  }
+
+  @JsonProperty("decisionDataCleanup")
+  public void setDecisionCleanupConfiguration(
+      final DecisionCleanupConfiguration decisionCleanupConfiguration) {
+    this.decisionCleanupConfiguration = decisionCleanupConfiguration;
+  }
+
+  public ExternalVariableCleanupConfiguration getExternalVariableCleanupConfiguration() {
+    return externalVariableCleanupConfiguration;
+  }
+
+  @JsonProperty("externalVariableCleanup")
+  public void setExternalVariableCleanupConfiguration(
+      final ExternalVariableCleanupConfiguration externalVariableCleanupConfiguration) {
+    this.externalVariableCleanupConfiguration = externalVariableCleanupConfiguration;
+  }
+
+  protected boolean canEqual(final Object other) {
+    return other instanceof CleanupConfiguration;
+  }
+
+  @Override
+  public int hashCode() {
+    return org.apache.commons.lang3.builder.HashCodeBuilder.reflectionHashCode(this);
+  }
+
+  @Override
+  public boolean equals(final Object o) {
+    return org.apache.commons.lang3.builder.EqualsBuilder.reflectionEquals(this, o);
+  }
+
+  @Override
+  public String toString() {
+    return "CleanupConfiguration(cronTrigger="
+        + getCronTrigger()
+        + ", ttl="
+        + getTtl()
+        + ", processDataCleanupConfiguration="
+        + getProcessDataCleanupConfiguration()
+        + ", decisionCleanupConfiguration="
+        + getDecisionCleanupConfiguration()
+        + ", externalVariableCleanupConfiguration="
+        + getExternalVariableCleanupConfiguration()
+        + ")";
   }
 }

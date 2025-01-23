@@ -39,7 +39,7 @@ export default function DashboardTemplateModal({
     })();
   }, []);
 
-  let templateGroups = [
+  const templateGroups = [
     {
       name: 'blankGroup',
       templates: [{name: 'blank', disableDescription: true}],
@@ -55,11 +55,9 @@ export default function DashboardTemplateModal({
     },
     {
       name: 'multiProcessGroup',
-      templates: [operationsMonitoringDashboardTemplate()],
+      templates: [portfolioPerformanceDashboardTemplate(), operationsMonitoringDashboardTemplate()],
     },
   ];
-
-  templateGroups[2].templates.unshift(portfolioPerformanceDashboardTemplate());
 
   if (!optimizeProfileLoaded) {
     return null;

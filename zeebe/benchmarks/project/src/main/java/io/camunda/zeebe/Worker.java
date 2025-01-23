@@ -15,11 +15,11 @@
  */
 package io.camunda.zeebe;
 
-import io.camunda.zeebe.client.ZeebeClient;
-import io.camunda.zeebe.client.ZeebeClientBuilder;
-import io.camunda.zeebe.client.api.worker.JobHandler;
-import io.camunda.zeebe.client.api.worker.JobWorker;
-import io.camunda.zeebe.client.api.worker.JobWorkerMetrics;
+import io.camunda.client.CamundaClient;
+import io.camunda.client.CamundaClientBuilder;
+import io.camunda.client.api.worker.JobHandler;
+import io.camunda.client.api.worker.JobWorker;
+import io.camunda.client.api.worker.JobWorkerMetrics;
 import io.camunda.zeebe.config.AppCfg;
 import io.camunda.zeebe.config.WorkerCfg;
 import io.camunda.zeebe.util.logging.ThrottledLogger;
@@ -51,7 +51,7 @@ public class Worker extends App {
     final boolean isStreamEnabled = workerCfg.isStreamEnabled();
     final var variables = readVariables(workerCfg.getPayloadPath());
     final BlockingQueue<Future<?>> requestFutures = new ArrayBlockingQueue<>(10_000);
-    final ZeebeClient client = createZeebeClient();
+    final CamundaClient client = createCamundaClient();
     final JobWorkerMetrics metrics =
         JobWorkerMetrics.micrometer()
             .withMeterRegistry(prometheusRegistry)
@@ -82,7 +82,7 @@ public class Worker extends App {
   }
 
   private JobHandler handleJob(
-      final ZeebeClient client,
+      final CamundaClient client,
       final String variables,
       final long completionDelay,
       final BlockingQueue<Future<?>> requestFutures) {
@@ -98,15 +98,20 @@ public class Worker extends App {
 
         final boolean messagePublishedSuccessfully = publishMessage(client, correlationKey);
         if (!messagePublishedSuccessfully) {
-          // - On issues with publishing a message we need to retry the job
-          // - thus is to make sure our message gets published
-          // - otherwise our process might get stuck
-          // - failing the job makes it immediately available again
-          jobClient
-              .newFailCommand(job)
-              .retries(job.getRetries())
-              .errorMessage("Message publish failed.")
-              .send();
+          // Instead of failing the job, we simply let the job time out, so someone else has to
+          // pick up the job later. This might delay the individual process instance, but overall it
+          // has a lesser impact, as we can work on a different job in the meantime, keeping up the
+          // throughput.
+          //
+          // It might be that one partition has currently some struggle due to restarts or role
+          // changes, chances are low that this affects all partitions.
+          //
+          // This might cause issues for the current job to publish a message, but we are sending
+          // messages via correlation key,   based on the process instance payload.
+          //
+          // On the next job/message published the chances are (partition count - 1 / partition
+          // count) that we hit another partition where it works without issues.
+
           return;
         }
       }
@@ -117,7 +122,7 @@ public class Worker extends App {
     };
   }
 
-  private boolean publishMessage(final ZeebeClient client, final String correlationKey) {
+  private boolean publishMessage(final CamundaClient client, final String correlationKey) {
     final var messageName = workerCfg.getMessageName();
 
     LOGGER.debug("Publish message '{}' with correlation key '{}'", messageName, correlationKey);
@@ -160,14 +165,14 @@ public class Worker extends App {
     }
   }
 
-  private ZeebeClient createZeebeClient() {
+  private CamundaClient createCamundaClient() {
     final WorkerCfg workerCfg = appCfg.getWorker();
     final var timeout =
         appCfg.getWorker().getTimeout() != Duration.ZERO
             ? appCfg.getWorker().getTimeout()
             : workerCfg.getCompletionDelay().multipliedBy(6);
-    final ZeebeClientBuilder builder =
-        ZeebeClient.newClientBuilder()
+    final CamundaClientBuilder builder =
+        CamundaClient.newClientBuilder()
             .gatewayAddress(appCfg.getBrokerUrl())
             .numJobWorkerExecutionThreads(workerCfg.getThreads())
             .defaultJobWorkerName(workerCfg.getWorkerName())

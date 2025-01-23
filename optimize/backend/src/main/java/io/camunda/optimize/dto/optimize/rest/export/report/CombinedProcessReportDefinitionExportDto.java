@@ -14,16 +14,9 @@ import io.camunda.optimize.dto.optimize.query.report.combined.CombinedReportDefi
 import io.camunda.optimize.dto.optimize.rest.export.ExportEntityType;
 import io.camunda.optimize.service.db.schema.index.report.CombinedReportIndex;
 import jakarta.validation.constraints.NotNull;
-import lombok.AllArgsConstructor;
-import lombok.Data;
-import lombok.EqualsAndHashCode;
-import lombok.NoArgsConstructor;
 
-@AllArgsConstructor
-@NoArgsConstructor
-@EqualsAndHashCode(callSuper = true)
-@Data
 public class CombinedProcessReportDefinitionExportDto extends ReportDefinitionExportDto {
+
   @NotNull private CombinedReportDataDto data;
 
   public CombinedProcessReportDefinitionExportDto(
@@ -35,11 +28,45 @@ public class CombinedProcessReportDefinitionExportDto extends ReportDefinitionEx
         reportDefinition.getName(),
         reportDefinition.getDescription(),
         reportDefinition.getCollectionId());
-    this.data = reportDefinition.getData();
+    data = reportDefinition.getData();
   }
+
+  public CombinedProcessReportDefinitionExportDto(@NotNull final CombinedReportDataDto data) {
+    this.data = data;
+  }
+
+  public CombinedProcessReportDefinitionExportDto() {}
 
   @Override
   public ExportEntityType getExportEntityType() {
     return COMBINED_REPORT;
+  }
+
+  public @NotNull CombinedReportDataDto getData() {
+    return data;
+  }
+
+  public void setData(@NotNull final CombinedReportDataDto data) {
+    this.data = data;
+  }
+
+  @Override
+  public String toString() {
+    return "CombinedProcessReportDefinitionExportDto(data=" + getData() + ")";
+  }
+
+  @Override
+  public boolean equals(final Object o) {
+    return org.apache.commons.lang3.builder.EqualsBuilder.reflectionEquals(this, o);
+  }
+
+  @Override
+  protected boolean canEqual(final Object other) {
+    return other instanceof CombinedProcessReportDefinitionExportDto;
+  }
+
+  @Override
+  public int hashCode() {
+    return org.apache.commons.lang3.builder.HashCodeBuilder.reflectionHashCode(this);
   }
 }

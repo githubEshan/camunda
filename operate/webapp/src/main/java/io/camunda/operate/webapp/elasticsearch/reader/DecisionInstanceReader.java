@@ -7,30 +7,30 @@
  */
 package io.camunda.operate.webapp.elasticsearch.reader;
 
-import static io.camunda.operate.entities.dmn.DecisionInstanceState.EVALUATED;
-import static io.camunda.operate.entities.dmn.DecisionInstanceState.FAILED;
-import static io.camunda.operate.schema.indices.IndexDescriptor.TENANT_ID;
-import static io.camunda.operate.schema.templates.DecisionInstanceTemplate.DECISION_DEFINITION_ID;
-import static io.camunda.operate.schema.templates.DecisionInstanceTemplate.DECISION_ID;
-import static io.camunda.operate.schema.templates.DecisionInstanceTemplate.DECISION_NAME;
-import static io.camunda.operate.schema.templates.DecisionInstanceTemplate.ELEMENT_INSTANCE_KEY;
-import static io.camunda.operate.schema.templates.DecisionInstanceTemplate.EVALUATED_INPUTS;
-import static io.camunda.operate.schema.templates.DecisionInstanceTemplate.EVALUATED_OUTPUTS;
-import static io.camunda.operate.schema.templates.DecisionInstanceTemplate.EVALUATION_DATE;
-import static io.camunda.operate.schema.templates.DecisionInstanceTemplate.EXECUTION_INDEX;
-import static io.camunda.operate.schema.templates.DecisionInstanceTemplate.ID;
-import static io.camunda.operate.schema.templates.DecisionInstanceTemplate.KEY;
-import static io.camunda.operate.schema.templates.DecisionInstanceTemplate.PROCESS_INSTANCE_KEY;
-import static io.camunda.operate.schema.templates.DecisionInstanceTemplate.RESULT;
-import static io.camunda.operate.schema.templates.DecisionInstanceTemplate.ROOT_DECISION_DEFINITION_ID;
-import static io.camunda.operate.schema.templates.DecisionInstanceTemplate.ROOT_DECISION_ID;
-import static io.camunda.operate.schema.templates.DecisionInstanceTemplate.ROOT_DECISION_NAME;
-import static io.camunda.operate.schema.templates.DecisionInstanceTemplate.STATE;
 import static io.camunda.operate.util.ElasticsearchUtil.QueryType.ALL;
 import static io.camunda.operate.util.ElasticsearchUtil.createMatchNoneQuery;
 import static io.camunda.operate.util.ElasticsearchUtil.joinWithAnd;
 import static io.camunda.operate.util.ElasticsearchUtil.reverseOrder;
 import static io.camunda.operate.webapp.rest.dto.dmn.list.DecisionInstanceListRequestDto.SORT_BY_PROCESS_INSTANCE_ID;
+import static io.camunda.webapps.schema.descriptors.IndexTemplateDescriptor.TENANT_ID;
+import static io.camunda.webapps.schema.descriptors.operate.template.DecisionInstanceTemplate.DECISION_DEFINITION_ID;
+import static io.camunda.webapps.schema.descriptors.operate.template.DecisionInstanceTemplate.DECISION_ID;
+import static io.camunda.webapps.schema.descriptors.operate.template.DecisionInstanceTemplate.DECISION_NAME;
+import static io.camunda.webapps.schema.descriptors.operate.template.DecisionInstanceTemplate.ELEMENT_INSTANCE_KEY;
+import static io.camunda.webapps.schema.descriptors.operate.template.DecisionInstanceTemplate.EVALUATED_INPUTS;
+import static io.camunda.webapps.schema.descriptors.operate.template.DecisionInstanceTemplate.EVALUATED_OUTPUTS;
+import static io.camunda.webapps.schema.descriptors.operate.template.DecisionInstanceTemplate.EVALUATION_DATE;
+import static io.camunda.webapps.schema.descriptors.operate.template.DecisionInstanceTemplate.EXECUTION_INDEX;
+import static io.camunda.webapps.schema.descriptors.operate.template.DecisionInstanceTemplate.ID;
+import static io.camunda.webapps.schema.descriptors.operate.template.DecisionInstanceTemplate.KEY;
+import static io.camunda.webapps.schema.descriptors.operate.template.DecisionInstanceTemplate.PROCESS_INSTANCE_KEY;
+import static io.camunda.webapps.schema.descriptors.operate.template.DecisionInstanceTemplate.RESULT;
+import static io.camunda.webapps.schema.descriptors.operate.template.DecisionInstanceTemplate.ROOT_DECISION_DEFINITION_ID;
+import static io.camunda.webapps.schema.descriptors.operate.template.DecisionInstanceTemplate.ROOT_DECISION_ID;
+import static io.camunda.webapps.schema.descriptors.operate.template.DecisionInstanceTemplate.ROOT_DECISION_NAME;
+import static io.camunda.webapps.schema.descriptors.operate.template.DecisionInstanceTemplate.STATE;
+import static io.camunda.webapps.schema.entities.operate.dmn.DecisionInstanceState.EVALUATED;
+import static io.camunda.webapps.schema.entities.operate.dmn.DecisionInstanceState.FAILED;
 import static java.util.stream.Collectors.groupingBy;
 import static org.elasticsearch.index.query.QueryBuilders.constantScoreQuery;
 import static org.elasticsearch.index.query.QueryBuilders.idsQuery;
@@ -40,12 +40,8 @@ import static org.elasticsearch.index.query.QueryBuilders.termQuery;
 import static org.elasticsearch.index.query.QueryBuilders.termsQuery;
 
 import io.camunda.operate.conditions.ElasticsearchCondition;
-import io.camunda.operate.entities.dmn.DecisionInstanceEntity;
-import io.camunda.operate.entities.dmn.DecisionInstanceState;
 import io.camunda.operate.exceptions.OperateRuntimeException;
 import io.camunda.operate.property.OperateProperties;
-import io.camunda.operate.schema.indices.DecisionIndex;
-import io.camunda.operate.schema.templates.DecisionInstanceTemplate;
 import io.camunda.operate.util.CollectionUtil;
 import io.camunda.operate.util.ElasticsearchUtil;
 import io.camunda.operate.util.Tuple;
@@ -58,7 +54,11 @@ import io.camunda.operate.webapp.rest.dto.dmn.list.DecisionInstanceListRequestDt
 import io.camunda.operate.webapp.rest.dto.dmn.list.DecisionInstanceListResponseDto;
 import io.camunda.operate.webapp.rest.exception.NotFoundException;
 import io.camunda.operate.webapp.security.identity.IdentityPermission;
-import io.camunda.operate.webapp.security.identity.PermissionsService;
+import io.camunda.operate.webapp.security.permission.PermissionsService;
+import io.camunda.webapps.schema.descriptors.operate.index.DecisionIndex;
+import io.camunda.webapps.schema.descriptors.operate.template.DecisionInstanceTemplate;
+import io.camunda.webapps.schema.entities.operate.dmn.DecisionInstanceEntity;
+import io.camunda.webapps.schema.entities.operate.dmn.DecisionInstanceState;
 import java.io.IOException;
 import java.time.format.DateTimeFormatter;
 import java.util.Collections;
@@ -89,9 +89,7 @@ public class DecisionInstanceReader extends AbstractReader
 
   private static final Logger LOGGER = LoggerFactory.getLogger(DecisionInstanceReader.class);
 
-  @Autowired(required = false)
-  protected PermissionsService permissionsService;
-
+  @Autowired private PermissionsService permissionsService;
   @Autowired private DecisionInstanceTemplate decisionInstanceTemplate;
   @Autowired private DateTimeFormatter dateTimeFormatter;
   @Autowired private OperateProperties operateProperties;
@@ -338,7 +336,7 @@ public class DecisionInstanceReader extends AbstractReader
   }
 
   private QueryBuilder createReadPermissionQuery() {
-    if (permissionsService == null) {
+    if (!permissionsService.permissionsEnabled()) {
       return null;
     }
     final var allowed = permissionsService.getDecisionsWithPermission(IdentityPermission.READ);

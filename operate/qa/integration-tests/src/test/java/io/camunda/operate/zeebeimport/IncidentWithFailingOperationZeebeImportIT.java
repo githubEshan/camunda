@@ -7,15 +7,13 @@
  */
 package io.camunda.operate.zeebeimport;
 
-import static io.camunda.operate.entities.ErrorType.JOB_NO_RETRIES;
 import static io.camunda.operate.webapp.rest.ProcessInstanceRestService.PROCESS_INSTANCE_URL;
+import static io.camunda.webapps.schema.entities.operate.ErrorType.JOB_NO_RETRIES;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
 
 import com.fasterxml.jackson.core.type.TypeReference;
-import io.camunda.operate.entities.ErrorType;
-import io.camunda.operate.entities.OperationType;
 import io.camunda.operate.property.OperateProperties;
 import io.camunda.operate.store.BatchRequest;
 import io.camunda.operate.util.OperateZeebeAbstractIT;
@@ -26,6 +24,8 @@ import io.camunda.operate.webapp.rest.dto.incidents.IncidentDto;
 import io.camunda.operate.webapp.rest.dto.incidents.IncidentResponseDto;
 import io.camunda.operate.webapp.rest.dto.operation.CreateOperationRequestDto;
 import io.camunda.operate.webapp.zeebe.operation.ResolveIncidentHandler;
+import io.camunda.webapps.schema.entities.operate.ErrorType;
+import io.camunda.webapps.schema.entities.operation.OperationType;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -63,7 +63,7 @@ public class IncidentWithFailingOperationZeebeImportIT extends OperateZeebeAbstr
   @Before
   public void before() {
     super.before();
-    updateRetriesHandler.setZeebeClient(super.getClient());
+    updateRetriesHandler.setCamundaClient(super.getClient());
   }
 
   @Test
@@ -88,10 +88,10 @@ public class IncidentWithFailingOperationZeebeImportIT extends OperateZeebeAbstr
     final String processId = "complexProcess";
     deployProcess("complexProcess_v_3.bpmn");
     final long processInstanceKey =
-        ZeebeTestUtil.startProcessInstance(zeebeClient, processId, "{\"count\":3}");
+        ZeebeTestUtil.startProcessInstance(camundaClient, processId, "{\"count\":3}");
     final String errorMsg = "some error";
     final String activityId = "alwaysFailingTask";
-    ZeebeTestUtil.failTask(zeebeClient, activityId, getWorkerName(), 3, errorMsg);
+    ZeebeTestUtil.failTask(camundaClient, activityId, getWorkerName(), 3, errorMsg);
     searchTestRule.processAllRecordsAndWait(incidentsAreActiveCheck, processInstanceKey, 4);
 
     postOperationWithOKResponse(

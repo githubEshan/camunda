@@ -18,47 +18,55 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.common.collect.Lists;
 import io.camunda.optimize.dto.optimize.DecisionDefinitionOptimizeDto;
 import io.camunda.optimize.service.db.os.OptimizeOpenSearchClient;
-import io.camunda.optimize.service.db.os.externalcode.client.dsl.QueryDSL;
+import io.camunda.optimize.service.db.os.client.dsl.QueryDSL;
 import io.camunda.optimize.service.db.writer.DecisionDefinitionWriter;
 import io.camunda.optimize.service.util.configuration.ConfigurationService;
 import io.camunda.optimize.service.util.configuration.condition.OpenSearchCondition;
 import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicBoolean;
-import lombok.AllArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
 import org.opensearch.client.opensearch._types.Script;
 import org.opensearch.client.opensearch._types.query_dsl.BoolQuery;
 import org.opensearch.client.opensearch.core.UpdateRequest;
 import org.opensearch.client.opensearch.core.bulk.BulkOperation;
 import org.opensearch.client.opensearch.core.bulk.UpdateOperation;
+import org.slf4j.Logger;
 import org.springframework.context.annotation.Conditional;
 import org.springframework.stereotype.Component;
 
-@AllArgsConstructor
 @Component
-@Slf4j
 @Conditional(OpenSearchCondition.class)
 public class DecisionDefinitionWriterOS implements DecisionDefinitionWriter {
 
   private static final Script MARK_AS_DELETED_SCRIPT =
       OpenSearchWriterUtil.createDefaultScriptWithPrimitiveParams(
           "ctx._source.deleted = true", Collections.emptyMap());
+  private static final Logger LOG =
+      org.slf4j.LoggerFactory.getLogger(DecisionDefinitionWriterOS.class);
   private final ObjectMapper objectMapper;
   private final OptimizeOpenSearchClient osClient;
   private final ConfigurationService configurationService;
 
+  public DecisionDefinitionWriterOS(
+      final ObjectMapper objectMapper,
+      final OptimizeOpenSearchClient osClient,
+      final ConfigurationService configurationService) {
+    this.objectMapper = objectMapper;
+    this.osClient = osClient;
+    this.configurationService = configurationService;
+  }
+
   @Override
   public void importDecisionDefinitions(
       final List<DecisionDefinitionOptimizeDto> decisionDefinitionOptimizeDtos) {
-    log.debug(
+    LOG.debug(
         "Writing [{}] decision definitions to opensearch", decisionDefinitionOptimizeDtos.size());
     writeDecisionDefinitionInformation(decisionDefinitionOptimizeDtos);
   }
 
   @Override
   public void markDefinitionAsDeleted(final String definitionId) {
-    log.debug("Marking decision definition with ID {} as deleted", definitionId);
+    LOG.debug("Marking decision definition with ID {} as deleted", definitionId);
     final UpdateRequest.Builder updateRequest =
         new UpdateRequest.Builder<>()
             .index(DECISION_DEFINITION_INDEX_NAME)
@@ -113,7 +121,7 @@ public class DecisionDefinitionWriterOS implements DecisionDefinitionWriter {
               }
             });
     if (definitionsUpdated.get()) {
-      log.debug("Marked old decision definitions with new deployments as deleted");
+      LOG.debug("Marked old decision definitions with new deployments as deleted");
     }
     return definitionsUpdated.get();
   }
@@ -121,7 +129,7 @@ public class DecisionDefinitionWriterOS implements DecisionDefinitionWriter {
   private void writeDecisionDefinitionInformation(
       final List<DecisionDefinitionOptimizeDto> decisionDefinitionOptimizeDtos) {
     final String importItemName = "decision definition information";
-    log.debug("Writing [{}] {} to OS.", decisionDefinitionOptimizeDtos.size(), importItemName);
+    LOG.debug("Writing [{}] {} to OS.", decisionDefinitionOptimizeDtos.size(), importItemName);
     osClient.doImportBulkRequestWithList(
         importItemName,
         decisionDefinitionOptimizeDtos,

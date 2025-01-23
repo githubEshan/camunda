@@ -10,7 +10,7 @@ package io.camunda.optimize.service.db.repository.os;
 import static io.camunda.optimize.service.db.DatabaseConstants.LIST_FETCH_LIMIT;
 import static io.camunda.optimize.service.db.DatabaseConstants.POSITION_BASED_IMPORT_INDEX_NAME;
 import static io.camunda.optimize.service.db.DatabaseConstants.TIMESTAMP_BASED_IMPORT_INDEX_NAME;
-import static io.camunda.optimize.service.db.os.externalcode.client.dsl.QueryDSL.stringTerms;
+import static io.camunda.optimize.service.db.os.client.dsl.QueryDSL.stringTerms;
 import static io.camunda.optimize.service.db.schema.index.index.TimestampBasedImportIndex.DB_TYPE_INDEX_REFERS_TO;
 import static java.lang.String.format;
 
@@ -29,29 +29,39 @@ import io.camunda.optimize.service.util.configuration.condition.OpenSearchCondit
 import java.time.format.DateTimeFormatter;
 import java.util.List;
 import java.util.Optional;
-import lombok.AllArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
 import org.opensearch.client.opensearch.core.GetResponse;
 import org.opensearch.client.opensearch.core.SearchRequest;
 import org.opensearch.client.opensearch.core.bulk.BulkOperation;
 import org.opensearch.client.opensearch.core.bulk.IndexOperation;
+import org.slf4j.Logger;
 import org.springframework.context.annotation.Conditional;
 import org.springframework.stereotype.Component;
 
-@Slf4j
 @Component
-@AllArgsConstructor
 @Conditional(OpenSearchCondition.class)
 public class ImportRepositoryOS implements ImportRepository {
+
+  private static final Logger LOG = org.slf4j.LoggerFactory.getLogger(ImportRepositoryOS.class);
   private final OptimizeOpenSearchClient osClient;
   private final ConfigurationService configurationService;
   private final OptimizeIndexNameService indexNameService;
   private final DateTimeFormatter dateTimeFormatter;
 
+  public ImportRepositoryOS(
+      final OptimizeOpenSearchClient osClient,
+      final ConfigurationService configurationService,
+      final OptimizeIndexNameService indexNameService,
+      final DateTimeFormatter dateTimeFormatter) {
+    this.osClient = osClient;
+    this.configurationService = configurationService;
+    this.indexNameService = indexNameService;
+    this.dateTimeFormatter = dateTimeFormatter;
+  }
+
   @Override
   public List<TimestampBasedImportIndexDto> getAllTimestampBasedImportIndicesForTypes(
-      List<String> indexTypes) {
-    log.debug("Fetching timestamp based import indices of types '{}'", indexTypes);
+      final List<String> indexTypes) {
+    LOG.debug("Fetching timestamp based import indices of types '{}'", indexTypes);
 
     final SearchRequest.Builder requestBuilder =
         new SearchRequest.Builder()
@@ -70,7 +80,7 @@ public class ImportRepositoryOS implements ImportRepository {
       final Class<T> importDTOClass,
       final String typeIndexComesFrom,
       final D dataSourceDto) {
-    log.debug("Fetching {} import index of type '{}'", indexType, typeIndexComesFrom);
+    LOG.debug("Fetching {} import index of type '{}'", indexType, typeIndexComesFrom);
     final GetResponse<T> response =
         osClient.get(
             indexNameService.getOptimizeIndexAliasForIndex(indexName),
@@ -81,7 +91,7 @@ public class ImportRepositoryOS implements ImportRepository {
     if (response.found()) {
       return Optional.ofNullable(response.source());
     } else {
-      log.debug(
+      LOG.debug(
           "Was not able to retrieve {} import index for type [{}] and engine [{}] from opensearch.",
           indexType,
           typeIndexComesFrom,
@@ -112,14 +122,11 @@ public class ImportRepositoryOS implements ImportRepository {
   }
 
   private BulkOperation addPositionBasedImportIndexRequest(
-      PositionBasedImportIndexDto optimizeDto) {
-    log.debug(
+      final PositionBasedImportIndexDto optimizeDto) {
+    LOG.debug(
         "Writing position based import index of type [{}] with position [{}] to opensearch",
-        optimizeDto.getEsTypeIndexRefersTo(),
+        optimizeDto.getDbTypeIndexRefersTo(),
         optimizeDto.getPositionOfLastEntity());
-    // leaving the prefix "es" although it is valid for ES and OS,
-    // since changing this would require data migration and the cost/benefit of the change is not
-    // worth the effort
     return new BulkOperation.Builder()
         .index(
             new IndexOperation.Builder<PositionBasedImportIndexDto>()
@@ -128,14 +135,14 @@ public class ImportRepositoryOS implements ImportRepository {
                         POSITION_BASED_IMPORT_INDEX_NAME))
                 .id(
                     DatabaseHelper.constructKey(
-                        optimizeDto.getEsTypeIndexRefersTo(), optimizeDto.getDataSource()))
+                        optimizeDto.getDbTypeIndexRefersTo(), optimizeDto.getDataSource()))
                 .document(optimizeDto)
                 .build())
         .build();
   }
 
-  private BulkOperation addImportIndexRequest(OptimizeDto optimizeDto) {
-    if (optimizeDto instanceof TimestampBasedImportIndexDto timestampBasedIndexDto) {
+  private BulkOperation addImportIndexRequest(final OptimizeDto optimizeDto) {
+    if (optimizeDto instanceof final TimestampBasedImportIndexDto timestampBasedIndexDto) {
       return createTimestampBasedRequest(timestampBasedIndexDto);
     } else {
       throw new OptimizeRuntimeException(
@@ -144,12 +151,14 @@ public class ImportRepositoryOS implements ImportRepository {
     }
   }
 
-  private BulkOperation createTimestampBasedRequest(TimestampBasedImportIndexDto importIndex) {
-    String currentTimeStamp = dateTimeFormatter.format(importIndex.getTimestampOfLastEntity());
-    log.debug(
+  private BulkOperation createTimestampBasedRequest(
+      final TimestampBasedImportIndexDto importIndex) {
+    final String currentTimeStamp =
+        dateTimeFormatter.format(importIndex.getTimestampOfLastEntity());
+    LOG.debug(
         "Writing timestamp based import index [{}] of type [{}] with execution timestamp [{}] to opensearch",
         currentTimeStamp,
-        importIndex.getEsTypeIndexRefersTo(),
+        importIndex.getDbTypeIndexRefersTo(),
         importIndex.getLastImportExecutionTimestamp());
     return new BulkOperation.Builder()
         .index(
@@ -163,8 +172,8 @@ public class ImportRepositoryOS implements ImportRepository {
         .build();
   }
 
-  private String getId(TimestampBasedImportIndexDto importIndex) {
+  private String getId(final TimestampBasedImportIndexDto importIndex) {
     return DatabaseHelper.constructKey(
-        importIndex.getEsTypeIndexRefersTo(), importIndex.getDataSourceName());
+        importIndex.getDbTypeIndexRefersTo(), importIndex.getDataSourceName());
   }
 }

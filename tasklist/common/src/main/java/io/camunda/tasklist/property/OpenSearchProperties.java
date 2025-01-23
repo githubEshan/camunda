@@ -26,7 +26,7 @@ public class OpenSearchProperties {
 
   @Deprecated private String host = "localhost";
 
-  @Deprecated private int port = 9205;
+  @Deprecated private int port = 9200;
 
   private String dateFormat = DATE_FORMAT_DEFAULT;
 
@@ -45,6 +45,7 @@ public class OpenSearchProperties {
 
   private boolean awsEnabled = false;
 
+  private boolean healthCheckEnabled = true;
   @NestedConfigurationProperty private SslProperties ssl;
 
   private List<PluginConfiguration> interceptorPlugins;
@@ -185,5 +186,13 @@ public class OpenSearchProperties {
 
   public void setAwsEnabled(final boolean awsEnabled) {
     this.awsEnabled = awsEnabled;
+  }
+
+  public boolean isHealthCheckEnabled() {
+    return healthCheckEnabled;
+  }
+
+  public void setHealthCheckEnabled(final boolean healthCheckEnabled) {
+    this.healthCheckEnabled = healthCheckEnabled;
   }
 }

@@ -7,8 +7,11 @@
  */
 package io.camunda.operate.webapp.zeebe.operation;
 
-import io.camunda.zeebe.client.ZeebeClient;
-import io.camunda.zeebe.client.api.command.ModifyProcessInstanceCommandStep1;
+import static io.camunda.operate.webapp.zeebe.operation.AbstractOperationHandler.withOperationReference;
+
+import io.camunda.client.CamundaClient;
+import io.camunda.client.api.command.ModifyProcessInstanceCommandStep1;
+import io.camunda.client.api.command.ModifyProcessInstanceCommandStep1.ModifyProcessInstanceCommandStep2;
 import java.util.Map;
 import org.springframework.stereotype.Component;
 
@@ -19,33 +22,39 @@ import org.springframework.stereotype.Component;
 @Component
 public class ModifyProcessZeebeWrapper {
 
-  private ZeebeClient zeebeClient;
+  private CamundaClient camundaClient;
 
-  public ModifyProcessZeebeWrapper(final ZeebeClient zeebeClient) {
-    this.zeebeClient = zeebeClient;
+  public ModifyProcessZeebeWrapper(final CamundaClient camundaClient) {
+    this.camundaClient = camundaClient;
   }
 
-  public ZeebeClient getZeebeClient() {
-    return zeebeClient;
+  public CamundaClient getCamundaClient() {
+    return camundaClient;
   }
 
-  public void setZeebeClient(final ZeebeClient zeebeClient) {
-    this.zeebeClient = zeebeClient;
+  public void setCamundaClient(final CamundaClient camundaClient) {
+    this.camundaClient = camundaClient;
   }
 
   public ModifyProcessInstanceCommandStep1 newModifyProcessInstanceCommand(
       final Long processInstanceKey) {
-    return zeebeClient.newModifyProcessInstanceCommand(processInstanceKey);
+    return camundaClient.newModifyProcessInstanceCommand(processInstanceKey);
   }
 
-  public void setVariablesInZeebe(final Long scopeKey, final Map<String, Object> variables) {
-    zeebeClient.newSetVariablesCommand(scopeKey).variables(variables).local(true).send().join();
+  public void setVariablesInZeebe(
+      final Long scopeKey, final Map<String, Object> variables, final String operationId) {
+    final var setVariablesCommand =
+        withOperationReference(
+            camundaClient.newSetVariablesCommand(scopeKey).variables(variables).local(true),
+            operationId);
+
+    setVariablesCommand.send().join();
   }
 
   public void sendModificationsToZeebe(
-      final ModifyProcessInstanceCommandStep1.ModifyProcessInstanceCommandStep2 stepCommand) {
+      final ModifyProcessInstanceCommandStep2 stepCommand, final String operationId) {
     if (stepCommand != null) {
-      stepCommand.send().join();
+      withOperationReference(stepCommand, operationId).send().join();
     }
   }
 }

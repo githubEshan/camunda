@@ -7,9 +7,6 @@
  */
 package io.camunda.optimize.dto.optimize.query.report.single.configuration.target_value;
 
-import lombok.Data;
-
-@Data
 public class SingleReportTargetValueDto {
 
   private SingleReportCountChartDto countChart = new SingleReportCountChartDto();
@@ -19,6 +16,88 @@ public class SingleReportTargetValueDto {
   private SingleReportDurationChartDto durationChart = new SingleReportDurationChartDto();
   private Boolean isKpi;
 
+  public SingleReportTargetValueDto() {}
+
+  public SingleReportCountChartDto getCountChart() {
+    return countChart;
+  }
+
+  public void setCountChart(final SingleReportCountChartDto countChart) {
+    this.countChart = countChart;
+  }
+
+  public DurationProgressDto getDurationProgress() {
+    return durationProgress;
+  }
+
+  public void setDurationProgress(final DurationProgressDto durationProgress) {
+    this.durationProgress = durationProgress;
+  }
+
+  public Boolean getActive() {
+    return active;
+  }
+
+  public void setActive(final Boolean active) {
+    this.active = active;
+  }
+
+  public CountProgressDto getCountProgress() {
+    return countProgress;
+  }
+
+  public void setCountProgress(final CountProgressDto countProgress) {
+    this.countProgress = countProgress;
+  }
+
+  public SingleReportDurationChartDto getDurationChart() {
+    return durationChart;
+  }
+
+  public void setDurationChart(final SingleReportDurationChartDto durationChart) {
+    this.durationChart = durationChart;
+  }
+
+  public Boolean getIsKpi() {
+    return isKpi;
+  }
+
+  public void setIsKpi(final Boolean isKpi) {
+    this.isKpi = isKpi;
+  }
+
+  protected boolean canEqual(final Object other) {
+    return other instanceof SingleReportTargetValueDto;
+  }
+
+  @Override
+  public int hashCode() {
+    return org.apache.commons.lang3.builder.HashCodeBuilder.reflectionHashCode(this);
+  }
+
+  @Override
+  public boolean equals(final Object o) {
+    return org.apache.commons.lang3.builder.EqualsBuilder.reflectionEquals(this, o);
+  }
+
+  @Override
+  public String toString() {
+    return "SingleReportTargetValueDto(countChart="
+        + getCountChart()
+        + ", durationProgress="
+        + getDurationProgress()
+        + ", active="
+        + getActive()
+        + ", countProgress="
+        + getCountProgress()
+        + ", durationChart="
+        + getDurationChart()
+        + ", isKpi="
+        + getIsKpi()
+        + ")";
+  }
+
+  @SuppressWarnings("checkstyle:ConstantName")
   public static final class Fields {
 
     public static final String countChart = "countChart";

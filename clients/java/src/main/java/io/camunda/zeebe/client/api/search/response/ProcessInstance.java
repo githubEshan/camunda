@@ -15,10 +15,11 @@
  */
 package io.camunda.zeebe.client.api.search.response;
 
-import io.camunda.zeebe.client.impl.search.response.OperationImpl;
-import io.camunda.zeebe.client.impl.search.response.ProcessInstanceReferenceImpl;
-import java.util.List;
-
+/**
+ * @deprecated since 8.7 for removal in 8.8, replaced by {@link
+ *     io.camunda.client.api.search.response.ProcessInstance}
+ */
+@Deprecated
 public interface ProcessInstance {
 
   Long getKey();
@@ -48,8 +49,4 @@ public interface ProcessInstance {
   String getTenantId();
 
   String getRootInstanceId();
-
-  List<OperationImpl> getOperations();
-
-  List<ProcessInstanceReferenceImpl> getCallHierarchy();
 }

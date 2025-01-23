@@ -17,16 +17,7 @@ import java.io.Serializable;
 import java.time.OffsetDateTime;
 import java.util.ArrayList;
 import java.util.List;
-import lombok.AllArgsConstructor;
-import lombok.Data;
-import lombok.NoArgsConstructor;
-import lombok.NonNull;
-import lombok.experimental.Accessors;
 
-@NoArgsConstructor
-@AllArgsConstructor
-@Data
-@Accessors(chain = true)
 public class FlowNodeInstanceDto implements Serializable, OptimizeDto {
 
   private String flowNodeInstanceId;
@@ -62,15 +53,37 @@ public class FlowNodeInstanceDto implements Serializable, OptimizeDto {
 
   // engine activity instance specific ctor with mandatory and default but nullable fields
   public FlowNodeInstanceDto(
-      @NonNull final String definitionKey,
-      @NonNull final String definitionVersion,
+      final String definitionKey,
+      final String definitionVersion,
       final String tenantId,
-      @NonNull final String engine,
-      @NonNull final String processInstanceId,
-      @NonNull final String flowNodeId,
-      @NonNull final String flowNodeType,
-      @NonNull final String flowNodeInstanceId,
+      final String engine,
+      final String processInstanceId,
+      final String flowNodeId,
+      final String flowNodeType,
+      final String flowNodeInstanceId,
       final String userTaskInstanceId) {
+    if (definitionKey == null) {
+      throw new IllegalArgumentException("Definition key cannot be null");
+    }
+    if (definitionVersion == null) {
+      throw new IllegalArgumentException("Definition version cannot be null");
+    }
+    if (engine == null) {
+      throw new IllegalArgumentException("Engine cannot be null");
+    }
+    if (processInstanceId == null) {
+      throw new IllegalArgumentException("ProcessInstanceId cannot be null");
+    }
+    if (flowNodeId == null) {
+      throw new IllegalArgumentException("FlowNodeId cannot be null");
+    }
+    if (flowNodeType == null) {
+      throw new IllegalArgumentException("FlowNodeType cannot be null");
+    }
+    if (flowNodeInstanceId == null) {
+      throw new IllegalArgumentException("FlowNodeInstanceId cannot be null");
+    }
+
     this.flowNodeInstanceId = flowNodeInstanceId;
     this.flowNodeId = flowNodeId;
     this.flowNodeType = flowNodeType;
@@ -84,13 +97,32 @@ public class FlowNodeInstanceDto implements Serializable, OptimizeDto {
 
   // zeebe process activity instance specific ctor with mandatory fields
   public FlowNodeInstanceDto(
-      @NonNull final String definitionKey,
-      @NonNull final String definitionVersion,
+      final String definitionKey,
+      final String definitionVersion,
       final String tenantId,
-      @NonNull final String processInstanceId,
-      @NonNull final String flowNodeId,
-      @NonNull final String flowNodeType,
-      @NonNull final String flowNodeInstanceId) {
+      final String processInstanceId,
+      final String flowNodeId,
+      final String flowNodeType,
+      final String flowNodeInstanceId) {
+    if (definitionKey == null) {
+      throw new IllegalArgumentException("Definition key cannot be null");
+    }
+    if (definitionVersion == null) {
+      throw new IllegalArgumentException("Definition version cannot be null");
+    }
+    if (processInstanceId == null) {
+      throw new IllegalArgumentException("ProcessInstanceId cannot be null");
+    }
+    if (flowNodeId == null) {
+      throw new IllegalArgumentException("FlowNodeId cannot be null");
+    }
+    if (flowNodeType == null) {
+      throw new IllegalArgumentException("FlowNodeType cannot be null");
+    }
+    if (flowNodeInstanceId == null) {
+      throw new IllegalArgumentException("FlowNodeInstanceId cannot be null");
+    }
+
     this.flowNodeInstanceId = flowNodeInstanceId;
     this.flowNodeId = flowNodeId;
     this.flowNodeType = flowNodeType;
@@ -102,12 +134,31 @@ public class FlowNodeInstanceDto implements Serializable, OptimizeDto {
 
   // engine user task specific ctor with mandatory fields
   public FlowNodeInstanceDto(
-      @NonNull final String definitionKey,
-      @NonNull final String engine,
-      @NonNull final String processInstanceId,
-      @NonNull final String flowNodeId,
-      @NonNull final String flowNodeInstanceId,
-      @NonNull final String userTaskInstanceId) {
+      final String definitionKey,
+      final String engine,
+      final String processInstanceId,
+      final String flowNodeId,
+      final String flowNodeInstanceId,
+      final String userTaskInstanceId) {
+    if (definitionKey == null) {
+      throw new IllegalArgumentException("Definition key cannot be null");
+    }
+    if (engine == null) {
+      throw new IllegalArgumentException("Engine cannot be null");
+    }
+    if (processInstanceId == null) {
+      throw new IllegalArgumentException("ProcessInstanceId cannot be null");
+    }
+    if (flowNodeId == null) {
+      throw new IllegalArgumentException("FlowNodeId cannot be null");
+    }
+    if (flowNodeInstanceId == null) {
+      throw new IllegalArgumentException("FlowNodeInstanceId cannot be null");
+    }
+    if (userTaskInstanceId == null) {
+      throw new IllegalArgumentException("UserTaskInstanceId cannot be null");
+    }
+
     this.processInstanceId = processInstanceId;
     this.definitionKey = definitionKey;
     this.engine = engine;
@@ -119,10 +170,23 @@ public class FlowNodeInstanceDto implements Serializable, OptimizeDto {
 
   // engine identity link log specific ctor with mandatory fields
   public FlowNodeInstanceDto(
-      @NonNull final String definitionKey,
-      @NonNull final String engine,
-      @NonNull final String processInstanceId,
-      @NonNull final String userTaskInstanceId) {
+      final String definitionKey,
+      final String engine,
+      final String processInstanceId,
+      final String userTaskInstanceId) {
+    if (definitionKey == null) {
+      throw new IllegalArgumentException("Definition key cannot be null");
+    }
+    if (engine == null) {
+      throw new IllegalArgumentException("Engine cannot be null");
+    }
+    if (processInstanceId == null) {
+      throw new IllegalArgumentException("ProcessInstanceId cannot be null");
+    }
+    if (userTaskInstanceId == null) {
+      throw new IllegalArgumentException("UserTaskInstanceId cannot be null");
+    }
+
     this.processInstanceId = processInstanceId;
     this.definitionKey = definitionKey;
     this.engine = engine;
@@ -130,6 +194,285 @@ public class FlowNodeInstanceDto implements Serializable, OptimizeDto {
     this.userTaskInstanceId = userTaskInstanceId;
   }
 
+  public FlowNodeInstanceDto(
+      final String flowNodeInstanceId,
+      final String flowNodeId,
+      final String flowNodeType,
+      final String processInstanceId,
+      final Long totalDurationInMs,
+      final OffsetDateTime startDate,
+      final OffsetDateTime endDate,
+      final Boolean canceled,
+      final String definitionKey,
+      final String definitionVersion,
+      final String tenantId,
+      final String engine,
+      final String userTaskInstanceId,
+      final OffsetDateTime dueDate,
+      final String deleteReason,
+      final String assignee,
+      final List<String> candidateGroups,
+      final List<AssigneeOperationDto> assigneeOperations,
+      final List<CandidateGroupOperationDto> candidateGroupOperations,
+      final Long idleDurationInMs,
+      final Long workDurationInMs) {
+    this.flowNodeInstanceId = flowNodeInstanceId;
+    this.flowNodeId = flowNodeId;
+    this.flowNodeType = flowNodeType;
+    this.processInstanceId = processInstanceId;
+    this.totalDurationInMs = totalDurationInMs;
+    this.startDate = startDate;
+    this.endDate = endDate;
+    this.canceled = canceled;
+    this.definitionKey = definitionKey;
+    this.definitionVersion = definitionVersion;
+    this.tenantId = tenantId;
+    this.engine = engine;
+    this.userTaskInstanceId = userTaskInstanceId;
+    this.dueDate = dueDate;
+    this.deleteReason = deleteReason;
+    this.assignee = assignee;
+    this.candidateGroups = candidateGroups;
+    this.assigneeOperations = assigneeOperations;
+    this.candidateGroupOperations = candidateGroupOperations;
+    this.idleDurationInMs = idleDurationInMs;
+    this.workDurationInMs = workDurationInMs;
+  }
+
+  public FlowNodeInstanceDto() {}
+
+  public String getFlowNodeInstanceId() {
+    return flowNodeInstanceId;
+  }
+
+  public void setFlowNodeInstanceId(final String flowNodeInstanceId) {
+    this.flowNodeInstanceId = flowNodeInstanceId;
+  }
+
+  public String getFlowNodeId() {
+    return flowNodeId;
+  }
+
+  public void setFlowNodeId(final String flowNodeId) {
+    this.flowNodeId = flowNodeId;
+  }
+
+  public String getFlowNodeType() {
+    return flowNodeType;
+  }
+
+  public void setFlowNodeType(final String flowNodeType) {
+    this.flowNodeType = flowNodeType;
+  }
+
+  public String getProcessInstanceId() {
+    return processInstanceId;
+  }
+
+  public void setProcessInstanceId(final String processInstanceId) {
+    this.processInstanceId = processInstanceId;
+  }
+
+  public Long getTotalDurationInMs() {
+    return totalDurationInMs;
+  }
+
+  public void setTotalDurationInMs(final Long totalDurationInMs) {
+    this.totalDurationInMs = totalDurationInMs;
+  }
+
+  public OffsetDateTime getStartDate() {
+    return startDate;
+  }
+
+  public void setStartDate(final OffsetDateTime startDate) {
+    this.startDate = startDate;
+  }
+
+  public OffsetDateTime getEndDate() {
+    return endDate;
+  }
+
+  public void setEndDate(final OffsetDateTime endDate) {
+    this.endDate = endDate;
+  }
+
+  public Boolean getCanceled() {
+    return canceled;
+  }
+
+  public void setCanceled(final Boolean canceled) {
+    this.canceled = canceled;
+  }
+
+  public String getDefinitionKey() {
+    return definitionKey;
+  }
+
+  public void setDefinitionKey(final String definitionKey) {
+    this.definitionKey = definitionKey;
+  }
+
+  public String getDefinitionVersion() {
+    return definitionVersion;
+  }
+
+  public void setDefinitionVersion(final String definitionVersion) {
+    this.definitionVersion = definitionVersion;
+  }
+
+  public String getTenantId() {
+    return tenantId;
+  }
+
+  public void setTenantId(final String tenantId) {
+    this.tenantId = tenantId;
+  }
+
+  public String getEngine() {
+    return engine;
+  }
+
+  @JsonIgnore
+  public void setEngine(final String engine) {
+    this.engine = engine;
+  }
+
+  public String getUserTaskInstanceId() {
+    return userTaskInstanceId;
+  }
+
+  public void setUserTaskInstanceId(final String userTaskInstanceId) {
+    this.userTaskInstanceId = userTaskInstanceId;
+  }
+
+  public OffsetDateTime getDueDate() {
+    return dueDate;
+  }
+
+  public void setDueDate(final OffsetDateTime dueDate) {
+    this.dueDate = dueDate;
+  }
+
+  public String getDeleteReason() {
+    return deleteReason;
+  }
+
+  public void setDeleteReason(final String deleteReason) {
+    this.deleteReason = deleteReason;
+  }
+
+  public String getAssignee() {
+    return assignee;
+  }
+
+  public void setAssignee(final String assignee) {
+    this.assignee = assignee;
+  }
+
+  public List<String> getCandidateGroups() {
+    return candidateGroups;
+  }
+
+  public void setCandidateGroups(final List<String> candidateGroups) {
+    this.candidateGroups = candidateGroups;
+  }
+
+  public List<AssigneeOperationDto> getAssigneeOperations() {
+    return assigneeOperations;
+  }
+
+  public void setAssigneeOperations(final List<AssigneeOperationDto> assigneeOperations) {
+    this.assigneeOperations = assigneeOperations;
+  }
+
+  public List<CandidateGroupOperationDto> getCandidateGroupOperations() {
+    return candidateGroupOperations;
+  }
+
+  public void setCandidateGroupOperations(
+      final List<CandidateGroupOperationDto> candidateGroupOperations) {
+    this.candidateGroupOperations = candidateGroupOperations;
+  }
+
+  public Long getIdleDurationInMs() {
+    return idleDurationInMs;
+  }
+
+  public void setIdleDurationInMs(final Long idleDurationInMs) {
+    this.idleDurationInMs = idleDurationInMs;
+  }
+
+  public Long getWorkDurationInMs() {
+    return workDurationInMs;
+  }
+
+  public void setWorkDurationInMs(final Long workDurationInMs) {
+    this.workDurationInMs = workDurationInMs;
+  }
+
+  protected boolean canEqual(final Object other) {
+    return other instanceof FlowNodeInstanceDto;
+  }
+
+  @Override
+  public int hashCode() {
+    return org.apache.commons.lang3.builder.HashCodeBuilder.reflectionHashCode(this);
+  }
+
+  @Override
+  public boolean equals(final Object o) {
+    return org.apache.commons.lang3.builder.EqualsBuilder.reflectionEquals(this, o);
+  }
+
+  @Override
+  public String toString() {
+    return "FlowNodeInstanceDto(flowNodeInstanceId="
+        + getFlowNodeInstanceId()
+        + ", flowNodeId="
+        + getFlowNodeId()
+        + ", flowNodeType="
+        + getFlowNodeType()
+        + ", processInstanceId="
+        + getProcessInstanceId()
+        + ", totalDurationInMs="
+        + getTotalDurationInMs()
+        + ", startDate="
+        + getStartDate()
+        + ", endDate="
+        + getEndDate()
+        + ", canceled="
+        + getCanceled()
+        + ", definitionKey="
+        + getDefinitionKey()
+        + ", definitionVersion="
+        + getDefinitionVersion()
+        + ", tenantId="
+        + getTenantId()
+        + ", engine="
+        + getEngine()
+        + ", userTaskInstanceId="
+        + getUserTaskInstanceId()
+        + ", dueDate="
+        + getDueDate()
+        + ", deleteReason="
+        + getDeleteReason()
+        + ", assignee="
+        + getAssignee()
+        + ", candidateGroups="
+        + getCandidateGroups()
+        + ", assigneeOperations="
+        + getAssigneeOperations()
+        + ", candidateGroupOperations="
+        + getCandidateGroupOperations()
+        + ", idleDurationInMs="
+        + getIdleDurationInMs()
+        + ", workDurationInMs="
+        + getWorkDurationInMs()
+        + ")";
+  }
+
+  @SuppressWarnings("checkstyle:ConstantName")
   public static final class Fields {
 
     public static final String flowNodeInstanceId = "flowNodeInstanceId";

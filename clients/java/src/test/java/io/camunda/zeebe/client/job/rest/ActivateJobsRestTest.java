@@ -19,6 +19,10 @@ import static java.util.Collections.singletonMap;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import io.camunda.client.protocol.rest.ActivatedJob;
+import io.camunda.client.protocol.rest.JobActivationRequest;
+import io.camunda.client.protocol.rest.JobActivationResponse;
+import io.camunda.client.protocol.rest.ProblemDetail;
 import io.camunda.zeebe.client.api.command.ActivateJobsCommandStep1.ActivateJobsCommandStep3;
 import io.camunda.zeebe.client.api.command.ClientException;
 import io.camunda.zeebe.client.api.command.ProblemException;
@@ -26,10 +30,6 @@ import io.camunda.zeebe.client.api.response.ActivateJobsResponse;
 import io.camunda.zeebe.client.impl.ZeebeClientBuilderImpl;
 import io.camunda.zeebe.client.impl.ZeebeObjectMapper;
 import io.camunda.zeebe.client.impl.response.ActivatedJobImpl;
-import io.camunda.zeebe.client.protocol.rest.ActivatedJob;
-import io.camunda.zeebe.client.protocol.rest.JobActivationRequest;
-import io.camunda.zeebe.client.protocol.rest.JobActivationResponse;
-import io.camunda.zeebe.client.protocol.rest.ProblemDetail;
 import io.camunda.zeebe.client.util.ClientRestTest;
 import io.camunda.zeebe.client.util.RestGatewayPaths;
 import java.time.Duration;
@@ -46,10 +46,10 @@ public final class ActivateJobsRestTest extends ClientRestTest {
     // given
     final ActivatedJob activatedJob1 =
         new ActivatedJob()
-            .key(12L)
+            .jobKey(12L)
             .type("foo")
             .processInstanceKey(123L)
-            .bpmnProcessId("test1")
+            .processDefinitionId("test1")
             .processDefinitionVersion(2)
             .processDefinitionKey(23L)
             .elementId("foo")
@@ -63,10 +63,10 @@ public final class ActivateJobsRestTest extends ClientRestTest {
 
     final ActivatedJob activatedJob2 =
         new ActivatedJob()
-            .key(42L)
+            .jobKey(42L)
             .type("foo")
             .processInstanceKey(333L)
-            .bpmnProcessId("test3")
+            .processDefinitionId("test3")
             .processDefinitionVersion(23)
             .processDefinitionKey(11L)
             .elementId("bar")
@@ -97,9 +97,9 @@ public final class ActivateJobsRestTest extends ClientRestTest {
     assertThat(response.getJobs()).hasSize(2);
 
     io.camunda.zeebe.client.api.response.ActivatedJob job = response.getJobs().get(0);
-    assertThat(job.getKey()).isEqualTo(activatedJob1.getKey());
+    assertThat(job.getKey()).isEqualTo(activatedJob1.getJobKey());
     assertThat(job.getType()).isEqualTo(activatedJob1.getType());
-    assertThat(job.getBpmnProcessId()).isEqualTo(activatedJob1.getBpmnProcessId());
+    assertThat(job.getBpmnProcessId()).isEqualTo(activatedJob1.getProcessDefinitionId());
     assertThat(job.getElementId()).isEqualTo(activatedJob1.getElementId());
     assertThat(job.getElementInstanceKey()).isEqualTo(activatedJob1.getElementInstanceKey());
     assertThat(job.getProcessDefinitionVersion())
@@ -114,9 +114,9 @@ public final class ActivateJobsRestTest extends ClientRestTest {
     assertThat(job.getTenantId()).isEqualTo(activatedJob1.getTenantId());
 
     job = response.getJobs().get(1);
-    assertThat(job.getKey()).isEqualTo(activatedJob2.getKey());
+    assertThat(job.getKey()).isEqualTo(activatedJob2.getJobKey());
     assertThat(job.getType()).isEqualTo(activatedJob2.getType());
-    assertThat(job.getBpmnProcessId()).isEqualTo(activatedJob2.getBpmnProcessId());
+    assertThat(job.getBpmnProcessId()).isEqualTo(activatedJob2.getProcessDefinitionId());
     assertThat(job.getElementId()).isEqualTo(activatedJob2.getElementId());
     assertThat(job.getElementInstanceKey()).isEqualTo(activatedJob2.getElementInstanceKey());
     assertThat(job.getProcessDefinitionVersion())
@@ -220,7 +220,7 @@ public final class ActivateJobsRestTest extends ClientRestTest {
     // when
     assertThatThrownBy(
             () -> client.newActivateJobsCommand().jobType("foo").maxJobsToActivate(3).send().join())
-        .hasCauseInstanceOf(ProblemException.class)
+        .isInstanceOf(ProblemException.class)
         .hasMessageContaining("Invalid request");
   }
 

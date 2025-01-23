@@ -19,23 +19,23 @@ import io.camunda.optimize.rest.cloud.CCSaaSUserCache;
 import io.camunda.optimize.service.exceptions.OptimizeRuntimeException;
 import io.camunda.optimize.service.util.configuration.ConfigurationService;
 import io.camunda.optimize.service.util.configuration.condition.CCSaaSCondition;
+import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.constraints.NotNull;
-import jakarta.ws.rs.container.ContainerRequestContext;
 import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 import java.util.function.Supplier;
-import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
+import org.slf4j.Logger;
 import org.springframework.context.annotation.Conditional;
 import org.springframework.stereotype.Component;
 
 @Component
-@Slf4j
 @Conditional(CCSaaSCondition.class)
 public class CCSaaSIdentityService extends AbstractIdentityService {
 
+  private static final Logger LOG = org.slf4j.LoggerFactory.getLogger(CCSaaSIdentityService.class);
   private final CCSaaSUserCache usersCache;
 
   public CCSaaSIdentityService(
@@ -51,7 +51,7 @@ public class CCSaaSIdentityService extends AbstractIdentityService {
 
   @Override
   public Optional<UserDto> getCurrentUserById(
-      final String userId, final ContainerRequestContext requestContext) {
+      final String userId, final HttpServletRequest request) {
     return getUserById(userId);
   }
 
@@ -59,12 +59,6 @@ public class CCSaaSIdentityService extends AbstractIdentityService {
   public Optional<GroupDto> getGroupById(final String groupId) {
     // Groups do not exist in SaaS
     return Optional.empty();
-  }
-
-  @Override
-  public List<IdentityWithMetadataResponseDto> getGroupsById(final Set<String> groupIds) {
-    // Groups do not exist in SaaS
-    return Collections.emptyList();
   }
 
   @Override
@@ -106,9 +100,23 @@ public class CCSaaSIdentityService extends AbstractIdentityService {
                 .collect(toList()));
       }
     } catch (final OptimizeRuntimeException e) {
-      log.warn("Failed retrieving users.", e);
+      LOG.warn("Failed retrieving users.", e);
       return new IdentitySearchResultResponseDto(Collections.emptyList());
     }
+  }
+
+  @Override
+  public List<IdentityWithMetadataResponseDto> getUsersById(final Set<String> userIds) {
+    return usersCache.getUsersById(userIds).stream()
+        .map(this::mapToUserDto)
+        .map(IdentityWithMetadataResponseDto.class::cast)
+        .toList();
+  }
+
+  @Override
+  public List<IdentityWithMetadataResponseDto> getGroupsById(final Set<String> groupIds) {
+    // Groups do not exist in SaaS
+    return Collections.emptyList();
   }
 
   public List<UserDto> getUsersByEmail(final Set<String> emails) {
@@ -121,17 +129,9 @@ public class CCSaaSIdentityService extends AbstractIdentityService {
           .map(this::mapToUserDto)
           .toList();
     } catch (final OptimizeRuntimeException e) {
-      log.warn("Failed retrieving users.", e);
+      LOG.warn("Failed retrieving users.", e);
       return Collections.emptyList();
     }
-  }
-
-  @Override
-  public List<IdentityWithMetadataResponseDto> getUsersById(final Set<String> userIds) {
-    return usersCache.getUsersById(userIds).stream()
-        .map(this::mapToUserDto)
-        .map(IdentityWithMetadataResponseDto.class::cast)
-        .toList();
   }
 
   @NotNull

@@ -14,13 +14,10 @@ import java.util.HashSet;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
-import lombok.Data;
-import lombok.NoArgsConstructor;
 
-@Data
-@NoArgsConstructor
 @JsonIgnoreProperties(ignoreUnknown = false)
 public class DecisionCleanupConfiguration {
+
   @JsonProperty("enabled")
   private boolean enabled;
 
@@ -32,13 +29,53 @@ public class DecisionCleanupConfiguration {
     this.enabled = enabled;
   }
 
+  public DecisionCleanupConfiguration() {}
+
   public Set<String> getAllDecisionSpecificConfigurationKeys() {
     return new HashSet<>(decisionDefinitionSpecificConfiguration.keySet());
   }
 
+  public boolean isEnabled() {
+    return enabled;
+  }
+
+  @JsonProperty("enabled")
+  public void setEnabled(final boolean enabled) {
+    this.enabled = enabled;
+  }
+
+  public Map<String, DecisionDefinitionCleanupConfiguration>
+      getDecisionDefinitionSpecificConfiguration() {
+    return decisionDefinitionSpecificConfiguration;
+  }
+
   public void setDecisionDefinitionSpecificConfiguration(
-      Map<String, DecisionDefinitionCleanupConfiguration> decisionDefinitionSpecificConfiguration) {
+      final Map<String, DecisionDefinitionCleanupConfiguration>
+          decisionDefinitionSpecificConfiguration) {
     this.decisionDefinitionSpecificConfiguration =
         Optional.ofNullable(decisionDefinitionSpecificConfiguration).orElse(new HashMap<>());
+  }
+
+  protected boolean canEqual(final Object other) {
+    return other instanceof DecisionCleanupConfiguration;
+  }
+
+  @Override
+  public int hashCode() {
+    return org.apache.commons.lang3.builder.HashCodeBuilder.reflectionHashCode(this);
+  }
+
+  @Override
+  public boolean equals(final Object o) {
+    return org.apache.commons.lang3.builder.EqualsBuilder.reflectionEquals(this, o);
+  }
+
+  @Override
+  public String toString() {
+    return "DecisionCleanupConfiguration(enabled="
+        + isEnabled()
+        + ", decisionDefinitionSpecificConfiguration="
+        + getDecisionDefinitionSpecificConfiguration()
+        + ")";
   }
 }

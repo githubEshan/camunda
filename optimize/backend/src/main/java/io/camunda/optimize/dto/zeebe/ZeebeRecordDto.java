@@ -17,17 +17,7 @@ import java.time.Instant;
 import java.time.OffsetDateTime;
 import java.time.ZoneId;
 import java.util.Map;
-import lombok.EqualsAndHashCode;
-import lombok.Getter;
-import lombok.NoArgsConstructor;
-import lombok.Setter;
-import lombok.ToString;
 
-@EqualsAndHashCode
-@Getter
-@Setter
-@NoArgsConstructor
-@ToString(callSuper = true)
 public abstract class ZeebeRecordDto<VALUE extends RecordValue, INTENT extends Intent>
     implements Record<VALUE> {
 
@@ -48,9 +38,70 @@ public abstract class ZeebeRecordDto<VALUE extends RecordValue, INTENT extends I
   private Map<String, Object> authorizations;
   private long operationReference;
 
+  public ZeebeRecordDto() {}
+
   @Override
   public String toJson() {
     throw new UnsupportedOperationException("Operation not supported");
+  }
+
+  public OffsetDateTime getDateForTimestamp() {
+    return OffsetDateTime.ofInstant(Instant.ofEpochMilli(timestamp), ZoneId.systemDefault());
+  }
+
+  @Override
+  public long getPosition() {
+    return position;
+  }
+
+  @Override
+  public long getSourceRecordPosition() {
+    return sourceRecordPosition;
+  }
+
+  @Override
+  public long getKey() {
+    return key;
+  }
+
+  @Override
+  public long getTimestamp() {
+    return timestamp;
+  }
+
+  @Override
+  public INTENT getIntent() {
+    return intent;
+  }
+
+  @Override
+  public int getPartitionId() {
+    return partitionId;
+  }
+
+  @Override
+  public RecordType getRecordType() {
+    return recordType;
+  }
+
+  @Override
+  public RejectionType getRejectionType() {
+    return rejectionType;
+  }
+
+  @Override
+  public String getRejectionReason() {
+    return rejectionReason;
+  }
+
+  @Override
+  public String getBrokerVersion() {
+    return brokerVersion;
+  }
+
+  @Override
+  public Map<String, Object> getAuthorizations() {
+    return authorizations;
   }
 
   @Override
@@ -59,14 +110,141 @@ public abstract class ZeebeRecordDto<VALUE extends RecordValue, INTENT extends I
   }
 
   @Override
+  public ValueType getValueType() {
+    return valueType;
+  }
+
+  @Override
+  public VALUE getValue() {
+    return value;
+  }
+
+  @Override
+  public long getOperationReference() {
+    return operationReference;
+  }
+
+  @Override
   public Record<VALUE> copyOf() {
     throw new UnsupportedOperationException("Operation not supported");
   }
 
-  public OffsetDateTime getDateForTimestamp() {
-    return OffsetDateTime.ofInstant(Instant.ofEpochMilli(timestamp), ZoneId.systemDefault());
+  public void setOperationReference(final long operationReference) {
+    this.operationReference = operationReference;
   }
 
+  public void setValue(final VALUE value) {
+    this.value = value;
+  }
+
+  public void setValueType(final ValueType valueType) {
+    this.valueType = valueType;
+  }
+
+  public void setAuthorizations(final Map<String, Object> authorizations) {
+    this.authorizations = authorizations;
+  }
+
+  public void setBrokerVersion(final String brokerVersion) {
+    this.brokerVersion = brokerVersion;
+  }
+
+  public void setRejectionReason(final String rejectionReason) {
+    this.rejectionReason = rejectionReason;
+  }
+
+  public void setRejectionType(final RejectionType rejectionType) {
+    this.rejectionType = rejectionType;
+  }
+
+  public void setRecordType(final RecordType recordType) {
+    this.recordType = recordType;
+  }
+
+  public void setPartitionId(final int partitionId) {
+    this.partitionId = partitionId;
+  }
+
+  public void setIntent(final INTENT intent) {
+    this.intent = intent;
+  }
+
+  public void setTimestamp(final long timestamp) {
+    this.timestamp = timestamp;
+  }
+
+  public void setKey(final long key) {
+    this.key = key;
+  }
+
+  public void setSourceRecordPosition(final long sourceRecordPosition) {
+    this.sourceRecordPosition = sourceRecordPosition;
+  }
+
+  public void setPosition(final long position) {
+    this.position = position;
+  }
+
+  public Long getSequence() {
+    return sequence;
+  }
+
+  public void setSequence(final Long sequence) {
+    this.sequence = sequence;
+  }
+
+  protected boolean canEqual(final Object other) {
+    return other instanceof ZeebeRecordDto;
+  }
+
+  @Override
+  public int hashCode() {
+    return org.apache.commons.lang3.builder.HashCodeBuilder.reflectionHashCode(this);
+  }
+
+  @Override
+  public boolean equals(final Object o) {
+    return org.apache.commons.lang3.builder.EqualsBuilder.reflectionEquals(this, o);
+  }
+
+  @Override
+  public String toString() {
+    return "ZeebeRecordDto(super="
+        + super.toString()
+        + ", position="
+        + getPosition()
+        + ", sequence="
+        + getSequence()
+        + ", sourceRecordPosition="
+        + getSourceRecordPosition()
+        + ", key="
+        + getKey()
+        + ", timestamp="
+        + getTimestamp()
+        + ", partitionId="
+        + getPartitionId()
+        + ", recordType="
+        + getRecordType()
+        + ", rejectionType="
+        + getRejectionType()
+        + ", rejectionReason="
+        + getRejectionReason()
+        + ", brokerVersion="
+        + getBrokerVersion()
+        + ", valueType="
+        + getValueType()
+        + ", value="
+        + getValue()
+        + ", intent="
+        + getIntent()
+        + ", authorizations="
+        + getAuthorizations()
+        + ", operationReference="
+        + getOperationReference()
+        + ")";
+  }
+
+  @SuppressWarnings("checkstyle:ConstantName")
   public static final class Fields {
 
     public static final String position = "position";

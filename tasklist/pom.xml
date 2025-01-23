@@ -5,7 +5,7 @@
   <parent>
     <groupId>io.camunda</groupId>
     <artifactId>zeebe-parent</artifactId>
-    <version>8.6.0-SNAPSHOT</version>
+    <version>8.8.0-SNAPSHOT</version>
     <relativePath>../parent/pom.xml</relativePath>
   </parent>
   <groupId>io.camunda</groupId>
@@ -20,10 +20,8 @@
     <module>els-schema</module>
     <module>data-generator</module>
     <module>importer-common</module>
-    <module>importer-850</module>
-    <module>importer-860</module>
+    <module>importer-870</module>
     <module>importer</module>
-    <module>archiver</module>
     <module>webapp</module>
     <module>mvc-auth-commons</module>
   </modules>
@@ -39,7 +37,7 @@
     <maven.compiler.target>21</maven.compiler.target>
     <maven.compiler.source>21</maven.compiler.source>
 
-    <skip.fe.build>true</skip.fe.build>
+    <skip.fe.build>false</skip.fe.build>
     <maven.javadoc.skip>true</maven.javadoc.skip>
   </properties>
 
@@ -123,7 +121,7 @@
               <!--exclusions for `tasklist-webapp` module-->
               <exclude>**/camunda/tasklist/webapp/api/rest/v1/entities/**/*</exclude>
               <exclude>**/camunda/tasklist/webapp/management/dto/**/*</exclude>
-              <exclude>**/camunda/tasklist/webapp/graphql/entity/**/*</exclude>
+              <exclude>**/camunda/tasklist/webapp/dto/**/*</exclude>
               <exclude>**/camunda/tasklist/webapp/rest/exception/**/*</exclude>
               <exclude>**/camunda/tasklist/webapp/config/**/*</exclude>
               <exclude>**/camunda/tasklist/webapp/es/dao/response/**/*</exclude>

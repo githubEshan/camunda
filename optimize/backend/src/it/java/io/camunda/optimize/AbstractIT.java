@@ -7,49 +7,36 @@
  */
 package io.camunda.optimize;
 
-import static io.camunda.optimize.jetty.OptimizeResourceConstants.ACTUATOR_PORT_PROPERTY_KEY;
 import static io.camunda.optimize.service.util.configuration.EnvironmentPropertiesConstants.CONTEXT_PATH;
 import static io.camunda.optimize.service.util.configuration.EnvironmentPropertiesConstants.HTTPS_PORT_KEY;
 import static io.camunda.optimize.service.util.configuration.EnvironmentPropertiesConstants.HTTP_PORT_KEY;
 import static io.camunda.optimize.service.util.configuration.EnvironmentPropertiesConstants.INTEGRATION_TESTS;
+import static io.camunda.optimize.tomcat.OptimizeResourceConstants.ACTUATOR_PORT_PROPERTY_KEY;
 
-import io.camunda.optimize.jetty.OptimizeResourceConstants;
 import io.camunda.optimize.test.it.extension.DatabaseIntegrationTestExtension;
 import io.camunda.optimize.test.it.extension.EmbeddedOptimizeExtension;
-import io.camunda.optimize.test.optimize.AlertClient;
-import io.camunda.optimize.test.optimize.AnalysisClient;
-import io.camunda.optimize.test.optimize.AssigneesClient;
-import io.camunda.optimize.test.optimize.CollectionClient;
-import io.camunda.optimize.test.optimize.DashboardClient;
-import io.camunda.optimize.test.optimize.DefinitionClient;
-import io.camunda.optimize.test.optimize.EntitiesClient;
-import io.camunda.optimize.test.optimize.ExportClient;
-import io.camunda.optimize.test.optimize.FlowNodeNamesClient;
-import io.camunda.optimize.test.optimize.IdentityClient;
-import io.camunda.optimize.test.optimize.ImportClient;
-import io.camunda.optimize.test.optimize.IngestionClient;
-import io.camunda.optimize.test.optimize.LocalizationClient;
-import io.camunda.optimize.test.optimize.ProcessOverviewClient;
-import io.camunda.optimize.test.optimize.PublicApiClient;
-import io.camunda.optimize.test.optimize.ReportClient;
-import io.camunda.optimize.test.optimize.SharingClient;
-import io.camunda.optimize.test.optimize.UiConfigurationClient;
 import io.camunda.optimize.test.optimize.VariablesClient;
+import io.camunda.optimize.tomcat.OptimizeResourceConstants;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
-import java.util.function.Supplier;
 import java.util.stream.Collectors;
 import org.junit.jupiter.api.Order;
 import org.junit.jupiter.api.extension.RegisterExtension;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.builder.SpringApplicationBuilder;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.context.ConfigurableApplicationContext;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.core.env.Environment;
 
 @SpringBootTest(
     webEnvironment = SpringBootTest.WebEnvironment.DEFINED_PORT,
-    properties = {INTEGRATION_TESTS + "=true"})
+    properties = {
+      INTEGRATION_TESTS + "=true",
+      "useLegacyPort=true" // TODO: Remove once we read the configuration from the single
+      // application
+    })
 @Configuration
 public abstract class AbstractIT {
 
@@ -63,6 +50,8 @@ public abstract class AbstractIT {
   // are ignored by the 'OpenSearch passing' CI pipeline, but need to be addressed soon
   public static final String OPENSEARCH_SHOULD_BE_PASSING = "openSearchShouldBePassing";
 
+  @Autowired private Environment environment;
+
   @RegisterExtension
   @Order(1)
   public static DatabaseIntegrationTestExtension databaseIntegrationTestExtension =
@@ -73,41 +62,8 @@ public abstract class AbstractIT {
   public static EmbeddedOptimizeExtension embeddedOptimizeExtension =
       new EmbeddedOptimizeExtension();
 
-  private final Supplier<OptimizeRequestExecutor> optimizeRequestExecutorSupplier =
-      () -> embeddedOptimizeExtension.getRequestExecutor();
   // optimize test helpers
-  protected CollectionClient collectionClient =
-      new CollectionClient(optimizeRequestExecutorSupplier);
-  protected ReportClient reportClient = new ReportClient(optimizeRequestExecutorSupplier);
-  protected AlertClient alertClient = new AlertClient(optimizeRequestExecutorSupplier);
-  protected DashboardClient dashboardClient = new DashboardClient(optimizeRequestExecutorSupplier);
-  protected SharingClient sharingClient = new SharingClient(optimizeRequestExecutorSupplier);
-  protected AnalysisClient analysisClient = new AnalysisClient(optimizeRequestExecutorSupplier);
-  protected UiConfigurationClient uiConfigurationClient =
-      new UiConfigurationClient(optimizeRequestExecutorSupplier);
-  protected EntitiesClient entitiesClient = new EntitiesClient(optimizeRequestExecutorSupplier);
-  protected ExportClient exportClient = new ExportClient(optimizeRequestExecutorSupplier);
-  protected ImportClient importClient = new ImportClient(optimizeRequestExecutorSupplier);
-  protected PublicApiClient publicApiClient = new PublicApiClient(optimizeRequestExecutorSupplier);
-  protected DefinitionClient definitionClient =
-      new DefinitionClient(optimizeRequestExecutorSupplier);
-  protected VariablesClient variablesClient = new VariablesClient(optimizeRequestExecutorSupplier);
-  protected AssigneesClient assigneesClient = new AssigneesClient(optimizeRequestExecutorSupplier);
-  protected FlowNodeNamesClient flowNodeNamesClient =
-      new FlowNodeNamesClient(optimizeRequestExecutorSupplier);
-  protected LocalizationClient localizationClient =
-      new LocalizationClient(optimizeRequestExecutorSupplier);
-  protected IdentityClient identityClient = new IdentityClient(optimizeRequestExecutorSupplier);
-  protected IngestionClient ingestionClient =
-      new IngestionClient(
-          optimizeRequestExecutorSupplier,
-          () ->
-              embeddedOptimizeExtension
-                  .getConfigurationService()
-                  .getOptimizeApiConfiguration()
-                  .getAccessToken());
-  protected ProcessOverviewClient processOverviewClient =
-      new ProcessOverviewClient(optimizeRequestExecutorSupplier);
+  protected VariablesClient variablesClient = new VariablesClient();
 
   protected abstract void startAndUseNewOptimizeInstance();
 
@@ -133,7 +89,13 @@ public abstract class AbstractIT {
 
   private String[] prepareArgs(final Map<String, String> argMap) {
     final String httpsPort = getPortArg(HTTPS_PORT_KEY);
-    final String httpPort = getPortArg(HTTP_PORT_KEY);
+
+    String httpPort = getPortArg(HTTP_PORT_KEY);
+    if ("true".equals(environment.getProperty("useLegacyPort"))) {
+      // TODO: Remove this if block once the configuration is read from the single application.
+      httpPort = "8090";
+    }
+
     final String actuatorPort =
         getArg(
             ACTUATOR_PORT_PROPERTY_KEY,
@@ -159,7 +121,7 @@ public abstract class AbstractIT {
     return getArg(
         portKey,
         String.valueOf(
-            embeddedOptimizeExtension.getBean(JettyConfig.class).getPort(portKey) + 100));
+            embeddedOptimizeExtension.getBean(OptimizeTomcatConfig.class).getPort(portKey) + 100));
   }
 
   private String getArg(final String key, final String value) {

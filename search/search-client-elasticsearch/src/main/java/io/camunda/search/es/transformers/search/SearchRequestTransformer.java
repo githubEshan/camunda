@@ -13,10 +13,10 @@ import co.elastic.clients.elasticsearch.core.SearchRequest;
 import co.elastic.clients.elasticsearch.core.search.SourceConfig;
 import co.elastic.clients.json.JsonData;
 import io.camunda.search.clients.core.SearchQueryRequest;
-import io.camunda.search.clients.sort.SearchSortOptions;
 import io.camunda.search.clients.source.SearchSourceConfig;
 import io.camunda.search.es.transformers.ElasticsearchTransformer;
 import io.camunda.search.es.transformers.ElasticsearchTransformers;
+import io.camunda.search.sort.SearchSortOptions;
 import java.util.Arrays;
 import java.util.List;
 import java.util.stream.Collectors;
@@ -30,6 +30,10 @@ public final class SearchRequestTransformer
 
   @Override
   public SearchRequest apply(final SearchQueryRequest value) {
+    return toSearchRequestBuilder(value).build();
+  }
+
+  public SearchRequest.Builder toSearchRequestBuilder(final SearchQueryRequest value) {
     final var sort = value.sort();
     final var searchAfter = value.searchAfter();
     final var searchQuery = value.query();
@@ -54,8 +58,7 @@ public final class SearchRequestTransformer
     if (value.source() != null) {
       builder.source(of(value.source()));
     }
-
-    return builder.build();
+    return builder;
   }
 
   private List<SortOptions> of(final List<SearchSortOptions> values) {

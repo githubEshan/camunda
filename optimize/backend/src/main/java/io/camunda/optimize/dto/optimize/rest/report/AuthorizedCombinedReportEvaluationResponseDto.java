@@ -9,14 +9,7 @@ package io.camunda.optimize.dto.optimize.rest.report;
 
 import io.camunda.optimize.dto.optimize.RoleType;
 import io.camunda.optimize.dto.optimize.query.report.combined.CombinedReportDefinitionRequestDto;
-import lombok.AccessLevel;
-import lombok.Data;
-import lombok.EqualsAndHashCode;
-import lombok.NoArgsConstructor;
 
-@Data
-@EqualsAndHashCode(callSuper = true)
-@NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class AuthorizedCombinedReportEvaluationResponseDto<T>
     extends AuthorizedReportEvaluationResponseDto<CombinedReportDefinitionRequestDto> {
 
@@ -28,5 +21,35 @@ public class AuthorizedCombinedReportEvaluationResponseDto<T>
       final CombinedProcessReportResultDataDto<T> result) {
     super(currentUserRole, reportDefinition);
     this.result = result;
+  }
+
+  protected AuthorizedCombinedReportEvaluationResponseDto() {}
+
+  public CombinedProcessReportResultDataDto<T> getResult() {
+    return result;
+  }
+
+  public void setResult(final CombinedProcessReportResultDataDto<T> result) {
+    this.result = result;
+  }
+
+  @Override
+  protected boolean canEqual(final Object other) {
+    return other instanceof AuthorizedCombinedReportEvaluationResponseDto;
+  }
+
+  @Override
+  public int hashCode() {
+    return org.apache.commons.lang3.builder.HashCodeBuilder.reflectionHashCode(this);
+  }
+
+  @Override
+  public boolean equals(final Object o) {
+    return org.apache.commons.lang3.builder.EqualsBuilder.reflectionEquals(this, o);
+  }
+
+  @Override
+  public String toString() {
+    return "AuthorizedCombinedReportEvaluationResponseDto(result=" + getResult() + ")";
   }
 }

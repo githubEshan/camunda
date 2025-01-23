@@ -74,8 +74,8 @@ import org.springframework.util.StringUtils;
 import software.amazon.awssdk.auth.credentials.AwsCredentialsProvider;
 import software.amazon.awssdk.auth.credentials.DefaultCredentialsProvider;
 import software.amazon.awssdk.auth.signer.Aws4Signer;
-import software.amazon.awssdk.http.async.SdkAsyncHttpClient;
-import software.amazon.awssdk.http.nio.netty.NettyNioAsyncHttpClient;
+import software.amazon.awssdk.http.SdkHttpClient;
+import software.amazon.awssdk.http.crt.AwsCrtHttpClient;
 import software.amazon.awssdk.regions.Region;
 
 @Configuration
@@ -426,6 +426,10 @@ public class OpenSearchConnector {
 
   public boolean checkHealth(final OpenSearchClient osClient) {
     final OpenSearchProperties osConfig = tasklistProperties.getOpenSearch();
+    if (!osConfig.isHealthCheckEnabled()) {
+      LOGGER.debug("Opensearch health check is disabled");
+      return true;
+    }
     final RetryPolicy<Boolean> retryPolicy = getConnectionRetryPolicy(osConfig);
     return Failsafe.with(retryPolicy)
         .get(
@@ -438,6 +442,10 @@ public class OpenSearchConnector {
 
   public boolean checkHealth(final OpenSearchAsyncClient osAsyncClient) {
     final OpenSearchProperties osConfig = tasklistProperties.getOpenSearch();
+    if (!osConfig.isHealthCheckEnabled()) {
+      LOGGER.debug("Opensearch health check is disabled");
+      return true;
+    }
     final RetryPolicy<Boolean> retryPolicy = getConnectionRetryPolicy(osConfig);
     return Failsafe.with(retryPolicy)
         .get(
@@ -491,7 +499,7 @@ public class OpenSearchConnector {
 
   private OpenSearchAsyncClient getAwsAsyncClient(final OpenSearchProperties osConfig) {
     final String region = new DefaultAwsRegionProviderChain().getRegion();
-    final SdkAsyncHttpClient httpClient = NettyNioAsyncHttpClient.builder().build();
+    final SdkHttpClient httpClient = AwsCrtHttpClient.builder().build();
     final AwsSdk2Transport transport =
         new AwsSdk2Transport(
             httpClient,
@@ -505,7 +513,7 @@ public class OpenSearchConnector {
 
   private OpenSearchClient getAwsClient(final OpenSearchProperties osConfig) {
     final String region = new DefaultAwsRegionProviderChain().getRegion();
-    final SdkAsyncHttpClient httpClient = NettyNioAsyncHttpClient.builder().build();
+    final SdkHttpClient httpClient = AwsCrtHttpClient.builder().build();
     final AwsSdk2Transport transport =
         new AwsSdk2Transport(
             httpClient,

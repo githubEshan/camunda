@@ -70,6 +70,17 @@ public interface DistributionState {
   void foreachRetriableDistribution(PendingDistributionVisitor visitor);
 
   /**
+   * Visits each persisted pending distribution, providing both the key of that distribution and the
+   * {@link CommandDistributionRecord}.
+   *
+   * <p>Note that a new instance of the record is provided for each visit, so the visitor does not
+   * have to make a copy when long term access is needed.
+   *
+   * @param visitor Each pending distribution is visited by this visitor
+   */
+  void foreachPendingDistribution(PendingDistributionVisitor visitor);
+
+  /**
    * Returns the distribution key at the head of the queue for the given partition.
    *
    * @param queue the queue to look up
@@ -85,6 +96,22 @@ public interface DistributionState {
    */
   Optional<String> getQueueIdForDistribution(long distributionKey);
 
+  /**
+   * Returns whether there are any queued distributions for the given queue.
+   *
+   * @param queue the queue to look up
+   * @return true if there are queued distributions for the given queue, otherwise false
+   */
+  boolean hasQueuedDistributions(String queue);
+
+  /** Visits each continuation command registered for the given queue. */
+  void forEachContinuationCommand(String queue, ContinuationCommandVisitor consumer);
+
+  /**
+   * Returns the continuation command for the given key and queue or null if no such command exists.
+   */
+  CommandDistributionRecord getContinuationRecord(String queue, long key);
+
   /** This visitor can visit pending distributions of {@link CommandDistributionRecord}. */
   @FunctionalInterface
   interface PendingDistributionVisitor {
@@ -94,7 +121,14 @@ public interface DistributionState {
      *
      * @param distributionKey The key of the pending distribution
      * @param pendingDistribution The pending distribution itself as command distribution record
+     * @return true if the visitor should continue visiting, false if it should stop
      */
-    void visit(final long distributionKey, final CommandDistributionRecord pendingDistribution);
+    boolean visit(final long distributionKey, final CommandDistributionRecord pendingDistribution);
+  }
+
+  @FunctionalInterface
+  interface ContinuationCommandVisitor {
+    /** Visits a registered continuation command. */
+    void visit(final long key);
   }
 }

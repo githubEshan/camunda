@@ -17,7 +17,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.common.collect.Lists;
 import io.camunda.optimize.dto.optimize.ProcessDefinitionOptimizeDto;
 import io.camunda.optimize.service.db.os.OptimizeOpenSearchClient;
-import io.camunda.optimize.service.db.os.externalcode.client.dsl.QueryDSL;
+import io.camunda.optimize.service.db.os.client.dsl.QueryDSL;
 import io.camunda.optimize.service.db.schema.index.DecisionDefinitionIndex;
 import io.camunda.optimize.service.db.writer.ProcessDefinitionWriter;
 import io.camunda.optimize.service.util.configuration.ConfigurationService;
@@ -26,16 +26,15 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicBoolean;
-import lombok.extern.slf4j.Slf4j;
 import org.opensearch.client.opensearch._types.FieldValue;
 import org.opensearch.client.opensearch._types.Script;
 import org.opensearch.client.opensearch._types.query_dsl.BoolQuery;
 import org.opensearch.client.opensearch.core.UpdateRequest;
+import org.slf4j.Logger;
 import org.springframework.context.annotation.Conditional;
 import org.springframework.stereotype.Component;
 
 @Component
-@Slf4j
 @Conditional(OpenSearchCondition.class)
 public class ProcessDefinitionWriterOS extends AbstractProcessDefinitionWriterOS
     implements ProcessDefinitionWriter {
@@ -47,6 +46,8 @@ public class ProcessDefinitionWriterOS extends AbstractProcessDefinitionWriterOS
   private static final Script MARK_AS_ONBOARDED_SCRIPT =
       OpenSearchWriterUtil.createDefaultScriptWithPrimitiveParams(
           "ctx._source.onboarded = true", Collections.emptyMap());
+  private static final Logger LOG =
+      org.slf4j.LoggerFactory.getLogger(ProcessDefinitionWriterOS.class);
 
   private final ConfigurationService configurationService;
 
@@ -60,13 +61,13 @@ public class ProcessDefinitionWriterOS extends AbstractProcessDefinitionWriterOS
 
   @Override
   public void importProcessDefinitions(final List<ProcessDefinitionOptimizeDto> procDefs) {
-    log.debug("Writing [{}] process definitions to opensearch", procDefs.size());
+    LOG.debug("Writing [{}] process definitions to opensearch", procDefs.size());
     writeProcessDefinitionInformation(procDefs);
   }
 
   @Override
   public void markDefinitionAsDeleted(final String definitionId) {
-    log.debug("Marking process definition with ID {} as deleted", definitionId);
+    LOG.debug("Marking process definition with ID {} as deleted", definitionId);
     final UpdateRequest.Builder updateReqBuilder =
         new UpdateRequest.Builder<>()
             .index(PROCESS_DEFINITION_INDEX_NAME)
@@ -122,7 +123,7 @@ public class ProcessDefinitionWriterOS extends AbstractProcessDefinitionWriterOS
               }
             });
     if (definitionsUpdated.get()) {
-      log.debug("Marked old process definitions with new deployments as deleted");
+      LOG.debug("Marked old process definitions with new deployments as deleted");
     }
     return definitionsUpdated.get();
   }
@@ -147,7 +148,7 @@ public class ProcessDefinitionWriterOS extends AbstractProcessDefinitionWriterOS
   private void writeProcessDefinitionInformation(
       final List<ProcessDefinitionOptimizeDto> procDefs) {
     final String importItemName = "process definition information";
-    log.debug("Writing [{}] {} to OpenSearch.", procDefs.size(), importItemName);
+    LOG.debug("Writing [{}] {} to OpenSearch.", procDefs.size(), importItemName);
 
     osClient.doImportBulkRequestWithList(
         importItemName,

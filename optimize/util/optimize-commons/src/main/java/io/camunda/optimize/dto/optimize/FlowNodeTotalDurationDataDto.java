@@ -7,14 +7,50 @@
  */
 package io.camunda.optimize.dto.optimize;
 
-import lombok.AllArgsConstructor;
-import lombok.Data;
-import lombok.NoArgsConstructor;
-
-@Data
-@AllArgsConstructor
-@NoArgsConstructor
 public class FlowNodeTotalDurationDataDto {
+
   String name;
   long value;
+
+  public FlowNodeTotalDurationDataDto(final String name, final long value) {
+    this.name = name;
+    this.value = value;
+  }
+
+  public FlowNodeTotalDurationDataDto() {}
+
+  public String getName() {
+    return name;
+  }
+
+  public void setName(final String name) {
+    this.name = name;
+  }
+
+  public long getValue() {
+    return value;
+  }
+
+  public void setValue(final long value) {
+    this.value = value;
+  }
+
+  protected boolean canEqual(final Object other) {
+    return other instanceof FlowNodeTotalDurationDataDto;
+  }
+
+  @Override
+  public int hashCode() {
+    return org.apache.commons.lang3.builder.HashCodeBuilder.reflectionHashCode(this);
+  }
+
+  @Override
+  public boolean equals(final Object o) {
+    return org.apache.commons.lang3.builder.EqualsBuilder.reflectionEquals(this, o);
+  }
+
+  @Override
+  public String toString() {
+    return "FlowNodeTotalDurationDataDto(name=" + getName() + ", value=" + getValue() + ")";
+  }
 }

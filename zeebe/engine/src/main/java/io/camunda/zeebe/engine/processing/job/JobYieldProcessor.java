@@ -7,8 +7,10 @@
  */
 package io.camunda.zeebe.engine.processing.job;
 
+import io.camunda.zeebe.engine.processing.ExcludeAuthorizationCheck;
 import io.camunda.zeebe.engine.processing.bpmn.behavior.BpmnBehaviors;
 import io.camunda.zeebe.engine.processing.bpmn.behavior.BpmnJobActivationBehavior;
+import io.camunda.zeebe.engine.processing.identity.AuthorizationCheckBehavior;
 import io.camunda.zeebe.engine.processing.streamprocessor.TypedRecordProcessor;
 import io.camunda.zeebe.engine.processing.streamprocessor.writers.StateWriter;
 import io.camunda.zeebe.engine.processing.streamprocessor.writers.TypedRejectionWriter;
@@ -21,20 +23,28 @@ import io.camunda.zeebe.protocol.record.intent.JobIntent;
 import io.camunda.zeebe.stream.api.records.TypedRecord;
 import java.util.List;
 
+@ExcludeAuthorizationCheck
 public final class JobYieldProcessor implements TypedRecordProcessor<JobRecord> {
   private final JobState jobState;
   private final BpmnJobActivationBehavior jobActivationBehavior;
   private final StateWriter stateWriter;
   private final TypedRejectionWriter rejectionWriter;
   private final JobCommandPreconditionChecker preconditionChecker;
+  private final AuthorizationCheckBehavior authorizationCheckBehavior;
 
   public JobYieldProcessor(
-      final ProcessingState state, final BpmnBehaviors bpmnBehaviors, final Writers writers) {
+      final ProcessingState state,
+      final BpmnBehaviors bpmnBehaviors,
+      final Writers writers,
+      final AuthorizationCheckBehavior authorizationCheckBehavior) {
     jobState = state.getJobState();
     jobActivationBehavior = bpmnBehaviors.jobActivationBehavior();
     stateWriter = writers.state();
     rejectionWriter = writers.rejection();
-    preconditionChecker = new JobCommandPreconditionChecker("yield", List.of(State.ACTIVATED));
+    this.authorizationCheckBehavior = authorizationCheckBehavior;
+    preconditionChecker =
+        new JobCommandPreconditionChecker(
+            jobState, "yield", List.of(State.ACTIVATED), authorizationCheckBehavior);
   }
 
   @Override
@@ -43,15 +53,13 @@ public final class JobYieldProcessor implements TypedRecordProcessor<JobRecord> 
     final JobState.State state = jobState.getState(jobKey);
 
     preconditionChecker
-        .check(state, jobKey)
+        .check(state, record)
         .ifRightOrLeft(
-            ok -> {
-              final JobRecord yieldedJob = jobState.getJob(jobKey);
-
+            yieldedJob -> {
               stateWriter.appendFollowUpEvent(jobKey, JobIntent.YIELDED, yieldedJob);
               jobActivationBehavior.notifyJobAvailableAsSideEffect(yieldedJob);
             },
-            violation ->
-                rejectionWriter.appendRejection(record, violation.getLeft(), violation.getRight()));
+            rejection ->
+                rejectionWriter.appendRejection(record, rejection.type(), rejection.reason()));
   }
 }

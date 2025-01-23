@@ -7,7 +7,7 @@
  */
 
 import React, {useCallback, useEffect, useRef, useState} from 'react';
-import {Redirect} from 'react-router-dom';
+import {useHistory} from 'react-router-dom';
 import {parseISO} from 'date-fns';
 import {Button, Grid, Column} from '@carbon/react';
 import {CopyFile, Edit, Save, TrashCan} from '@carbon/icons-react';
@@ -24,8 +24,8 @@ import {
   EmptyState,
   KpiCreationModal,
   EntityList,
-  Icon,
 } from 'components';
+import {OptimizeDashboard} from 'icons';
 import {
   formatters,
   createEntity,
@@ -43,6 +43,7 @@ import {importEntity, removeEntities, checkConflicts} from './service';
 import {formatLink, formatType, formatSubEntities} from './formatters';
 
 import './Home.scss';
+import { getFullURL } from '../../modules/api';
 
 export function Home({mightFail, user}) {
   const [entities, setEntities] = useState(null);
@@ -53,6 +54,7 @@ export function Home({mightFail, user}) {
   const [editingCollection, setEditingCollection] = useState(null);
   const [sorting, setSorting] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
+  const history = useHistory();
 
   const fileInput = useRef();
 
@@ -106,7 +108,7 @@ export function Home({mightFail, user}) {
   };
 
   if (redirect) {
-    return <Redirect to={redirect} />;
+    history.push(redirect);
   }
 
   const isEditor = user?.authorizations.includes('entity_editor');
@@ -121,7 +123,7 @@ export function Home({mightFail, user}) {
               <EmptyState
                 title={t('home.emptyState.title')}
                 description={t('home.emptyState.description')}
-                icon={<Icon type="dashboard-optimize" />}
+                icon={<OptimizeDashboard />}
                 actions={
                   <>
                     <Button size="md" onClick={() => setCreating('dashboard')}>
@@ -207,9 +209,9 @@ export function Home({mightFail, user}) {
                   icon: <Save />,
                   text: t('common.export'),
                   action: () => {
-                    window.location.href = `api/export/${entityType}/json/${
+                    window.location.href = getFullURL(`api/export/${entityType}/json/${
                       entity.id
-                    }/${encodeURIComponent(formatters.formatFileName(entity.name))}.json`;
+                    }/${encodeURIComponent(formatters.formatFileName(entity.name))}.json`);
                   },
                 });
               }
@@ -249,7 +251,7 @@ export function Home({mightFail, user}) {
         />
         <Copier
           entity={copying}
-          onCopy={(name, redirect) => {
+          onCopy={(_name, redirect) => {
             setCopying(null);
             if (!redirect) {
               loadList();

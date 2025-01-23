@@ -7,13 +7,19 @@
  */
 package io.camunda.optimize.service.db.schema;
 
+import co.elastic.clients.elasticsearch._types.mapping.TypeMapping;
 import io.camunda.optimize.service.util.configuration.ConfigurationService;
+import io.camunda.webapps.schema.descriptors.backup.BackupPriority;
 import java.io.IOException;
-import org.elasticsearch.xcontent.XContentBuilder;
 
-public interface IndexMappingCreator<TBuilder> {
+public interface IndexMappingCreator<TBuilder> extends BackupPriority {
 
   String getIndexName();
+
+  @Override
+  default String getFullQualifiedName() {
+    return getIndexName();
+  }
 
   default String getIndexNameInitialSuffix() {
     return "";
@@ -29,8 +35,8 @@ public interface IndexMappingCreator<TBuilder> {
 
   int getVersion();
 
-  XContentBuilder getSource();
+  TypeMapping getSource();
 
-  TBuilder getStaticSettings(TBuilder xContentBuilder, ConfigurationService configurationService)
+  TBuilder getStaticSettings(TBuilder builder, ConfigurationService configurationService)
       throws IOException;
 }

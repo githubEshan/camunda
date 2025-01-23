@@ -19,10 +19,12 @@ import com.github.tomakehurst.wiremock.client.WireMock;
 import com.github.tomakehurst.wiremock.junit5.WireMockRuntimeInfo;
 import com.github.tomakehurst.wiremock.stubbing.ServeEvent;
 import com.github.tomakehurst.wiremock.verification.LoggedRequest;
+import io.camunda.client.protocol.rest.DeploymentResponse;
+import io.camunda.client.protocol.rest.EvaluateDecisionResponse;
+import io.camunda.client.protocol.rest.JobActivationResponse;
+import io.camunda.client.protocol.rest.ProblemDetail;
+import io.camunda.client.protocol.rest.TopologyResponse;
 import io.camunda.zeebe.client.impl.ZeebeObjectMapper;
-import io.camunda.zeebe.client.protocol.rest.JobActivationResponse;
-import io.camunda.zeebe.client.protocol.rest.ProblemDetail;
-import io.camunda.zeebe.client.protocol.rest.TopologyResponse;
 import java.util.List;
 import java.util.function.Supplier;
 import org.assertj.core.api.Assertions;
@@ -67,6 +69,22 @@ public class RestGatewayService {
         .register(
             WireMock.get(RestGatewayPaths.getTopologyUrl())
                 .willReturn(WireMock.okJson(JSON_MAPPER.toJson(topologyResponse))));
+  }
+
+  public void onEvaluateDecisionRequest(final EvaluateDecisionResponse response) {
+    mockInfo
+        .getWireMock()
+        .register(
+            WireMock.post(RestGatewayPaths.getEvaluateDecisionUrl())
+                .willReturn(WireMock.okJson(JSON_MAPPER.toJson(response))));
+  }
+
+  public void onDeploymentsRequest(final DeploymentResponse response) {
+    mockInfo
+        .getWireMock()
+        .register(
+            WireMock.post(RestGatewayPaths.getDeploymentsUrl())
+                .willReturn(WireMock.okJson(JSON_MAPPER.toJson(response))));
   }
 
   /**

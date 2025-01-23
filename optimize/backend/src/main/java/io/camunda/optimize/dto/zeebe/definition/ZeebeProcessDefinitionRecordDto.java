@@ -9,8 +9,22 @@ package io.camunda.optimize.dto.zeebe.definition;
 
 import io.camunda.optimize.dto.zeebe.ZeebeRecordDto;
 import io.camunda.zeebe.protocol.record.intent.ProcessIntent;
-import lombok.EqualsAndHashCode;
 
-@EqualsAndHashCode(callSuper = true)
 public class ZeebeProcessDefinitionRecordDto
-    extends ZeebeRecordDto<ZeebeProcessDefinitionDataDto, ProcessIntent> {}
+    extends ZeebeRecordDto<ZeebeProcessDefinitionDataDto, ProcessIntent> {
+
+  @Override
+  protected boolean canEqual(final Object other) {
+    return other instanceof ZeebeProcessDefinitionRecordDto;
+  }
+
+  @Override
+  public int hashCode() {
+    return org.apache.commons.lang3.builder.HashCodeBuilder.reflectionHashCode(this);
+  }
+
+  @Override
+  public boolean equals(final Object o) {
+    return org.apache.commons.lang3.builder.EqualsBuilder.reflectionEquals(this, o);
+  }
+}

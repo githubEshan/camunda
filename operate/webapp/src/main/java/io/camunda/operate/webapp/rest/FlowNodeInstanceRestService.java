@@ -18,7 +18,7 @@ import io.camunda.operate.webapp.rest.dto.activity.FlowNodeInstanceResponseDto;
 import io.camunda.operate.webapp.rest.exception.InvalidRequestException;
 import io.camunda.operate.webapp.rest.exception.NotAuthorizedException;
 import io.camunda.operate.webapp.security.identity.IdentityPermission;
-import io.camunda.operate.webapp.security.identity.PermissionsService;
+import io.camunda.operate.webapp.security.permission.PermissionsService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import java.util.Map;
@@ -36,16 +36,14 @@ public class FlowNodeInstanceRestService extends InternalAPIErrorController {
 
   public static final String FLOW_NODE_INSTANCE_URL = "/api/flow-node-instances";
 
-  @Autowired(required = false)
-  protected PermissionsService permissionsService;
-
+  @Autowired private PermissionsService permissionsService;
   @Autowired private FlowNodeInstanceReader flowNodeInstanceReader;
   @Autowired private ProcessInstanceReader processInstanceReader;
 
   @Operation(summary = "Query flow node instance tree. Returns map treePath <-> list of children.")
   @PostMapping
   public Map<String, FlowNodeInstanceResponseDto> queryFlowNodeInstanceTree(
-      @RequestBody FlowNodeInstanceRequestDto request) {
+      @RequestBody final FlowNodeInstanceRequestDto request) {
     validateRequest(request);
     checkIdentityReadPermission(Long.parseLong(request.getQueries().get(0).getProcessInstanceId()));
     return flowNodeInstanceReader.getFlowNodeInstances(request);
@@ -58,7 +56,7 @@ public class FlowNodeInstanceRestService extends InternalAPIErrorController {
     }
 
     String processInstanceId = null;
-    for (FlowNodeInstanceQueryDto query : request.getQueries()) {
+    for (final FlowNodeInstanceQueryDto query : request.getQueries()) {
       if (query == null || query.getProcessInstanceId() == null || query.getTreePath() == null) {
         throw new InvalidRequestException(
             "Process instance id and tree path must be provided when requesting for flow node instance tree.");
@@ -81,11 +79,11 @@ public class FlowNodeInstanceRestService extends InternalAPIErrorController {
     }
   }
 
-  private void checkIdentityReadPermission(Long processInstanceKey) {
-    if (permissionsService != null
+  private void checkIdentityReadPermission(final Long processInstanceKey) {
+    if (permissionsService.permissionsEnabled()
         && !permissionsService.hasPermissionForProcess(
             processInstanceReader.getProcessInstanceByKey(processInstanceKey).getBpmnProcessId(),
-            IdentityPermission.READ)) {
+            IdentityPermission.READ_PROCESS_INSTANCE)) {
       throw new NotAuthorizedException(
           String.format("No read permission for process instance %s", processInstanceKey));
     }

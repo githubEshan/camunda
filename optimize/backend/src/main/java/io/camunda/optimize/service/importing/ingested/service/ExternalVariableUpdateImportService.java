@@ -31,13 +31,14 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.function.Function;
-import lombok.extern.slf4j.Slf4j;
+import org.slf4j.Logger;
 
-@Slf4j
 public class ExternalVariableUpdateImportService
     implements ImportService<ExternalProcessVariableDto> {
 
   public static final long DEFAULT_VERSION = 1000L;
+  private static final Logger LOG =
+      org.slf4j.LoggerFactory.getLogger(ExternalVariableUpdateImportService.class);
 
   private final DatabaseImportJobExecutor databaseImportJobExecutor;
   private final ProcessVariableUpdateWriter variableWriter;
@@ -62,7 +63,7 @@ public class ExternalVariableUpdateImportService
   public void executeImport(
       final List<ExternalProcessVariableDto> pageOfExternalEntities,
       final Runnable importCompleteCallback) {
-    log.trace("Importing external variable entities...");
+    LOG.trace("Importing external variable entities...");
 
     final boolean newDataIsAvailable = !pageOfExternalEntities.isEmpty();
     if (newDataIsAvailable) {

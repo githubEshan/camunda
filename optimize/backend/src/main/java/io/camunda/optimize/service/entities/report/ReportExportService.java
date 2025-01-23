@@ -12,32 +12,39 @@ import io.camunda.optimize.dto.optimize.query.report.ReportDefinitionDto;
 import io.camunda.optimize.dto.optimize.query.report.combined.CombinedReportDefinitionRequestDto;
 import io.camunda.optimize.dto.optimize.query.report.single.process.SingleProcessReportDefinitionRequestDto;
 import io.camunda.optimize.dto.optimize.rest.export.report.ReportDefinitionExportDto;
+import io.camunda.optimize.rest.exceptions.ForbiddenException;
+import io.camunda.optimize.rest.exceptions.NotFoundException;
 import io.camunda.optimize.service.db.reader.ReportReader;
 import io.camunda.optimize.service.exceptions.OptimizeRuntimeException;
 import io.camunda.optimize.service.security.AuthorizedCollectionService;
 import io.camunda.optimize.service.security.ReportAuthorizationService;
-import jakarta.ws.rs.ForbiddenException;
-import jakarta.ws.rs.NotFoundException;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
-import lombok.AllArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
+import org.slf4j.Logger;
 import org.springframework.stereotype.Component;
 
-@AllArgsConstructor
 @Component
-@Slf4j
 public class ReportExportService {
 
+  private static final Logger LOG = org.slf4j.LoggerFactory.getLogger(ReportExportService.class);
   private final ReportReader reportReader;
   private final ReportAuthorizationService reportAuthorizationService;
   private final AuthorizedCollectionService authorizedCollectionService;
 
+  public ReportExportService(
+      final ReportReader reportReader,
+      final ReportAuthorizationService reportAuthorizationService,
+      final AuthorizedCollectionService authorizedCollectionService) {
+    this.reportReader = reportReader;
+    this.reportAuthorizationService = reportAuthorizationService;
+    this.authorizedCollectionService = authorizedCollectionService;
+  }
+
   public List<ReportDefinitionExportDto> getReportExportDtos(final Set<String> reportIds) {
-    log.debug("Exporting all reports with IDs {} for export via API.", reportIds);
+    LOG.debug("Exporting all reports with IDs {} for export via API.", reportIds);
     final List<ReportDefinitionDto<?>> reportDefinitions =
         retrieveReportDefinitionsOrFailIfMissing(reportIds);
     return reportDefinitions.stream()
@@ -47,7 +54,7 @@ public class ReportExportService {
 
   public List<ReportDefinitionExportDto> getReportExportDtosAsUser(
       final String userId, final Set<String> reportIds) {
-    log.debug("Exporting all reports with IDs {} as user {}.", reportIds, userId);
+    LOG.debug("Exporting all reports with IDs {} as user {}.", reportIds, userId);
     final List<ReportDefinitionDto<?>> reportDefinitions =
         retrieveReportDefinitionsOrFailIfMissing(reportIds);
     validateReportAuthorizationsOrFail(userId, reportDefinitions);
@@ -113,7 +120,7 @@ public class ReportExportService {
 
   public void validateReportAuthorizationsOrFail(
       final String userId, final List<ReportDefinitionDto<?>> reportDefinitions) {
-    List<String> notAuthorizedReportIds = new ArrayList<>();
+    final List<String> notAuthorizedReportIds = new ArrayList<>();
 
     reportDefinitions.forEach(
         reportDef -> {

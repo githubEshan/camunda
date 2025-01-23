@@ -10,11 +10,6 @@ package io.camunda.operate.webapp.rest;
 import static org.assertj.core.api.AssertionsForClassTypes.assertThat;
 import static org.mockito.Mockito.when;
 
-import io.camunda.operate.entities.EventEntity;
-import io.camunda.operate.entities.EventMetadataEntity;
-import io.camunda.operate.entities.FlowNodeInstanceEntity;
-import io.camunda.operate.entities.FlowNodeType;
-import io.camunda.operate.entities.UserTaskEntity;
 import io.camunda.operate.util.Tuple;
 import io.camunda.operate.webapp.reader.DecisionInstanceReader;
 import io.camunda.operate.webapp.reader.EventReader;
@@ -27,6 +22,12 @@ import io.camunda.operate.webapp.rest.dto.metadata.FlowNodeInstanceMetadataDto;
 import io.camunda.operate.webapp.rest.dto.metadata.JobFlowNodeInstanceMetadataDto;
 import io.camunda.operate.webapp.rest.dto.metadata.ServiceTaskInstanceMetadataDto;
 import io.camunda.operate.webapp.rest.dto.metadata.UserTaskInstanceMetadataDto;
+import io.camunda.webapps.schema.entities.operate.EventEntity;
+import io.camunda.webapps.schema.entities.operate.EventMetadataEntity;
+import io.camunda.webapps.schema.entities.operate.FlowNodeInstanceEntity;
+import io.camunda.webapps.schema.entities.operate.FlowNodeType;
+import io.camunda.webapps.schema.entities.tasklist.SnapshotTaskVariableEntity;
+import io.camunda.webapps.schema.entities.tasklist.TaskEntity;
 import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Map;
@@ -92,19 +93,15 @@ class FlowNodeInstanceMetadataBuilderTest {
     final var followUpDate = dueDate.plusHours(3);
     final var userTask =
         Optional.of(
-            new UserTaskEntity()
-                .setUserTaskKey(42L)
-                .setVariables(
-                    """
-                    { "name": "Homer Simpson", "City":"Springfield" }
-                    """)
+            new TaskEntity()
+                .setKey(42L)
                 .setAction("action")
                 .setAssignee("Marge")
-                .setCandidateUsers(List.of("Lisa", "Bart"))
-                .setCandidateGroups(List.of("Springfield", "Shelbyville"))
+                .setCandidateUsers(new String[] {"Lisa", "Bart"})
+                .setCandidateGroups(new String[] {"Springfield", "Shelbyville"})
                 .setDueDate(dueDate)
                 .setFollowUpDate(followUpDate)
-                .setFormKey(5L));
+                .setFormKey(String.valueOf(5L)));
     when(eventReader.getEventEntityByFlowNodeInstanceId(flowNodeInstance.getId()))
         .thenReturn(
             new EventEntity()
@@ -115,6 +112,11 @@ class FlowNodeInstanceMetadataBuilderTest {
                         .setCorrelationKey("23-05")));
     when(userTaskReader.getUserTaskByFlowNodeInstanceKey(flowNodeInstance.getKey()))
         .thenReturn(userTask);
+    when(userTaskReader.getUserTaskVariables(userTask.get().getKey()))
+        .thenReturn(
+            List.of(
+                new SnapshotTaskVariableEntity().setName("name").setValue("Homer Simpson"),
+                new SnapshotTaskVariableEntity().setName("City").setValue("Springfield")));
     final var metadata = (UserTaskInstanceMetadataDto) builder.buildFrom(flowNodeInstance);
     assertThat(metadata.getFlowNodeType()).isEqualTo(FlowNodeType.USER_TASK);
     assertStandardValues(metadata);
@@ -138,14 +140,7 @@ class FlowNodeInstanceMetadataBuilderTest {
   void buildUserTaskMetadataWithInvalidVariables() {
     final var flowNodeInstance = new FlowNodeInstanceEntity().setType(FlowNodeType.USER_TASK);
     fillStandardValues(flowNodeInstance);
-    final var userTask =
-        Optional.of(
-            new UserTaskEntity()
-                .setUserTaskKey(42L)
-                .setVariables(
-                    """
-                    { "name": "Homer Simpson"
-                    """));
+    final var userTask = Optional.of(new TaskEntity().setKey(42L));
     when(eventReader.getEventEntityByFlowNodeInstanceId(flowNodeInstance.getId()))
         .thenReturn(
             new EventEntity()

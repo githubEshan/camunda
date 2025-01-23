@@ -34,10 +34,6 @@
 # This setting can also be overridden using the environment variable CAMUNDA_REST_ENABLED.
 # camunda.rest.enabled: true
 
-# Enable the Camunda REST Query API to start on gateway startup.
-# This setting can also be overridden using the environment variable CAMUNDA_REST_QUERY_ENABLED.
-# camunda.rest.query.enabled: false
-
 # zeebe:
   # gateway:
     # network:
@@ -59,6 +55,14 @@
       # Apply the same setting on the broker too, see ZEEBE_BROKER_NETWORK_MAXMESSAGESIZE.
       # This setting can also be overridden using the environment variable ZEEBE_GATEWAY_NETWORK_MAXMESSAGESIZE.
       # maxMessageSize: 4MB
+
+      # Sets the size of the socket receive buffer (SO_RCVBUF).
+      # This setting can also be overridden using the environment variable ZEEBE_GATEWAY_NETWORK_SOCKETRECEIVEBUFFER.
+      # socketReceiveBuffer: 1MB
+
+      # Sets the size of the socket send buffer (SO_SNDBUF).
+      # This setting can also be overridden using the environment variable ZEEBE_GATEWAY_NETWORK_SOCKETSENDBUFFER.
+      # socketSendBuffer: 1MB
 
     # cluster:
       # Sets initial contact points (brokers), which the gateway should contact to
@@ -157,6 +161,21 @@
         # This setting can also be overridden using the environment variable ZEEBE_GATEWAY_CLUSTER_MEMBERSHIP_SYNCINTERVAL
         # syncInterval: 10s
 
+      # Configure the parameters used to propagate the dynamic cluster configuration across brokers and gateways
+      # configManager:
+        # Configure the parameters used for gossiping the dynamic cluster configuration.
+        # Note that this is not related to cluster membership gossip.
+        # gossip:
+          # Sets the interval between two synchronization requests to other members of the cluster
+          # This setting can also be overridden using the environment variable ZEEBE_GATEWAY_CLUSTER_CONFIGMANAGER_GOSSIP_SYNCDELAY
+          # syncDelay: 10s
+          # Sets the timeout for the synchronization requests
+          # This setting can also be overridden using the environment variable ZEEBE_GATEWAY_CLUSTER_CONFIGMANAGER_GOSSIP_SYNCREQUESTTIMEOUT
+          # syncRequestTimeout: 2s
+          # Sets the number of cluster members the configuration is gossiped to.
+          # This setting can also be overridden using the environment variable ZEEBE_GATEWAY_CLUSTER_CONFIGMANAGER_GOSSIP_GOSSIPFANOUT
+          # gossipFanout: 2
+
       # security:
         # Enables TLS authentication between this gateway and other nodes in the cluster
         # If this setting is enabled then the certificate and private key must either be provided separately
@@ -184,34 +203,6 @@
           # Sets the password for the keystore file, if not set it is assumed there is no password
           # This setting can also be overridden using the environment variable ZEEBE_GATEWAY_CLUSTER_SECURITY_KEYSTORE_PASSWORD
           # password:
-
-
-        # authentication:
-          # Controls which authentication mode is active, supported modes are 'none' and 'identity'.
-          # If 'identity' is set, authentication will be done using camunda-identity, which needs to
-          # be configured in the corresponding subsection. See also https://docs.camunda.io/docs/self-managed/identity/what-is-identity/ .
-          # This setting can also be overridden using the environment variable ZEEBE_GATEWAY_SECURITY_AUTHENTICATION_MODE.
-          # mode: none
-
-          # WARNING: These settings are deprecated! Please use the corresponding Camunda Identity
-          # properties or the environment variables defined here: https://docs.camunda.io/docs/self-managed/identity/deployment/configuration-variables/
-          # identity:
-            # The URL to the auth provider backend, used to validate tokens.
-            # This setting can also be overridden using the environment variable ZEEBE_GATEWAY_SECURITY_AUTHENTICATION_IDENTITY_ISSUERBACKENDURL.
-            # issuerBackendUrl: http://keycloak:8080/auth/realms/camunda-platform
-
-            # The required audience of the auth token.
-            # This setting can also be overridden using the environment variable ZEEBE_GATEWAY_SECURITY_AUTHENTICATION_IDENTITY_AUDIENCE.
-            # audience: zeebe-api
-
-            # The identity auth type to apply, one of `keycloak` or `auth0`.
-            # This setting can also be overridden using the environment variable ZEEBE_GATEWAY_SECURITY_AUTHENTICATION_IDENTITY_TYPE.
-            # type: keycloak
-
-            # The URL to the Identity instance. Must be defined when multi-tenancy is enabled and authentication mode is set to 'identity'.
-            # This is used to retrieve the authorized tenants for requests based on the token.
-            # This setting can also be overridden using the environment variable ZEEBE_GATEWAY_SECURITY_AUTHENTICATION_IDENTITY_BASEURL.
-            # baseUrl:
 
       # Configure compression algorithm for all messages sent between the gateway and
       # the brokers. Available options are NONE, GZIP and SNAPPY.
@@ -263,10 +254,6 @@
       # When enabled, the gateway enhances requests with the authorized tenant ids of the requester.
       # It also rejects requests that specify a tenant id that the requester is not authorized to access.
       # When disabled, the gateway enhances requests with the default tenant id '<default>'.
-      #
-      # The authorized tenants are retrieved from the configured tenant authorization provider.
-      # For now, only Identity is supported as tenant authorization provider.
-      # It is used when ZEEBE_GATEWAY_SECURITY_AUTHENTICATION_MODE is set to 'identity'.
       #
       # This setting can also be overridden using the environment variable ZEEBE_GATEWAY_MULTITENANCY_ENABLED.
       enabled: false

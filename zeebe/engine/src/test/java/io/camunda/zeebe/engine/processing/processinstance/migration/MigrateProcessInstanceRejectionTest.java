@@ -7,18 +7,24 @@
  */
 package io.camunda.zeebe.engine.processing.processinstance.migration;
 
+import static io.camunda.zeebe.engine.processing.processinstance.migration.MigrationTestUtil.extractProcessDefinitionKeyByProcessId;
 import static io.camunda.zeebe.protocol.record.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.fail;
 
 import io.camunda.zeebe.engine.util.EngineRule;
 import io.camunda.zeebe.model.bpmn.Bpmn;
 import io.camunda.zeebe.protocol.record.Assertions;
 import io.camunda.zeebe.protocol.record.Record;
 import io.camunda.zeebe.protocol.record.RejectionType;
+import io.camunda.zeebe.protocol.record.intent.JobIntent;
 import io.camunda.zeebe.protocol.record.intent.ProcessInstanceIntent;
 import io.camunda.zeebe.protocol.record.intent.ProcessInstanceMigrationIntent;
 import io.camunda.zeebe.protocol.record.value.DeploymentRecordValue;
+import io.camunda.zeebe.test.util.BrokerClassRuleHelper;
 import io.camunda.zeebe.test.util.record.RecordingExporter;
 import io.camunda.zeebe.test.util.record.RecordingExporterTestWatcher;
+import java.util.Map;
 import org.junit.ClassRule;
 import org.junit.Rule;
 import org.junit.Test;
@@ -29,6 +35,7 @@ public class MigrateProcessInstanceRejectionTest {
   @ClassRule public static final EngineRule ENGINE = EngineRule.singlePartition();
 
   @Rule public final TestWatcher watcher = new RecordingExporterTestWatcher();
+  @Rule public final BrokerClassRuleHelper helper = new BrokerClassRuleHelper();
 
   @Test
   public void shouldRejectCommandWhenProcessInstanceIsUnknown() {
@@ -201,6 +208,225 @@ public class MigrateProcessInstanceRejectionTest {
   }
 
   @Test
+  public void shouldRejectCommandWhenMultiInstanceElementMappedToADifferentBpmnElementType() {
+    // given
+    final String processId = helper.getBpmnProcessId();
+    final String targetProcessId = helper.getBpmnProcessId() + "2";
+
+    final var deployment =
+        ENGINE
+            .deployment()
+            .withXmlResource(
+                Bpmn.createExecutableProcess(processId)
+                    .startEvent()
+                    .serviceTask(
+                        "serviceTask",
+                        t ->
+                            t.zeebeJobType("A")
+                                .multiInstance(
+                                    b ->
+                                        b.zeebeInputCollectionExpression("[1,2,3]")
+                                            .zeebeInputElement("index")))
+                    .endEvent()
+                    .done())
+            .withXmlResource(
+                Bpmn.createExecutableProcess(targetProcessId)
+                    .startEvent()
+                    .userTask(
+                        "userTask",
+                        t ->
+                            t.multiInstance(
+                                b ->
+                                    b.zeebeInputCollectionExpression("[1,2,3]")
+                                        .zeebeInputElement("index")))
+                    .endEvent()
+                    .done())
+            .deploy();
+
+    final long targetProcessDefinitionKey =
+        extractProcessDefinitionKeyByProcessId(deployment, targetProcessId);
+
+    final var processInstanceKey = ENGINE.processInstance().ofBpmnProcessId(processId).create();
+
+    assertThat(
+            RecordingExporter.jobRecords(JobIntent.CREATED)
+                .withType("A")
+                .withProcessInstanceKey(processInstanceKey)
+                .limit(3))
+        .describedAs("Wait until all service tasks have activated")
+        .hasSize(3);
+
+    // when
+    ENGINE
+        .processInstance()
+        .withInstanceKey(processInstanceKey)
+        .migration()
+        .withTargetProcessDefinitionKey(targetProcessDefinitionKey)
+        .addMappingInstruction("serviceTask", "userTask")
+        .expectRejection()
+        .migrate();
+
+    // then
+    final var rejectionRecord =
+        RecordingExporter.processInstanceMigrationRecords().onlyCommandRejections().getFirst();
+
+    assertThat(rejectionRecord)
+        .hasIntent(ProcessInstanceMigrationIntent.MIGRATE)
+        .hasRejectionType(RejectionType.INVALID_STATE)
+        .hasRejectionReason(
+            String.format(
+                """
+              Expected to migrate process instance '%s' \
+              but active element with id 'serviceTask' and type 'SERVICE_TASK' is mapped to \
+              an element with id 'userTask' and different type 'USER_TASK'. \
+              Elements must be mapped to elements of the same type.""",
+                processInstanceKey))
+        .hasKey(processInstanceKey);
+  }
+
+  @Test
+  public void shouldRejectCommandWhenMultiInstanceElementIsMigratedToNonMultiInstanceElement() {
+    // given
+    final String processId = helper.getBpmnProcessId();
+    final String targetProcessId = helper.getBpmnProcessId() + "2";
+
+    final var deployment =
+        ENGINE
+            .deployment()
+            .withXmlResource(
+                Bpmn.createExecutableProcess(processId)
+                    .startEvent()
+                    .serviceTask(
+                        "serviceTask1",
+                        t ->
+                            t.zeebeJobType("A")
+                                .multiInstance(
+                                    b ->
+                                        b.zeebeInputCollectionExpression("[1,2,3]")
+                                            .zeebeInputElement("index")))
+                    .endEvent()
+                    .done())
+            .withXmlResource(
+                Bpmn.createExecutableProcess(targetProcessId)
+                    .startEvent()
+                    .serviceTask("serviceTask2", t -> t.zeebeJobType("A"))
+                    .endEvent()
+                    .done())
+            .deploy();
+
+    final long targetProcessDefinitionKey =
+        extractProcessDefinitionKeyByProcessId(deployment, targetProcessId);
+
+    final var processInstanceKey = ENGINE.processInstance().ofBpmnProcessId(processId).create();
+
+    assertThat(
+            RecordingExporter.jobRecords(JobIntent.CREATED)
+                .withType("A")
+                .withProcessInstanceKey(processInstanceKey)
+                .limit(3))
+        .describedAs("Wait until all service tasks have activated")
+        .hasSize(3);
+
+    // when
+    ENGINE
+        .processInstance()
+        .withInstanceKey(processInstanceKey)
+        .migration()
+        .withTargetProcessDefinitionKey(targetProcessDefinitionKey)
+        .addMappingInstruction("serviceTask1", "serviceTask2")
+        .expectRejection()
+        .migrate();
+
+    // then
+    final var rejectionRecord =
+        RecordingExporter.processInstanceMigrationRecords().onlyCommandRejections().getFirst();
+
+    assertThat(rejectionRecord)
+        .hasIntent(ProcessInstanceMigrationIntent.MIGRATE)
+        .hasRejectionType(RejectionType.INVALID_STATE)
+        .hasRejectionReason(
+            String.format(
+                """
+              Expected to migrate process instance '%s' \
+              but active element with id 'serviceTask1' and type 'MULTI_INSTANCE_BODY' is mapped to \
+              an element with id 'serviceTask2' and different type 'SERVICE_TASK'. \
+              Elements must be mapped to elements of the same type.""",
+                processInstanceKey))
+        .hasKey(processInstanceKey);
+  }
+
+  @Test
+  public void shouldRejectCommandWhenNonMultiInstanceElementIsMigratedToMultiInstanceElement() {
+    // given
+    final String processId = helper.getBpmnProcessId();
+    final String targetProcessId = helper.getBpmnProcessId() + "2";
+
+    final var deployment =
+        ENGINE
+            .deployment()
+            .withXmlResource(
+                Bpmn.createExecutableProcess(processId)
+                    .startEvent()
+                    .serviceTask("serviceTask1", t -> t.zeebeJobType("A"))
+                    .endEvent()
+                    .done())
+            .withXmlResource(
+                Bpmn.createExecutableProcess(targetProcessId)
+                    .startEvent()
+                    .serviceTask(
+                        "serviceTask2",
+                        t ->
+                            t.zeebeJobType("A")
+                                .multiInstance(
+                                    b ->
+                                        b.zeebeInputCollectionExpression("[1,2,3]")
+                                            .zeebeInputElement("index")))
+                    .endEvent()
+                    .done())
+            .deploy();
+
+    final long targetProcessDefinitionKey =
+        extractProcessDefinitionKeyByProcessId(deployment, targetProcessId);
+
+    final var processInstanceKey = ENGINE.processInstance().ofBpmnProcessId(processId).create();
+
+    assertThat(
+            RecordingExporter.jobRecords(JobIntent.CREATED)
+                .withType("A")
+                .withProcessInstanceKey(processInstanceKey)
+                .limit(1))
+        .describedAs("Wait until job is created")
+        .hasSize(1);
+
+    // when
+    ENGINE
+        .processInstance()
+        .withInstanceKey(processInstanceKey)
+        .migration()
+        .withTargetProcessDefinitionKey(targetProcessDefinitionKey)
+        .addMappingInstruction("serviceTask1", "serviceTask2")
+        .expectRejection()
+        .migrate();
+
+    // then
+    final var rejectionRecord =
+        RecordingExporter.processInstanceMigrationRecords().onlyCommandRejections().getFirst();
+
+    assertThat(rejectionRecord)
+        .hasIntent(ProcessInstanceMigrationIntent.MIGRATE)
+        .hasRejectionType(RejectionType.INVALID_STATE)
+        .hasRejectionReason(
+            String.format(
+                """
+              Expected to migrate process instance '%s' \
+              but active element with id 'serviceTask1' and type 'SERVICE_TASK' is mapped to \
+              an element with id 'serviceTask2' and different type 'MULTI_INSTANCE_BODY'. \
+              Elements must be mapped to elements of the same type.""",
+                processInstanceKey))
+        .hasKey(processInstanceKey);
+  }
+
+  @Test
   public void shouldRejectCommandWhenMappingInstructionContainsANonExistingSourceElementId() {
     // given
     final var deployment =
@@ -363,6 +589,265 @@ public class MigrateProcessInstanceRejectionTest {
   }
 
   @Test
+  public void shouldRejectCommandWhenMultiInstanceFlowScopeIsChangedInTargetProcessDefinition() {
+    // given
+    final String processId = helper.getBpmnProcessId();
+    final String targetProcessId = helper.getBpmnProcessId() + "2";
+
+    final var deployment =
+        ENGINE
+            .deployment()
+            .withXmlResource(
+                Bpmn.createExecutableProcess(processId)
+                    .startEvent()
+                    .serviceTask(
+                        "serviceTask1",
+                        t ->
+                            t.zeebeJobType("A")
+                                .multiInstance(
+                                    b ->
+                                        b.zeebeInputCollectionExpression("[1,2,3]")
+                                            .zeebeInputElement("index")))
+                    .endEvent()
+                    .done())
+            .withXmlResource(
+                Bpmn.createExecutableProcess(targetProcessId)
+                    .startEvent()
+                    .subProcess(
+                        "sub",
+                        s ->
+                            s.embeddedSubProcess()
+                                .startEvent()
+                                .serviceTask(
+                                    "serviceTask2",
+                                    t ->
+                                        t.zeebeJobType("B")
+                                            .multiInstance(
+                                                b ->
+                                                    b.zeebeInputCollectionExpression("[1,2,3]")
+                                                        .zeebeInputElement("index")))
+                                .endEvent())
+                    .endEvent()
+                    .done())
+            .deploy();
+
+    final long targetProcessDefinitionKey =
+        extractProcessDefinitionKeyByProcessId(deployment, targetProcessId);
+
+    final var processInstanceKey = ENGINE.processInstance().ofBpmnProcessId(processId).create();
+
+    assertThat(
+            RecordingExporter.jobRecords(JobIntent.CREATED)
+                .withType("A")
+                .withProcessInstanceKey(processInstanceKey)
+                .limit(3))
+        .describedAs("Wait until all service tasks have activated")
+        .hasSize(3);
+
+    // when
+    ENGINE
+        .processInstance()
+        .withInstanceKey(processInstanceKey)
+        .migration()
+        .withTargetProcessDefinitionKey(targetProcessDefinitionKey)
+        .addMappingInstruction("serviceTask1", "serviceTask2")
+        .expectRejection()
+        .migrate();
+
+    // then
+    final var rejectionRecord =
+        RecordingExporter.processInstanceMigrationRecords().onlyCommandRejections().getFirst();
+
+    assertThat(rejectionRecord)
+        .hasIntent(ProcessInstanceMigrationIntent.MIGRATE)
+        .hasRejectionType(RejectionType.INVALID_STATE)
+        .hasRejectionReason(
+            String.format(
+                """
+              Expected to migrate process instance '%s' \
+              but the flow scope of active element with id 'serviceTask1' is changed. \
+              The flow scope of the active element is expected to be '%s' but was 'sub'. \
+              The flow scope of an element cannot be changed during migration yet.""",
+                processInstanceKey, targetProcessId))
+        .hasKey(processInstanceKey);
+  }
+
+  @Test
+  public void shouldRejectCommandWhenFlowScopeIsChangedInsideMultiInstanceBody() {
+    // given
+    final String processId = helper.getBpmnProcessId();
+    final String targetProcessId = helper.getBpmnProcessId() + "2";
+
+    final var deployment =
+        ENGINE
+            .deployment()
+            .withXmlResource(
+                Bpmn.createExecutableProcess(processId)
+                    .startEvent()
+                    .subProcess(
+                        "sub1",
+                        s ->
+                            s.multiInstance(
+                                    b ->
+                                        b.zeebeInputCollectionExpression("[1,2,3]")
+                                            .zeebeInputElement("index"))
+                                .embeddedSubProcess()
+                                .startEvent()
+                                .serviceTask("task1", t -> t.zeebeJobType("task"))
+                                .endEvent()
+                                .subProcessDone())
+                    .endEvent()
+                    .done())
+            .withXmlResource(
+                Bpmn.createExecutableProcess(targetProcessId)
+                    .startEvent()
+                    .subProcess(
+                        "sub2",
+                        s ->
+                            s.multiInstance(
+                                    b ->
+                                        b.zeebeInputCollectionExpression("[1,2,3]")
+                                            .zeebeInputElement("index"))
+                                .embeddedSubProcess()
+                                .startEvent()
+                                .subProcess(
+                                    "subsub2",
+                                    ss ->
+                                        ss.embeddedSubProcess()
+                                            .startEvent()
+                                            .serviceTask("task2", t -> t.zeebeJobType("task"))
+                                            .endEvent())
+                                .subProcessDone())
+                    .endEvent()
+                    .done())
+            .deploy();
+
+    final long targetProcessDefinitionKey =
+        extractProcessDefinitionKeyByProcessId(deployment, targetProcessId);
+
+    final var processInstanceKey = ENGINE.processInstance().ofBpmnProcessId(processId).create();
+
+    assertThat(
+            RecordingExporter.jobRecords(JobIntent.CREATED)
+                .withType("task")
+                .withProcessInstanceKey(processInstanceKey)
+                .limit(3))
+        .describedAs("Wait until all service tasks have activated")
+        .hasSize(3);
+
+    // when
+    final var rejection =
+        ENGINE
+            .processInstance()
+            .withInstanceKey(processInstanceKey)
+            .migration()
+            .withTargetProcessDefinitionKey(targetProcessDefinitionKey)
+            .addMappingInstruction("sub1", "sub2")
+            .addMappingInstruction("task1", "task2")
+            .expectRejection()
+            .migrate();
+
+    // then
+    assertThat(rejection)
+        .hasIntent(ProcessInstanceMigrationIntent.MIGRATE)
+        .hasRejectionType(RejectionType.INVALID_STATE)
+        .hasRejectionReason(
+            String.format(
+                """
+                Expected to migrate process instance '%s' \
+                but the flow scope of active element with id 'task1' is changed. \
+                The flow scope of the active element is expected to be 'sub2' but was 'subsub2'. \
+                The flow scope of an element cannot be changed during migration yet.""",
+                processInstanceKey))
+        .hasKey(processInstanceKey);
+  }
+
+  @Test
+  public void shouldRejectCommandWhenElementIsMovedOutsideOfMultiInstanceBody() {
+    // given
+    final String processId = helper.getBpmnProcessId();
+    final String targetProcessId = helper.getBpmnProcessId() + "2";
+
+    final var deployment =
+        ENGINE
+            .deployment()
+            .withXmlResource(
+                Bpmn.createExecutableProcess(processId)
+                    .startEvent()
+                    .subProcess(
+                        "sub1",
+                        s ->
+                            s.multiInstance(
+                                    b ->
+                                        b.zeebeInputCollectionExpression("[1,2,3]")
+                                            .zeebeInputElement("index"))
+                                .embeddedSubProcess()
+                                .startEvent()
+                                .serviceTask("task1", t -> t.zeebeJobType("task"))
+                                .endEvent()
+                                .subProcessDone())
+                    .endEvent()
+                    .done())
+            .withXmlResource(
+                Bpmn.createExecutableProcess(targetProcessId)
+                    .startEvent()
+                    .subProcess(
+                        "sub2",
+                        s ->
+                            s.multiInstance(
+                                    b ->
+                                        b.zeebeInputCollectionExpression("[1,2,3]")
+                                            .zeebeInputElement("index"))
+                                .embeddedSubProcess()
+                                .startEvent()
+                                .endEvent()
+                                .subProcessDone())
+                    .serviceTask("task2", t -> t.zeebeJobType("task"))
+                    .endEvent()
+                    .done())
+            .deploy();
+
+    final long targetProcessDefinitionKey =
+        extractProcessDefinitionKeyByProcessId(deployment, targetProcessId);
+
+    final var processInstanceKey = ENGINE.processInstance().ofBpmnProcessId(processId).create();
+
+    assertThat(
+            RecordingExporter.jobRecords(JobIntent.CREATED)
+                .withType("task")
+                .withProcessInstanceKey(processInstanceKey)
+                .limit(3))
+        .describedAs("Wait until all service tasks have activated")
+        .hasSize(3);
+
+    // when
+    final var rejection =
+        ENGINE
+            .processInstance()
+            .withInstanceKey(processInstanceKey)
+            .migration()
+            .withTargetProcessDefinitionKey(targetProcessDefinitionKey)
+            .addMappingInstruction("sub1", "sub2")
+            .addMappingInstruction("task1", "task2")
+            .expectRejection()
+            .migrate();
+
+    // then
+    assertThat(rejection)
+        .hasIntent(ProcessInstanceMigrationIntent.MIGRATE)
+        .hasRejectionType(RejectionType.INVALID_STATE)
+        .hasRejectionReason(
+            String.format(
+                """
+                Expected to migrate process instance '%s' \
+                but the flow scope of active element with id 'task1' is changed. \
+                The flow scope of the active element is expected to be 'sub2' but was '%s'. \
+                The flow scope of an element cannot be changed during migration yet.""",
+                processInstanceKey, targetProcessId))
+        .hasKey(processInstanceKey);
+  }
+
+  @Test
   public void shouldRejectCommandWhenElementFlowScopeIsChangedInTargetProcessDefinitionDeeper() {
     // given
     final var deployment =
@@ -478,146 +963,6 @@ public class MigrateProcessInstanceRejectionTest {
 
   @Test
   public void
-      shouldRejectCommandWhenMigratedProcessInstanceHasASubprocessWithEscalationBoundaryEvent() {
-    // given
-    final var deployment =
-        ENGINE
-            .deployment()
-            .withXmlResource(
-                Bpmn.createExecutableProcess("process")
-                    .startEvent()
-                    .subProcess(
-                        "sub",
-                        s ->
-                            s.embeddedSubProcess()
-                                .startEvent()
-                                .serviceTask("A", t -> t.zeebeJobType("A"))
-                                .endEvent("end", e -> e.escalation("escalation")))
-                    .boundaryEvent("catch", b -> b.escalation("escalation"))
-                    .endEvent()
-                    .done())
-            .withXmlResource(
-                Bpmn.createExecutableProcess("process2")
-                    .startEvent()
-                    .subProcess(
-                        "sub",
-                        s ->
-                            s.embeddedSubProcess()
-                                .startEvent()
-                                .serviceTask("A", t -> t.zeebeJobType("A"))
-                                .endEvent("end", e -> e.escalation("escalation")))
-                    .endEvent()
-                    .done())
-            .deploy();
-
-    final long processInstanceKey = ENGINE.processInstance().ofBpmnProcessId("process").create();
-
-    RecordingExporter.processInstanceRecords(ProcessInstanceIntent.ELEMENT_ACTIVATED)
-        .withElementId("A")
-        .await();
-
-    final long targetProcessDefinitionKey =
-        extractTargetProcessDefinitionKey(deployment, "process2");
-
-    // when
-    ENGINE
-        .processInstance()
-        .withInstanceKey(processInstanceKey)
-        .migration()
-        .withTargetProcessDefinitionKey(targetProcessDefinitionKey)
-        .addMappingInstruction("sub", "sub")
-        .addMappingInstruction("A", "A")
-        .expectRejection()
-        .migrate();
-
-    // then
-    final var rejectionRecord =
-        RecordingExporter.processInstanceMigrationRecords().onlyCommandRejections().getFirst();
-
-    assertThat(rejectionRecord)
-        .hasIntent(ProcessInstanceMigrationIntent.MIGRATE)
-        .hasRejectionType(RejectionType.INVALID_STATE)
-        .hasRejectionReason(
-            """
-                Expected to migrate process instance '%s' \
-                but active element with id 'sub' has one or more boundary events of types 'ESCALATION'. \
-                Migrating active elements with boundary events of these types is not possible yet."""
-                .formatted(processInstanceKey))
-        .hasKey(processInstanceKey);
-  }
-
-  @Test
-  public void
-      shouldRejectCommandWhenTargetProcessDefinitionHasASubprocessWithEscalationBoundaryEvent() {
-    // given
-    final var deployment =
-        ENGINE
-            .deployment()
-            .withXmlResource(
-                Bpmn.createExecutableProcess("process")
-                    .startEvent()
-                    .subProcess(
-                        "sub",
-                        s ->
-                            s.embeddedSubProcess()
-                                .startEvent()
-                                .serviceTask("A", t -> t.zeebeJobType("A"))
-                                .endEvent("end", e -> e.escalation("escalation")))
-                    .endEvent()
-                    .done())
-            .withXmlResource(
-                Bpmn.createExecutableProcess("process2")
-                    .startEvent()
-                    .subProcess(
-                        "sub",
-                        s ->
-                            s.embeddedSubProcess()
-                                .startEvent()
-                                .serviceTask("A", t -> t.zeebeJobType("A"))
-                                .endEvent("end", e -> e.escalation("escalation")))
-                    .boundaryEvent("catch", b -> b.escalation("escalation"))
-                    .endEvent()
-                    .done())
-            .deploy();
-
-    final long processInstanceKey = ENGINE.processInstance().ofBpmnProcessId("process").create();
-
-    final long targetProcessDefinitionKey =
-        extractTargetProcessDefinitionKey(deployment, "process2");
-
-    RecordingExporter.processInstanceRecords(ProcessInstanceIntent.ELEMENT_ACTIVATED)
-        .withProcessInstanceKey(processInstanceKey)
-        .withElementId("A")
-        .await();
-
-    // when
-    ENGINE
-        .processInstance()
-        .withInstanceKey(processInstanceKey)
-        .migration()
-        .withTargetProcessDefinitionKey(targetProcessDefinitionKey)
-        .addMappingInstruction("sub", "sub")
-        .addMappingInstruction("A", "A")
-        .expectRejection()
-        .migrate();
-
-    // then
-    final var rejectionRecord =
-        RecordingExporter.processInstanceMigrationRecords().onlyCommandRejections().getFirst();
-    assertThat(rejectionRecord)
-        .hasIntent(ProcessInstanceMigrationIntent.MIGRATE)
-        .hasRejectionType(RejectionType.INVALID_STATE)
-        .hasRejectionReason(
-            """
-            Expected to migrate process instance '%s' \
-            but target element with id 'sub' has one or more boundary events of types 'ESCALATION'. \
-            Migrating target elements with boundary events of these types is not possible yet."""
-                .formatted(processInstanceKey))
-        .hasKey(processInstanceKey);
-  }
-
-  @Test
-  public void
       shouldRejectCommandWhenActiveElementSubscribesToTheSameMessageBoundaryEventWithoutMapping() {
     // given
     final var deployment =
@@ -674,11 +1019,12 @@ public class MigrateProcessInstanceRejectionTest {
         .hasRejectionType(RejectionType.INVALID_STATE)
         .hasRejectionReason(
             """
-            Expected to migrate process instance '%s' but active element with id 'A' attempts to \
-            subscribe to a message it is already subscribed to with name 'message'. Migrating \
-            active elements that subscribe to a message they are already subscribed to is not \
-            possible yet. Please provide a mapping instruction to message catch event with id \
-            'boundary' to migrate the respective message subscription."""
+          Expected to migrate process instance '%s' but active element with id 'A' \
+          is already subscribed to the same message name 'message'. Currently, migrating message \
+          subscriptions to the same message name isn't supported without a mapping. \
+          Please provide a mapping instruction between message catch event with id 'boundary' \
+          and the target message catch event. \
+          """
                 .formatted(processInstanceKey))
         .hasKey(processInstanceKey);
   }
@@ -1039,6 +1385,296 @@ public class MigrateProcessInstanceRejectionTest {
             The evaluation reported the following warnings:
             [NO_VARIABLE_FOUND] No variable found with name 'invalid_signal_expression'"""
                 .formatted(processInstanceKey));
+  }
+
+  @Test
+  public void shouldRejectMigrationThatChangesParallelMultiInstanceToSequential() {
+    // given
+    final String processId = helper.getBpmnProcessId();
+    final String targetProcessId = helper.getBpmnProcessId() + "2";
+
+    final var deployment =
+        ENGINE
+            .deployment()
+            .withXmlResource(
+                Bpmn.createExecutableProcess(processId)
+                    .startEvent()
+                    .serviceTask(
+                        "serviceTask1",
+                        t ->
+                            t.zeebeJobType("A")
+                                .multiInstance(
+                                    b ->
+                                        b.parallel()
+                                            .zeebeInputCollectionExpression("[1,2,3]")
+                                            .zeebeInputElement("index")))
+                    .endEvent()
+                    .done())
+            .withXmlResource(
+                Bpmn.createExecutableProcess(targetProcessId)
+                    .startEvent()
+                    .serviceTask(
+                        "serviceTask2",
+                        t ->
+                            t.zeebeJobType("B")
+                                .multiInstance(
+                                    b ->
+                                        b.sequential()
+                                            .zeebeInputCollectionExpression("[1,2,3]")
+                                            .zeebeInputElement("index")))
+                    .endEvent()
+                    .done())
+            .deploy();
+
+    final long targetProcessDefinitionKey =
+        extractProcessDefinitionKeyByProcessId(deployment, targetProcessId);
+
+    final var processInstanceKey = ENGINE.processInstance().ofBpmnProcessId(processId).create();
+
+    assertThat(
+            RecordingExporter.jobRecords(JobIntent.CREATED)
+                .withType("A")
+                .withProcessInstanceKey(processInstanceKey)
+                .limit(3))
+        .describedAs("Wait until all service tasks have activated")
+        .hasSize(3);
+
+    // when
+    ENGINE
+        .processInstance()
+        .withInstanceKey(processInstanceKey)
+        .migration()
+        .withTargetProcessDefinitionKey(targetProcessDefinitionKey)
+        .addMappingInstruction("serviceTask1", "serviceTask2")
+        .expectRejection()
+        .migrate();
+
+    // then
+    final var rejectionRecord =
+        RecordingExporter.processInstanceMigrationRecords().onlyCommandRejections().getFirst();
+
+    assertThat(rejectionRecord)
+        .hasIntent(ProcessInstanceMigrationIntent.MIGRATE)
+        .hasRejectionType(RejectionType.INVALID_STATE)
+        .hasRejectionReason(
+            String.format(
+                """
+                Expected to migrate process instance '%s' \
+                but active element with id 'serviceTask1' has a different loop characteristics \
+                than the target element with id 'serviceTask2'. \
+                Both elements must have either sequential or parallel loop characteristics.""",
+                processInstanceKey))
+        .hasKey(processInstanceKey);
+  }
+
+  @Test
+  public void shouldRejectMigrationThatChangesSequentialMultiInstanceToParallel() {
+    // given
+    final String processId = helper.getBpmnProcessId();
+    final String targetProcessId = helper.getBpmnProcessId() + "2";
+
+    final var deployment =
+        ENGINE
+            .deployment()
+            .withXmlResource(
+                Bpmn.createExecutableProcess(processId)
+                    .startEvent()
+                    .serviceTask(
+                        "serviceTask1",
+                        t ->
+                            t.zeebeJobType("A")
+                                .multiInstance(
+                                    b ->
+                                        b.sequential()
+                                            .zeebeInputCollectionExpression("[1,2,3]")
+                                            .zeebeInputElement("index")))
+                    .endEvent()
+                    .done())
+            .withXmlResource(
+                Bpmn.createExecutableProcess(targetProcessId)
+                    .startEvent()
+                    .serviceTask(
+                        "serviceTask2",
+                        t ->
+                            t.zeebeJobType("B")
+                                .multiInstance(
+                                    b ->
+                                        b.parallel()
+                                            .zeebeInputCollectionExpression("[1,2,3]")
+                                            .zeebeInputElement("index")))
+                    .endEvent()
+                    .done())
+            .deploy();
+
+    final long targetProcessDefinitionKey =
+        extractProcessDefinitionKeyByProcessId(deployment, targetProcessId);
+
+    final var processInstanceKey = ENGINE.processInstance().ofBpmnProcessId(processId).create();
+
+    assertThat(
+            RecordingExporter.jobRecords(JobIntent.CREATED)
+                .withType("A")
+                .withProcessInstanceKey(processInstanceKey)
+                .limit(1))
+        .describedAs("Wait until the first service tasks has activated")
+        .hasSize(1);
+
+    // when
+    ENGINE
+        .processInstance()
+        .withInstanceKey(processInstanceKey)
+        .migration()
+        .withTargetProcessDefinitionKey(targetProcessDefinitionKey)
+        .addMappingInstruction("serviceTask1", "serviceTask2")
+        .expectRejection()
+        .migrate();
+
+    // then
+    final var rejectionRecord =
+        RecordingExporter.processInstanceMigrationRecords().onlyCommandRejections().getFirst();
+
+    assertThat(rejectionRecord)
+        .hasIntent(ProcessInstanceMigrationIntent.MIGRATE)
+        .hasRejectionType(RejectionType.INVALID_STATE)
+        .hasRejectionReason(
+            String.format(
+                """
+                Expected to migrate process instance '%s' \
+                but active element with id 'serviceTask1' has a different loop characteristics \
+                than the target element with id 'serviceTask2'. \
+                Both elements must have either sequential or parallel loop characteristics.""",
+                processInstanceKey))
+        .hasKey(processInstanceKey);
+  }
+
+  @Test
+  public void shouldNotStoreSubscriptionDeletionInTransientStateWhenRejectingCommand() {
+    // given
+    final var deployment =
+        ENGINE
+            .deployment()
+            .withXmlResource(
+                Bpmn.createExecutableProcess("process")
+                    .startEvent()
+                    .serviceTask("A", a -> a.zeebeJobType("A"))
+                    .boundaryEvent("boundary")
+                    .message(m -> m.name("message").zeebeCorrelationKeyExpression("key"))
+                    .endEvent()
+                    .moveToActivity("A")
+                    .endEvent()
+                    .done())
+            .withXmlResource(
+                Bpmn.createExecutableProcess("process2")
+                    .startEvent()
+                    .serviceTask("A", t -> t.zeebeJobType("A"))
+                    .boundaryEvent("boundary")
+                    .message(m -> m.name("message").zeebeCorrelationKeyExpression("key"))
+                    .endEvent()
+                    .moveToActivity("A")
+                    .endEvent("end")
+                    .done())
+            .deploy();
+
+    final long processInstanceKey =
+        ENGINE.processInstance().ofBpmnProcessId("process").withVariable("key", "key").create();
+
+    final long targetProcessDefinitionKey =
+        extractProcessDefinitionKeyByProcessId(deployment, "process2");
+
+    RecordingExporter.processInstanceRecords(ProcessInstanceIntent.ELEMENT_ACTIVATED)
+        .withProcessInstanceKey(processInstanceKey)
+        .withElementId("A")
+        .await();
+
+    // when
+    ENGINE
+        .processInstance()
+        .withInstanceKey(processInstanceKey)
+        .migration()
+        .withTargetProcessDefinitionKey(targetProcessDefinitionKey)
+        .addMappingInstruction("A", "A")
+        .expectRejection()
+        .migrate();
+
+    // then
+    ENGINE
+        .getProcessingState()
+        .getPendingProcessMessageSubscriptionState()
+        .visitPending(
+            System.currentTimeMillis(),
+            s -> {
+              fail("Encountered a pending process message subscription.");
+              return true;
+            });
+  }
+
+  @Test
+  public void shouldNotStoreSubscriptionCreationInTransientStateWhenRejectingCommand() {
+    // given
+    final var deployment =
+        ENGINE
+            .deployment()
+            .withXmlResource(
+                Bpmn.createExecutableProcess("process")
+                    .startEvent()
+                    .serviceTask("A", a -> a.zeebeJobType("A"))
+                    .boundaryEvent("boundary1")
+                    .message(m -> m.name("message1").zeebeCorrelationKeyExpression("key1"))
+                    .endEvent()
+                    .moveToActivity("A")
+                    .endEvent()
+                    .done())
+            .withXmlResource(
+                Bpmn.createExecutableProcess("process2")
+                    .startEvent()
+                    .serviceTask("A", t -> t.zeebeJobType("A"))
+                    .boundaryEvent("boundary2")
+                    .message(m -> m.name("message2").zeebeCorrelationKeyExpression("key2"))
+                    .endEvent()
+                    .moveToActivity("A")
+                    .boundaryEvent("boundary1")
+                    .message(m -> m.name("message1").zeebeCorrelationKeyExpression("key1"))
+                    .endEvent()
+                    .moveToActivity("A")
+                    .endEvent("end")
+                    .done())
+            .deploy();
+
+    final long processInstanceKey =
+        ENGINE
+            .processInstance()
+            .ofBpmnProcessId("process")
+            .withVariables(Map.of("key1", "key1", "key2", "key2"))
+            .create();
+
+    final long targetProcessDefinitionKey =
+        extractProcessDefinitionKeyByProcessId(deployment, "process2");
+
+    RecordingExporter.processInstanceRecords(ProcessInstanceIntent.ELEMENT_ACTIVATED)
+        .withProcessInstanceKey(processInstanceKey)
+        .withElementId("A")
+        .await();
+
+    // when
+    ENGINE
+        .processInstance()
+        .withInstanceKey(processInstanceKey)
+        .migration()
+        .withTargetProcessDefinitionKey(targetProcessDefinitionKey)
+        .addMappingInstruction("A", "A")
+        .expectRejection()
+        .migrate();
+
+    // then
+    ENGINE
+        .getProcessingState()
+        .getPendingProcessMessageSubscriptionState()
+        .visitPending(
+            System.currentTimeMillis(),
+            s -> {
+              fail("Encountered a pending process message subscription.");
+              return true;
+            });
   }
 
   private static long extractTargetProcessDefinitionKey(

@@ -7,14 +7,17 @@
  */
 package io.camunda.service;
 
-import io.camunda.search.clients.CamundaSearchClient;
-import io.camunda.service.entities.ProcessInstanceEntity;
+import static io.camunda.search.query.SearchQueryBuilders.processInstanceSearchQuery;
+
+import io.camunda.search.clients.ProcessInstanceSearchClient;
+import io.camunda.search.entities.ProcessInstanceEntity;
+import io.camunda.search.query.ProcessInstanceQuery;
+import io.camunda.search.query.SearchQueryResult;
+import io.camunda.security.auth.Authentication;
+import io.camunda.security.auth.Authorization;
+import io.camunda.service.exception.ForbiddenException;
 import io.camunda.service.search.core.SearchQueryService;
-import io.camunda.service.search.query.ProcessInstanceQuery;
-import io.camunda.service.search.query.SearchQueryBuilders;
-import io.camunda.service.search.query.SearchQueryResult;
-import io.camunda.service.security.auth.Authentication;
-import io.camunda.service.transformers.ServiceTransformers;
+import io.camunda.service.security.SecurityContextProvider;
 import io.camunda.util.ObjectBuilder;
 import io.camunda.zeebe.broker.client.api.BrokerClient;
 import io.camunda.zeebe.gateway.impl.broker.request.BrokerCancelProcessInstanceRequest;
@@ -40,32 +43,52 @@ public final class ProcessInstanceServices
     extends SearchQueryService<
         ProcessInstanceServices, ProcessInstanceQuery, ProcessInstanceEntity> {
 
-  public ProcessInstanceServices(
-      final BrokerClient brokerClient, final CamundaSearchClient dataStoreClient) {
-    this(brokerClient, dataStoreClient, null, null);
-  }
+  private final ProcessInstanceSearchClient processInstanceSearchClient;
 
   public ProcessInstanceServices(
       final BrokerClient brokerClient,
-      final CamundaSearchClient searchClient,
-      final ServiceTransformers transformers,
+      final SecurityContextProvider securityContextProvider,
+      final ProcessInstanceSearchClient processInstanceSearchClient,
       final Authentication authentication) {
-    super(brokerClient, searchClient, transformers, authentication);
+    super(brokerClient, securityContextProvider, authentication);
+    this.processInstanceSearchClient = processInstanceSearchClient;
   }
 
   @Override
   public ProcessInstanceServices withAuthentication(final Authentication authentication) {
-    return new ProcessInstanceServices(brokerClient, searchClient, transformers, authentication);
+    return new ProcessInstanceServices(
+        brokerClient, securityContextProvider, processInstanceSearchClient, authentication);
   }
 
   @Override
   public SearchQueryResult<ProcessInstanceEntity> search(final ProcessInstanceQuery query) {
-    return executor.search(query, ProcessInstanceEntity.class);
+    return processInstanceSearchClient
+        .withSecurityContext(
+            securityContextProvider.provideSecurityContext(
+                authentication, Authorization.of(a -> a.processDefinition().readProcessInstance())))
+        .searchProcessInstances(query);
   }
 
   public SearchQueryResult<ProcessInstanceEntity> search(
       final Function<ProcessInstanceQuery.Builder, ObjectBuilder<ProcessInstanceQuery>> fn) {
-    return search(SearchQueryBuilders.processInstanceSearchQuery(fn));
+    return search(processInstanceSearchQuery(fn));
+  }
+
+  public ProcessInstanceEntity getByKey(final Long processInstanceKey) {
+    final var result =
+        processInstanceSearchClient
+            .withSecurityContext(securityContextProvider.provideSecurityContext(authentication))
+            .searchProcessInstances(
+                processInstanceSearchQuery(
+                    q -> q.filter(f -> f.processInstanceKeys(processInstanceKey))));
+    final var processInstanceEntity =
+        getSingleResultOrThrow(result, processInstanceKey, "Process instance");
+    final var authorization = Authorization.of(a -> a.processDefinition().readProcessInstance());
+    if (!securityContextProvider.isAuthorized(
+        processInstanceEntity.processDefinitionId(), authentication, authorization)) {
+      throw new ForbiddenException(authorization);
+    }
+    return processInstanceEntity;
   }
 
   public CompletableFuture<ProcessInstanceCreationRecord> createProcessInstance(
@@ -94,7 +117,8 @@ public final class ProcessInstanceServices
             .setVersion(request.version())
             .setTenantId(request.tenantId())
             .setVariables(getDocumentOrEmpty(request.variables()))
-            .setInstructions(request.startInstructions());
+            .setInstructions(request.startInstructions())
+            .setFetchVariables(request.fetchVariables());
 
     if (request.operationReference() != null) {
       brokerRequest.setOperationReference(request.operationReference());
@@ -151,7 +175,8 @@ public final class ProcessInstanceServices
       Boolean awaitCompletion,
       Long requestTimeout,
       Long operationReference,
-      List<ProcessInstanceCreationStartInstruction> startInstructions) {}
+      List<ProcessInstanceCreationStartInstruction> startInstructions,
+      List<String> fetchVariables) {}
 
   public record ProcessInstanceCancelRequest(Long processInstanceKey, Long operationReference) {}
 

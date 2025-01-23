@@ -8,8 +8,8 @@
 package io.camunda.zeebe.it.clustering;
 
 import io.atomix.cluster.MemberId;
-import io.camunda.zeebe.client.ZeebeClient;
-import io.camunda.zeebe.client.api.worker.JobWorker;
+import io.camunda.client.CamundaClient;
+import io.camunda.client.api.worker.JobWorker;
 import io.camunda.zeebe.qa.util.actuator.JobStreamActuator;
 import io.camunda.zeebe.qa.util.cluster.TestCluster;
 import io.camunda.zeebe.qa.util.cluster.TestGateway;
@@ -19,32 +19,35 @@ import io.camunda.zeebe.qa.util.jobstream.JobStreamActuatorAssert;
 import io.camunda.zeebe.qa.util.junit.ZeebeIntegration;
 import io.camunda.zeebe.qa.util.junit.ZeebeIntegration.TestZeebe;
 import io.camunda.zeebe.test.util.Strings;
-import io.camunda.zeebe.test.util.junit.AutoCloseResources;
-import io.camunda.zeebe.test.util.junit.AutoCloseResources.AutoCloseResource;
 import io.camunda.zeebe.test.util.junit.RegressionTest;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 import org.agrona.CloseHelper;
 import org.awaitility.Awaitility;
+import org.junit.jupiter.api.AutoClose;
 import org.junit.jupiter.api.Test;
 
-@AutoCloseResources
 @ZeebeIntegration
 final class JobStreamLifecycleIT {
-  @TestZeebe
-  private static final TestCluster CLUSTER =
-      TestCluster.builder()
-          .withReplicationFactor(2)
-          .withBrokersCount(2)
-          .withGatewaysCount(2)
-          .withEmbeddedGateway(false)
-          .build();
+  @TestZeebe(initMethod = "initTestCluster")
+  private static TestCluster cluster;
 
-  private final TestGateway<?> gateway = CLUSTER.availableGateway();
-  @AutoCloseResource private final ZeebeClient client = gateway.newClientBuilder().build();
+  private final TestGateway<?> gateway = cluster.availableGateway();
+  @AutoClose private final CamundaClient client = gateway.newClientBuilder().build();
 
   private final String jobType = Strings.newRandomValidBpmnId();
+
+  @SuppressWarnings("unused")
+  static void initTestCluster() {
+    cluster =
+        TestCluster.builder()
+            .withReplicationFactor(2)
+            .withBrokersCount(2)
+            .withGatewaysCount(2)
+            .withEmbeddedGateway(false)
+            .build();
+  }
 
   @Test
   void shouldRegisterStream() {
@@ -198,7 +201,7 @@ final class JobStreamLifecycleIT {
 
     // when - trigger stream restarts by restarting the gateway
     gateway.stop().start();
-    CLUSTER.awaitCompleteTopology();
+    cluster.awaitCompleteTopology();
     Awaitility.await("until streams are re-registered")
         .atMost(Duration.ofSeconds(30))
         .untilAsserted(
@@ -225,7 +228,7 @@ final class JobStreamLifecycleIT {
     // given - two logically equivalent streams on different gateways
     //noinspection resource
     final var otherGateway =
-        CLUSTER.gateways().values().stream()
+        cluster.gateways().values().stream()
             .filter(g -> !g.nodeId().equals(gateway.nodeId()))
             .findAny()
             .orElseThrow();
@@ -355,8 +358,8 @@ final class JobStreamLifecycleIT {
                     .haveConnectedTo(2, jobType, 0, 1));
 
     // when
-    CLUSTER.availableGateway().stop().start().await(TestHealthProbe.READY);
-    CLUSTER.awaitCompleteTopology();
+    cluster.availableGateway().stop().start().await(TestHealthProbe.READY);
+    cluster.awaitCompleteTopology();
 
     // then - no streams will be registered on any broker
     for (int nodeId = 0; nodeId < 2; nodeId++) {
@@ -372,7 +375,7 @@ final class JobStreamLifecycleIT {
 
   private JobStreamActuator brokerActuator(final int nodeId) {
     final var brokerId = MemberId.from(String.valueOf(nodeId));
-    final var broker = CLUSTER.brokers().get(brokerId);
+    final var broker = cluster.brokers().get(brokerId);
     return JobStreamActuator.of(broker);
   }
 }

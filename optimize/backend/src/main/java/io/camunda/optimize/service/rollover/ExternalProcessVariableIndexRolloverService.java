@@ -17,15 +17,16 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Set;
-import lombok.extern.slf4j.Slf4j;
+import org.slf4j.Logger;
 import org.springframework.scheduling.Trigger;
 import org.springframework.scheduling.support.PeriodicTrigger;
 import org.springframework.stereotype.Component;
 
-@Slf4j
 @Component
 public class ExternalProcessVariableIndexRolloverService extends AbstractScheduledService {
 
+  private static final Logger LOG =
+      org.slf4j.LoggerFactory.getLogger(ExternalProcessVariableIndexRolloverService.class);
   private final DatabaseClient databaseClient;
   private final ConfigurationService configurationService;
 
@@ -46,18 +47,18 @@ public class ExternalProcessVariableIndexRolloverService extends AbstractSchedul
   }
 
   public List<String> triggerRollover() {
-    List<String> rolledOverIndexAliases = new ArrayList<>();
+    final List<String> rolledOverIndexAliases = new ArrayList<>();
     getAliasesToConsiderRolling()
         .forEach(
             indexAlias -> {
               try {
-                boolean isRolledOver =
+                final boolean isRolledOver =
                     databaseClient.triggerRollover(indexAlias, getMaxIndexSizeGB());
                 if (isRolledOver) {
                   rolledOverIndexAliases.add(indexAlias);
                 }
-              } catch (Exception e) {
-                log.warn("Failed rolling over index {}, will try again next time.", indexAlias, e);
+              } catch (final Exception e) {
+                LOG.warn("Failed rolling over index {}, will try again next time.", indexAlias, e);
               }
             });
     return rolledOverIndexAliases;

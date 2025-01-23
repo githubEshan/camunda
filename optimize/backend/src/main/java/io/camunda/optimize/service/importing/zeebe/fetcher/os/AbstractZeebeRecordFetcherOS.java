@@ -12,14 +12,13 @@ import static io.camunda.optimize.service.db.DatabaseConstants.INDEX_NOT_FOUND_E
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.camunda.optimize.dto.zeebe.ZeebeRecordDto;
 import io.camunda.optimize.service.db.os.OptimizeOpenSearchClient;
-import io.camunda.optimize.service.db.os.externalcode.client.dsl.QueryDSL;
+import io.camunda.optimize.service.db.os.client.dsl.QueryDSL;
 import io.camunda.optimize.service.exceptions.OptimizeRuntimeException;
 import io.camunda.optimize.service.importing.page.PositionBasedImportPage;
 import io.camunda.optimize.service.importing.zeebe.fetcher.AbstractZeebeRecordFetcher;
 import io.camunda.optimize.service.util.configuration.ConfigurationService;
 import io.camunda.optimize.service.util.configuration.condition.OpenSearchCondition;
 import java.util.List;
-import lombok.extern.slf4j.Slf4j;
 import org.opensearch.client.opensearch._types.FieldSort;
 import org.opensearch.client.opensearch._types.OpenSearchException;
 import org.opensearch.client.opensearch._types.SortOptions;
@@ -29,12 +28,14 @@ import org.opensearch.client.opensearch.core.CountRequest;
 import org.opensearch.client.opensearch.core.SearchRequest;
 import org.opensearch.client.opensearch.core.SearchResponse;
 import org.opensearch.client.opensearch.core.search.Hit;
+import org.slf4j.Logger;
 import org.springframework.context.annotation.Conditional;
 
-@Slf4j
 @Conditional(OpenSearchCondition.class)
 public abstract class AbstractZeebeRecordFetcherOS<T> extends AbstractZeebeRecordFetcher<T> {
 
+  private static final Logger LOG =
+      org.slf4j.LoggerFactory.getLogger(AbstractZeebeRecordFetcherOS.class);
   private final OptimizeOpenSearchClient osClient;
 
   protected AbstractZeebeRecordFetcherOS(
@@ -44,6 +45,14 @@ public abstract class AbstractZeebeRecordFetcherOS<T> extends AbstractZeebeRecor
       final ConfigurationService configurationService) {
     super(partitionId, configurationService);
     this.osClient = osClient;
+  }
+
+  @Override
+  protected boolean isZeebeInstanceIndexNotFoundException(final Exception e) {
+    if (e instanceof OpenSearchException) {
+      return e.getMessage().contains(INDEX_NOT_FOUND_EXCEPTION_TYPE);
+    }
+    return false;
   }
 
   @Override
@@ -67,14 +76,6 @@ public abstract class AbstractZeebeRecordFetcherOS<T> extends AbstractZeebeRecor
       throw new OptimizeRuntimeException("Not all shards could be searched successfully");
     }
     return searchResponse.hits().hits().stream().map(Hit::source).toList();
-  }
-
-  @Override
-  protected boolean isZeebeInstanceIndexNotFoundException(final Exception e) {
-    if (e instanceof OpenSearchException) {
-      return e.getMessage().contains(INDEX_NOT_FOUND_EXCEPTION_TYPE);
-    }
-    return false;
   }
 
   private Query getRecordQuery(final PositionBasedImportPage positionBasedImportPage) {
@@ -106,14 +107,14 @@ public abstract class AbstractZeebeRecordFetcherOS<T> extends AbstractZeebeRecor
             .query(buildPositionQuery(positionBasedImportPage));
 
     try {
-      log.info(
+      LOG.info(
           "Using the position query to see if there are new records in the {} index on partition {}",
           getBaseIndexName(),
           partitionId);
       final long numberOfRecordsFound =
           osClient.getOpenSearchClient().count(builder.build()).count();
       if (numberOfRecordsFound > 0) {
-        log.info(
+        LOG.info(
             "Found {} records in index {} on partition {} that can't be imported by the current sequence query. Will revert to "
                 + "position query for the next fetch attempt",
             numberOfRecordsFound,
@@ -121,14 +122,14 @@ public abstract class AbstractZeebeRecordFetcherOS<T> extends AbstractZeebeRecor
             partitionId);
         return true;
       } else {
-        log.info(
+        LOG.info(
             "There are no newer records to process, so empty pages of records are currently expected");
       }
     } catch (final Exception e) {
       if (isZeebeInstanceIndexNotFoundException(e)) {
-        log.warn("No Zeebe index of type {} found to count records from!", getIndexAlias());
+        LOG.warn("No Zeebe index of type {} found to count records from!", getIndexAlias());
       } else {
-        log.warn(
+        LOG.warn(
             "There was an error when looking for records to import beyond the boundaries of the sequence request"
                 + e);
       }
@@ -140,7 +141,7 @@ public abstract class AbstractZeebeRecordFetcherOS<T> extends AbstractZeebeRecor
   }
 
   private Query buildPositionQuery(final PositionBasedImportPage positionBasedImportPage) {
-    log.trace(
+    LOG.trace(
         "using position query for records of {} on partition {}",
         getBaseIndexName(),
         getPartitionId());
@@ -150,7 +151,7 @@ public abstract class AbstractZeebeRecordFetcherOS<T> extends AbstractZeebeRecor
   }
 
   private Query buildSequenceQuery(final PositionBasedImportPage positionBasedImportPage) {
-    log.trace(
+    LOG.trace(
         "using sequence query for records of {} on partition {}",
         getBaseIndexName(),
         getPartitionId());

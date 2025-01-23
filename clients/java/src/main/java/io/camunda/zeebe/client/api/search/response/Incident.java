@@ -15,19 +15,28 @@
  */
 package io.camunda.zeebe.client.api.search.response;
 
+/**
+ * @deprecated since 8.7 for removal in 8.8, replaced by {@link
+ *     io.camunda.client.api.search.response.Incident}
+ */
+@Deprecated
 public interface Incident {
 
   Long getKey();
 
   Long getProcessDefinitionKey();
 
+  String getBpmnProcessId();
+
   Long getProcessInstanceKey();
 
-  String getType();
+  String getErrorType();
+
+  String getErrorMessage();
 
   String getFlowNodeId();
 
-  String getFlowNodeInstanceId();
+  Long getFlowNodeInstanceKey();
 
   String getCreationTime();
 
@@ -35,11 +44,7 @@ public interface Incident {
 
   Long getJobKey();
 
-  Boolean getHasActiveOperation();
+  String getTreePath();
 
-  Operation getOperation();
-
-  ProcessInstanceReference getProcessInstanceReference();
-
-  DecisionInstanceReference getDecisionInstanceReference();
+  String getTenantId();
 }

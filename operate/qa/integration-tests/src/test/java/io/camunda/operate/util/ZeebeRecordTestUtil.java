@@ -7,10 +7,10 @@
  */
 package io.camunda.operate.util;
 
-import io.camunda.operate.entities.IncidentEntity;
-import io.camunda.operate.entities.VariableEntity;
-import io.camunda.operate.entities.listview.FlowNodeInstanceForListViewEntity;
-import io.camunda.operate.entities.listview.ProcessInstanceForListViewEntity;
+import io.camunda.webapps.schema.entities.operate.IncidentEntity;
+import io.camunda.webapps.schema.entities.operate.VariableEntity;
+import io.camunda.webapps.schema.entities.operate.listview.FlowNodeInstanceForListViewEntity;
+import io.camunda.webapps.schema.entities.operate.listview.ProcessInstanceForListViewEntity;
 import io.camunda.zeebe.protocol.record.ImmutableRecord;
 import io.camunda.zeebe.protocol.record.ImmutableRecord.Builder;
 import io.camunda.zeebe.protocol.record.Record;
@@ -101,6 +101,27 @@ public abstract class ZeebeRecordTestUtil {
         .withTimestamp(Instant.now().toEpochMilli())
         .withValue(valueBuilder.build())
         .withValueType(ValueType.PROCESS_MESSAGE_SUBSCRIPTION);
+    if (recordBuilderFunction != null) {
+      recordBuilderFunction.accept(builder);
+    }
+    return builder.build();
+  }
+
+  @NotNull
+  public static Record<IncidentRecordValue> createIncidentZeebeRecord(
+      final Consumer<Builder> recordBuilderFunction,
+      final Consumer<ImmutableIncidentRecordValue.Builder> recordValueBuilderFunction) {
+    final Builder<IncidentRecordValue> builder = ImmutableRecord.builder();
+    final ImmutableIncidentRecordValue.Builder valueBuilder =
+        ImmutableIncidentRecordValue.builder();
+    if (recordValueBuilderFunction != null) {
+      recordValueBuilderFunction.accept(valueBuilder);
+    }
+    builder
+        .withPartitionId(1)
+        .withTimestamp(Instant.now().toEpochMilli())
+        .withValue(valueBuilder.build())
+        .withValueType(ValueType.PROCESS_INSTANCE);
     if (recordBuilderFunction != null) {
       recordBuilderFunction.accept(builder);
     }

@@ -21,10 +21,10 @@ import static io.camunda.optimize.service.util.configuration.ConfigurationServic
 import static io.camunda.optimize.service.util.configuration.ConfigurationServiceConstants.ONBOARDING_CONFIGURATION;
 import static io.camunda.optimize.service.util.configuration.ConfigurationServiceConstants.OPENSEARCH_DATABASE_PROPERTY;
 import static io.camunda.optimize.service.util.configuration.ConfigurationServiceConstants.OPTIMIZE_API_CONFIGURATION;
+import static io.camunda.optimize.service.util.configuration.ConfigurationServiceConstants.OPTIMIZE_MODE_PROFILES;
 import static io.camunda.optimize.service.util.configuration.ConfigurationServiceConstants.PANEL_NOTIFICATION_CONFIGURATION;
 import static io.camunda.optimize.service.util.configuration.ConfigurationServiceConstants.TELEMETRY_CONFIGURATION;
 import static io.camunda.optimize.service.util.configuration.ConfigurationServiceConstants.UI_CONFIGURATION;
-import static io.camunda.optimize.service.util.configuration.ConfigurationServiceConstants.optimizeModeProfiles;
 import static io.camunda.optimize.service.util.configuration.ConfigurationUtil.ensureGreaterThanZero;
 import static io.camunda.optimize.service.util.configuration.ConfigurationUtil.getLocationsAsInputStream;
 import static io.camunda.optimize.util.SuppressionConstants.OPTIONAL_ASSIGNED_TO_NULL;
@@ -40,7 +40,6 @@ import io.camunda.optimize.dto.optimize.datasource.EngineDataSourceDto;
 import io.camunda.optimize.dto.optimize.datasource.IngestedDataSourceDto;
 import io.camunda.optimize.service.exceptions.OptimizeConfigurationException;
 import io.camunda.optimize.service.util.configuration.analytics.AnalyticsConfiguration;
-import io.camunda.optimize.service.util.configuration.archive.DataArchiveConfiguration;
 import io.camunda.optimize.service.util.configuration.cleanup.CleanupConfiguration;
 import io.camunda.optimize.service.util.configuration.engine.EngineAuthenticationConfiguration;
 import io.camunda.optimize.service.util.configuration.engine.EngineConfiguration;
@@ -59,14 +58,10 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Properties;
-import lombok.NonNull;
-import lombok.Setter;
-import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
+import org.slf4j.Logger;
 import org.springframework.core.env.Environment;
 
-@Setter
-@Slf4j
 public class ConfigurationService {
 
   private static final String ERROR_NO_ENGINE_WITH_ALIAS = "No Engine configured with alias ";
@@ -77,6 +72,7 @@ public class ConfigurationService {
   private static final TypeRef<List<String>> LIST_OF_STRINGS_TYPE_REF = new TypeRef<>() {};
   private static final TypeRef<HashMap<String, WebhookConfiguration>> WEBHOOKS_MAP_TYPEREF =
       new TypeRef<>() {};
+  private static final Logger LOG = org.slf4j.LoggerFactory.getLogger(ConfigurationService.class);
   // @formatter:on
   // job executor settings
   protected Integer jobExecutorQueueSize;
@@ -85,7 +81,6 @@ public class ConfigurationService {
   private OpenSearchConfiguration openSearchConfiguration;
   private ReadContext configJsonContext;
   private SecurityConfiguration securityConfiguration;
-  private DataArchiveConfiguration dataArchiveConfiguration;
   private UsersConfiguration usersConfiguration;
   private Map<String, EngineConfiguration> configuredEngines;
   private ZeebeConfiguration configuredZeebe;
@@ -195,7 +190,7 @@ public class ConfigurationService {
   public static OptimizeProfile getOptimizeProfile(final Environment environment) {
     final List<OptimizeProfile> specifiedProfiles =
         Arrays.stream(environment.getActiveProfiles())
-            .filter(optimizeModeProfiles::contains)
+            .filter(OPTIMIZE_MODE_PROFILES::contains)
             .map(OptimizeProfile::toProfile)
             .toList();
     if (specifiedProfiles.size() > 1) {
@@ -213,7 +208,11 @@ public class ConfigurationService {
     return convertToDatabaseProperty(configuredProperty);
   }
 
-  public static DatabaseType convertToDatabaseProperty(final @NonNull String configuredProperty) {
+  public static DatabaseType convertToDatabaseProperty(final String configuredProperty) {
+    if (configuredProperty == null) {
+      throw new OptimizeConfigurationException("configuredProperty cannot be null");
+    }
+
     if (configuredProperty.equalsIgnoreCase(ELASTICSEARCH_DATABASE_PROPERTY)) {
       return DatabaseType.ELASTICSEARCH;
     } else if (configuredProperty.equalsIgnoreCase(OPENSEARCH_DATABASE_PROPERTY)) {
@@ -222,7 +221,7 @@ public class ConfigurationService {
       final String reason =
           String.format(
               "Cannot start Optimize. Invalid database configured %s", configuredProperty);
-      log.error(reason);
+      LOG.error(reason);
       throw new OptimizeConfigurationException(reason);
     }
   }
@@ -236,6 +235,11 @@ public class ConfigurationService {
     return elasticSearchConfiguration;
   }
 
+  public void setElasticSearchConfiguration(
+      final ElasticSearchConfiguration elasticSearchConfiguration) {
+    this.elasticSearchConfiguration = elasticSearchConfiguration;
+  }
+
   public OpenSearchConfiguration getOpenSearchConfiguration() {
     if (openSearchConfiguration == null) {
       openSearchConfiguration =
@@ -245,8 +249,16 @@ public class ConfigurationService {
     return openSearchConfiguration;
   }
 
+  public void setOpenSearchConfiguration(final OpenSearchConfiguration openSearchConfiguration) {
+    this.openSearchConfiguration = openSearchConfiguration;
+  }
+
   ReadContext getConfigJsonContext() {
     return configJsonContext;
+  }
+
+  public void setConfigJsonContext(final ReadContext configJsonContext) {
+    this.configJsonContext = configJsonContext;
   }
 
   public Map<String, EngineConfiguration> getConfiguredEngines() {
@@ -258,6 +270,10 @@ public class ConfigurationService {
     return configuredEngines;
   }
 
+  public void setConfiguredEngines(final Map<String, EngineConfiguration> configuredEngines) {
+    this.configuredEngines = configuredEngines;
+  }
+
   public ZeebeConfiguration getConfiguredZeebe() {
     if (configuredZeebe == null) {
       configuredZeebe =
@@ -265,6 +281,10 @@ public class ConfigurationService {
               ConfigurationServiceConstants.CONFIGURED_ZEEBE, ZeebeConfiguration.class);
     }
     return configuredZeebe;
+  }
+
+  public void setConfiguredZeebe(final ZeebeConfiguration configuredZeebe) {
+    this.configuredZeebe = configuredZeebe;
   }
 
   public SecurityConfiguration getSecurityConfiguration() {
@@ -276,13 +296,8 @@ public class ConfigurationService {
     return securityConfiguration;
   }
 
-  public DataArchiveConfiguration getDataArchiveConfiguration() {
-    if (dataArchiveConfiguration == null) {
-      dataArchiveConfiguration =
-          configJsonContext.read(
-              ConfigurationServiceConstants.DATA_ARCHIVE, DataArchiveConfiguration.class);
-    }
-    return dataArchiveConfiguration;
+  public void setSecurityConfiguration(final SecurityConfiguration securityConfiguration) {
+    this.securityConfiguration = securityConfiguration;
   }
 
   public UsersConfiguration getUsersConfiguration() {
@@ -291,6 +306,10 @@ public class ConfigurationService {
           configJsonContext.read(ConfigurationServiceConstants.USERS, UsersConfiguration.class);
     }
     return usersConfiguration;
+  }
+
+  public void setUsersConfiguration(final UsersConfiguration usersConfiguration) {
+    this.usersConfiguration = usersConfiguration;
   }
 
   @JsonIgnore
@@ -305,6 +324,10 @@ public class ConfigurationService {
     return engineDateFormat;
   }
 
+  public void setEngineDateFormat(final String engineDateFormat) {
+    this.engineDateFormat = engineDateFormat;
+  }
+
   public int getImportIndexAutoStorageIntervalInSec() {
     if (importIndexAutoStorageIntervalInSec == null) {
       importIndexAutoStorageIntervalInSec =
@@ -312,6 +335,11 @@ public class ConfigurationService {
               ConfigurationServiceConstants.IMPORT_INDEX_AUTO_STORAGE_INTERVAL, Integer.class);
     }
     return importIndexAutoStorageIntervalInSec;
+  }
+
+  public void setImportIndexAutoStorageIntervalInSec(
+      final Integer importIndexAutoStorageIntervalInSec) {
+    this.importIndexAutoStorageIntervalInSec = importIndexAutoStorageIntervalInSec;
   }
 
   public long getInitialBackoff() {
@@ -323,12 +351,20 @@ public class ConfigurationService {
     return initialBackoff;
   }
 
+  public void setInitialBackoff(final Long initialBackoff) {
+    this.initialBackoff = initialBackoff;
+  }
+
   public long getMaximumBackoff() {
     if (maximumBackoff == null) {
       maximumBackoff =
           configJsonContext.read(ConfigurationServiceConstants.MAXIMUM_BACK_OFF, Long.class);
     }
     return maximumBackoff;
+  }
+
+  public void setMaximumBackoff(final Long maximumBackoff) {
+    this.maximumBackoff = maximumBackoff;
   }
 
   public int getEngineConnectTimeout() {
@@ -340,12 +376,20 @@ public class ConfigurationService {
     return engineConnectTimeout;
   }
 
+  public void setEngineConnectTimeout(final Integer engineConnectTimeout) {
+    this.engineConnectTimeout = engineConnectTimeout;
+  }
+
   public int getEngineReadTimeout() {
     if (engineReadTimeout == null) {
       engineReadTimeout =
           configJsonContext.read(ConfigurationServiceConstants.ENGINE_READ_TIMEOUT, Integer.class);
     }
     return engineReadTimeout;
+  }
+
+  public void setEngineReadTimeout(final Integer engineReadTimeout) {
+    this.engineReadTimeout = engineReadTimeout;
   }
 
   public int getCurrentTimeBackoffMilliseconds() {
@@ -356,6 +400,10 @@ public class ConfigurationService {
               Integer.class);
     }
     return currentTimeBackoffMilliseconds;
+  }
+
+  public void setCurrentTimeBackoffMilliseconds(final Integer currentTimeBackoffMilliseconds) {
+    this.currentTimeBackoffMilliseconds = currentTimeBackoffMilliseconds;
   }
 
   public int getEngineImportProcessInstanceMaxPageSize() {
@@ -369,6 +417,11 @@ public class ConfigurationService {
     return engineImportProcessInstanceMaxPageSize;
   }
 
+  public void setEngineImportProcessInstanceMaxPageSize(
+      final Integer engineImportProcessInstanceMaxPageSize) {
+    this.engineImportProcessInstanceMaxPageSize = engineImportProcessInstanceMaxPageSize;
+  }
+
   public int getEngineImportVariableInstanceMaxPageSize() {
     if (engineImportVariableInstanceMaxPageSize == null) {
       engineImportVariableInstanceMaxPageSize =
@@ -380,6 +433,11 @@ public class ConfigurationService {
     return engineImportVariableInstanceMaxPageSize;
   }
 
+  public void setEngineImportVariableInstanceMaxPageSize(
+      final Integer engineImportVariableInstanceMaxPageSize) {
+    this.engineImportVariableInstanceMaxPageSize = engineImportVariableInstanceMaxPageSize;
+  }
+
   public boolean getEngineImportVariableIncludeObjectVariableValue() {
     if (engineImportVariableIncludeObjectVariableValue == null) {
       engineImportVariableIncludeObjectVariableValue =
@@ -388,6 +446,12 @@ public class ConfigurationService {
               Boolean.class);
     }
     return engineImportVariableIncludeObjectVariableValue;
+  }
+
+  public void setEngineImportVariableIncludeObjectVariableValue(
+      final Boolean engineImportVariableIncludeObjectVariableValue) {
+    this.engineImportVariableIncludeObjectVariableValue =
+        engineImportVariableIncludeObjectVariableValue;
   }
 
   public int getEngineImportProcessDefinitionXmlMaxPageSize() {
@@ -401,6 +465,11 @@ public class ConfigurationService {
     return engineImportProcessDefinitionXmlMaxPageSize;
   }
 
+  public void setEngineImportProcessDefinitionXmlMaxPageSize(
+      final Integer engineImportProcessDefinitionXmlMaxPageSize) {
+    this.engineImportProcessDefinitionXmlMaxPageSize = engineImportProcessDefinitionXmlMaxPageSize;
+  }
+
   public int getEngineImportProcessDefinitionMaxPageSize() {
     if (engineImportProcessDefinitionMaxPageSize == null) {
       engineImportProcessDefinitionMaxPageSize =
@@ -412,12 +481,21 @@ public class ConfigurationService {
     return engineImportProcessDefinitionMaxPageSize;
   }
 
+  public void setEngineImportProcessDefinitionMaxPageSize(
+      final Integer engineImportProcessDefinitionMaxPageSize) {
+    this.engineImportProcessDefinitionMaxPageSize = engineImportProcessDefinitionMaxPageSize;
+  }
+
   public boolean getSharingEnabled() {
     if (sharingEnabled == null) {
       sharingEnabled =
           configJsonContext.read(ConfigurationServiceConstants.SHARING_ENABLED, Boolean.class);
     }
     return Optional.ofNullable(sharingEnabled).orElse(false);
+  }
+
+  public void setSharingEnabled(final Boolean sharingEnabled) {
+    this.sharingEnabled = sharingEnabled;
   }
 
   public int getEngineImportDecisionDefinitionXmlMaxPageSize() {
@@ -431,6 +509,12 @@ public class ConfigurationService {
     return engineImportDecisionDefinitionXmlMaxPageSize;
   }
 
+  public void setEngineImportDecisionDefinitionXmlMaxPageSize(
+      final Integer engineImportDecisionDefinitionXmlMaxPageSize) {
+    this.engineImportDecisionDefinitionXmlMaxPageSize =
+        engineImportDecisionDefinitionXmlMaxPageSize;
+  }
+
   public int getEngineImportDecisionDefinitionMaxPageSize() {
     if (engineImportDecisionDefinitionMaxPageSize == null) {
       engineImportDecisionDefinitionMaxPageSize =
@@ -440,6 +524,11 @@ public class ConfigurationService {
     }
     ensureGreaterThanZero(engineImportDecisionDefinitionMaxPageSize);
     return engineImportDecisionDefinitionMaxPageSize;
+  }
+
+  public void setEngineImportDecisionDefinitionMaxPageSize(
+      final Integer engineImportDecisionDefinitionMaxPageSize) {
+    this.engineImportDecisionDefinitionMaxPageSize = engineImportDecisionDefinitionMaxPageSize;
   }
 
   public boolean getCustomerOnboardingImport() {
@@ -466,6 +555,11 @@ public class ConfigurationService {
     return engineImportDecisionInstanceMaxPageSize;
   }
 
+  public void setEngineImportDecisionInstanceMaxPageSize(
+      final Integer engineImportDecisionInstanceMaxPageSize) {
+    this.engineImportDecisionInstanceMaxPageSize = engineImportDecisionInstanceMaxPageSize;
+  }
+
   public int getEngineImportTenantMaxPageSize() {
     if (engineImportTenantMaxPageSize == null) {
       engineImportTenantMaxPageSize =
@@ -476,6 +570,10 @@ public class ConfigurationService {
     return engineImportTenantMaxPageSize;
   }
 
+  public void setEngineImportTenantMaxPageSize(final Integer engineImportTenantMaxPageSize) {
+    this.engineImportTenantMaxPageSize = engineImportTenantMaxPageSize;
+  }
+
   public int getEngineImportGroupMaxPageSize() {
     if (engineImportGroupMaxPageSize == null) {
       engineImportGroupMaxPageSize =
@@ -484,6 +582,10 @@ public class ConfigurationService {
     }
     ensureGreaterThanZero(engineImportGroupMaxPageSize);
     return engineImportGroupMaxPageSize;
+  }
+
+  public void setEngineImportGroupMaxPageSize(final Integer engineImportGroupMaxPageSize) {
+    this.engineImportGroupMaxPageSize = engineImportGroupMaxPageSize;
   }
 
   public int getEngineImportAuthorizationMaxPageSize() {
@@ -497,6 +599,11 @@ public class ConfigurationService {
     return engineImportAuthorizationMaxPageSize;
   }
 
+  public void setEngineImportAuthorizationMaxPageSize(
+      final Integer engineImportAuthorizationMaxPageSize) {
+    this.engineImportAuthorizationMaxPageSize = engineImportAuthorizationMaxPageSize;
+  }
+
   public int getEngineImportActivityInstanceMaxPageSize() {
     if (engineImportActivityInstanceMaxPageSize == null) {
       engineImportActivityInstanceMaxPageSize =
@@ -508,6 +615,11 @@ public class ConfigurationService {
     return engineImportActivityInstanceMaxPageSize;
   }
 
+  public void setEngineImportActivityInstanceMaxPageSize(
+      final Integer engineImportActivityInstanceMaxPageSize) {
+    this.engineImportActivityInstanceMaxPageSize = engineImportActivityInstanceMaxPageSize;
+  }
+
   public int getEngineImportIncidentMaxPageSize() {
     if (engineImportIncidentMaxPageSize == null) {
       engineImportIncidentMaxPageSize =
@@ -516,6 +628,10 @@ public class ConfigurationService {
     }
     ensureGreaterThanZero(engineImportIncidentMaxPageSize);
     return engineImportIncidentMaxPageSize;
+  }
+
+  public void setEngineImportIncidentMaxPageSize(final Integer engineImportIncidentMaxPageSize) {
+    this.engineImportIncidentMaxPageSize = engineImportIncidentMaxPageSize;
   }
 
   public int getEngineImportUserTaskInstanceMaxPageSize() {
@@ -529,6 +645,11 @@ public class ConfigurationService {
     return engineImportUserTaskInstanceMaxPageSize;
   }
 
+  public void setEngineImportUserTaskInstanceMaxPageSize(
+      final Integer engineImportUserTaskInstanceMaxPageSize) {
+    this.engineImportUserTaskInstanceMaxPageSize = engineImportUserTaskInstanceMaxPageSize;
+  }
+
   public int getEngineImportIdentityLinkLogsMaxPageSize() {
     if (engineImportIdentityLinkLogsMaxPageSize == null) {
       engineImportIdentityLinkLogsMaxPageSize =
@@ -538,6 +659,11 @@ public class ConfigurationService {
     }
     ensureGreaterThanZero(engineImportIdentityLinkLogsMaxPageSize);
     return engineImportIdentityLinkLogsMaxPageSize;
+  }
+
+  public void setEngineImportIdentityLinkLogsMaxPageSize(
+      final Integer engineImportIdentityLinkLogsMaxPageSize) {
+    this.engineImportIdentityLinkLogsMaxPageSize = engineImportIdentityLinkLogsMaxPageSize;
   }
 
   public int getEngineImportUserOperationLogsMaxPageSize() {
@@ -551,6 +677,11 @@ public class ConfigurationService {
     return engineImportUserOperationLogsMaxPageSize;
   }
 
+  public void setEngineImportUserOperationLogsMaxPageSize(
+      final Integer engineImportUserOperationLogsMaxPageSize) {
+    this.engineImportUserOperationLogsMaxPageSize = engineImportUserOperationLogsMaxPageSize;
+  }
+
   public String getContainerHost() {
     if (containerHost == null) {
       containerHost = configJsonContext.read(ConfigurationServiceConstants.CONTAINER_HOST);
@@ -558,11 +689,19 @@ public class ConfigurationService {
     return containerHost;
   }
 
+  public void setContainerHost(final String containerHost) {
+    this.containerHost = containerHost;
+  }
+
   public Optional<String> getContextPath() {
     if (contextPath == null) {
       contextPath = configJsonContext.read(ConfigurationServiceConstants.CONTAINER_CONTEXT_PATH);
     }
     return Optional.ofNullable(contextPath);
+  }
+
+  public void setContextPath(final String contextPath) {
+    this.contextPath = contextPath;
   }
 
   public String getContainerKeystorePassword() {
@@ -573,6 +712,10 @@ public class ConfigurationService {
     return containerKeystorePassword;
   }
 
+  public void setContainerKeystorePassword(final String containerKeystorePassword) {
+    this.containerKeystorePassword = containerKeystorePassword;
+  }
+
   @SuppressWarnings(OPTIONAL_ASSIGNED_TO_NULL)
   public Optional<String> getContainerAccessUrl() {
     if (containerAccessUrl == null) {
@@ -581,6 +724,10 @@ public class ConfigurationService {
               configJsonContext.read(ConfigurationServiceConstants.CONTAINER_ACCESS_URL));
     }
     return containerAccessUrl;
+  }
+
+  public void setContainerAccessUrl(final Optional<String> containerAccessUrl) {
+    this.containerAccessUrl = containerAccessUrl;
   }
 
   // Note: special setter for Optional field value, see note on field why the field is Optional
@@ -597,6 +744,10 @@ public class ConfigurationService {
     return maxRequestHeaderSizeInBytes;
   }
 
+  public void setMaxRequestHeaderSizeInBytes(final Integer maxRequestHeaderSizeInBytes) {
+    this.maxRequestHeaderSizeInBytes = maxRequestHeaderSizeInBytes;
+  }
+
   public Integer getMaxResponseHeaderSizeInBytes() {
     if (maxResponseHeaderSizeInBytes == null) {
       maxResponseHeaderSizeInBytes =
@@ -604,6 +755,10 @@ public class ConfigurationService {
               ConfigurationServiceConstants.CONTAINER_MAX_RESPONSE_HEADER_IN_BYTES, Integer.class);
     }
     return maxResponseHeaderSizeInBytes;
+  }
+
+  public void setMaxResponseHeaderSizeInBytes(final Integer maxResponseHeaderSizeInBytes) {
+    this.maxResponseHeaderSizeInBytes = maxResponseHeaderSizeInBytes;
   }
 
   public String getContainerKeystoreLocation() {
@@ -617,6 +772,10 @@ public class ConfigurationService {
     return containerKeystoreLocation;
   }
 
+  public void setContainerKeystoreLocation(final String containerKeystoreLocation) {
+    this.containerKeystoreLocation = containerKeystoreLocation;
+  }
+
   public Boolean getContainerEnableSniCheck() {
     if (containerEnableSniCheck == null) {
       containerEnableSniCheck =
@@ -626,6 +785,10 @@ public class ConfigurationService {
     return containerEnableSniCheck;
   }
 
+  public void setContainerEnableSniCheck(final Boolean containerEnableSniCheck) {
+    this.containerEnableSniCheck = containerEnableSniCheck;
+  }
+
   public Boolean getContainerHttp2Enabled() {
     if (containerHttp2Enabled == null) {
       containerHttp2Enabled =
@@ -633,6 +796,10 @@ public class ConfigurationService {
               ConfigurationServiceConstants.CONTAINER_HTTP2_ENABLED, Boolean.class);
     }
     return containerHttp2Enabled;
+  }
+
+  public void setContainerHttp2Enabled(final Boolean containerHttp2Enabled) {
+    this.containerHttp2Enabled = containerHttp2Enabled;
   }
 
   public Integer getContainerHttpsPort() {
@@ -647,6 +814,10 @@ public class ConfigurationService {
     return containerHttpsPort;
   }
 
+  public void setContainerHttpsPort(final Integer containerHttpsPort) {
+    this.containerHttpsPort = containerHttpsPort;
+  }
+
   public Integer getActuatorPort() {
     if (actuatorPort == null) {
       actuatorPort =
@@ -658,6 +829,10 @@ public class ConfigurationService {
       }
     }
     return actuatorPort;
+  }
+
+  public void setActuatorPort(final Integer actuatorPort) {
+    this.actuatorPort = actuatorPort;
   }
 
   public Optional<Integer> getContainerHttpPort() {
@@ -674,6 +849,10 @@ public class ConfigurationService {
     return containerHttpPort;
   }
 
+  public void setContainerHttpPort(final Optional<Integer> containerHttpPort) {
+    this.containerHttpPort = containerHttpPort;
+  }
+
   // Note: special setter for Optional field value, see note on field why the field is Optional
   @SuppressWarnings(SuppressionConstants.UNUSED)
   public void setContainerHttpPortValue(final Integer containerHttpPort) {
@@ -687,6 +866,10 @@ public class ConfigurationService {
               ConfigurationServiceConstants.CONTAINER_STATUS_MAX_CONNECTIONS, Integer.class);
     }
     return maxStatusConnections;
+  }
+
+  public void setMaxStatusConnections(final Integer maxStatusConnections) {
+    this.maxStatusConnections = maxStatusConnections;
   }
 
   public Optional<String> getEngineDefaultTenantIdOfCustomEngine(final String engineAlias) {
@@ -774,12 +957,20 @@ public class ConfigurationService {
     return quartzProperties;
   }
 
+  public void setQuartzProperties(final Properties quartzProperties) {
+    this.quartzProperties = quartzProperties;
+  }
+
   public boolean getEmailEnabled() {
     if (emailEnabled == null) {
       emailEnabled =
           configJsonContext.read(ConfigurationServiceConstants.EMAIL_ENABLED, Boolean.class);
     }
     return emailEnabled;
+  }
+
+  public void setEmailEnabled(final Boolean emailEnabled) {
+    this.emailEnabled = emailEnabled;
   }
 
   public EmailAuthenticationConfiguration getEmailAuthenticationConfiguration() {
@@ -790,6 +981,11 @@ public class ConfigurationService {
               EmailAuthenticationConfiguration.class);
     }
     return emailAuthenticationConfiguration;
+  }
+
+  public void setEmailAuthenticationConfiguration(
+      final EmailAuthenticationConfiguration emailAuthenticationConfiguration) {
+    this.emailAuthenticationConfiguration = emailAuthenticationConfiguration;
   }
 
   private Boolean getImportDmnDataEnabled() {
@@ -803,6 +999,10 @@ public class ConfigurationService {
   @JsonIgnore
   public boolean isImportDmnDataEnabled() {
     return getImportDmnDataEnabled();
+  }
+
+  public void setImportDmnDataEnabled(final Boolean importDmnDataEnabled) {
+    this.importDmnDataEnabled = importDmnDataEnabled;
   }
 
   private Boolean getImportUserTaskWorkerDataEnabled() {
@@ -824,9 +1024,18 @@ public class ConfigurationService {
     return skipDataAfterNestedDocLimitReached;
   }
 
+  public void setSkipDataAfterNestedDocLimitReached(
+      final Boolean skipDataAfterNestedDocLimitReached) {
+    this.skipDataAfterNestedDocLimitReached = skipDataAfterNestedDocLimitReached;
+  }
+
   @JsonIgnore
   public boolean isImportUserTaskWorkerDataEnabled() {
     return getImportUserTaskWorkerDataEnabled();
+  }
+
+  public void setImportUserTaskWorkerDataEnabled(final Boolean importUserTaskWorkerDataEnabled) {
+    this.importUserTaskWorkerDataEnabled = importUserTaskWorkerDataEnabled;
   }
 
   public String getNotificationEmailAddress() {
@@ -837,12 +1046,20 @@ public class ConfigurationService {
     return notificationEmailAddress;
   }
 
+  public void setNotificationEmailAddress(final String notificationEmailAddress) {
+    this.notificationEmailAddress = notificationEmailAddress;
+  }
+
   public String getNotificationEmailHostname() {
     if (notificationEmailHostname == null) {
       notificationEmailHostname =
           configJsonContext.read(ConfigurationServiceConstants.EMAIL_HOSTNAME);
     }
     return notificationEmailHostname;
+  }
+
+  public void setNotificationEmailHostname(final String notificationEmailHostname) {
+    this.notificationEmailHostname = notificationEmailHostname;
   }
 
   public Integer getNotificationEmailPort() {
@@ -853,11 +1070,20 @@ public class ConfigurationService {
     return notificationEmailPort;
   }
 
+  public void setNotificationEmailPort(final Integer notificationEmailPort) {
+    this.notificationEmailPort = notificationEmailPort;
+  }
+
   public Boolean getNotificationEmailCheckServerIdentity() {
     return Optional.ofNullable(notificationEmailCheckServerIdentity)
         .orElse(
             configJsonContext.read(
                 ConfigurationServiceConstants.CHECK_SERVER_IDENTITY, Boolean.class));
+  }
+
+  public void setNotificationEmailCheckServerIdentity(
+      final Boolean notificationEmailCheckServerIdentity) {
+    this.notificationEmailCheckServerIdentity = notificationEmailCheckServerIdentity;
   }
 
   public String getNotificationEmailCompanyBranding() {
@@ -866,6 +1092,10 @@ public class ConfigurationService {
           configJsonContext.read(ConfigurationServiceConstants.EMAIL_BRANDING, String.class);
     }
     return notificationEmailCompanyBranding;
+  }
+
+  public void setNotificationEmailCompanyBranding(final String notificationEmailCompanyBranding) {
+    this.notificationEmailCompanyBranding = notificationEmailCompanyBranding;
   }
 
   public Map<String, WebhookConfiguration> getConfiguredWebhooks() {
@@ -880,12 +1110,20 @@ public class ConfigurationService {
     return configuredWebhooks;
   }
 
+  public void setConfiguredWebhooks(final Map<String, WebhookConfiguration> configuredWebhooks) {
+    this.configuredWebhooks = configuredWebhooks;
+  }
+
   public String getDigestCronTrigger() {
     if (digestCronTrigger == null) {
       digestCronTrigger =
           configJsonContext.read(ConfigurationServiceConstants.DIGEST_CRON_TRIGGER, String.class);
     }
     return digestCronTrigger;
+  }
+
+  public void setDigestCronTrigger(final String digestCronTrigger) {
+    this.digestCronTrigger = digestCronTrigger;
   }
 
   public EntityConfiguration getEntityConfiguration() {
@@ -897,6 +1135,10 @@ public class ConfigurationService {
     return entityConfiguration;
   }
 
+  public void setEntityConfiguration(final EntityConfiguration entityConfiguration) {
+    this.entityConfiguration = entityConfiguration;
+  }
+
   public CsvConfiguration getCsvConfiguration() {
     if (csvConfiguration == null) {
       csvConfiguration =
@@ -904,6 +1146,10 @@ public class ConfigurationService {
               ConfigurationServiceConstants.CSV_CONFIGURATION, CsvConfiguration.class);
     }
     return csvConfiguration;
+  }
+
+  public void setCsvConfiguration(final CsvConfiguration csvConfiguration) {
+    this.csvConfiguration = csvConfiguration;
   }
 
   public CleanupConfiguration getCleanupServiceConfiguration() {
@@ -916,6 +1162,11 @@ public class ConfigurationService {
     return cleanupServiceConfiguration;
   }
 
+  public void setCleanupServiceConfiguration(
+      final CleanupConfiguration cleanupServiceConfiguration) {
+    this.cleanupServiceConfiguration = cleanupServiceConfiguration;
+  }
+
   public List<String> getAvailableLocales() {
     if (availableLocales == null) {
       availableLocales = configJsonContext.read(AVAILABLE_LOCALES, LIST_OF_STRINGS_TYPE_REF);
@@ -924,6 +1175,10 @@ public class ConfigurationService {
       }
     }
     return availableLocales;
+  }
+
+  public void setAvailableLocales(final List<String> availableLocales) {
+    this.availableLocales = availableLocales;
   }
 
   public String getFallbackLocale() {
@@ -936,6 +1191,10 @@ public class ConfigurationService {
     return fallbackLocale;
   }
 
+  public void setFallbackLocale(final String fallbackLocale) {
+    this.fallbackLocale = fallbackLocale;
+  }
+
   public UIConfiguration getUiConfiguration() {
     if (uiConfiguration == null) {
       uiConfiguration = configJsonContext.read(UI_CONFIGURATION, UIConfiguration.class);
@@ -944,12 +1203,21 @@ public class ConfigurationService {
     return uiConfiguration;
   }
 
+  public void setUiConfiguration(final UIConfiguration uiConfiguration) {
+    this.uiConfiguration = uiConfiguration;
+  }
+
   public UserIdentityCacheConfiguration getUserIdentityCacheConfiguration() {
     if (userIdentityCacheConfiguration == null) {
       userIdentityCacheConfiguration =
           configJsonContext.read(IDENTITY_SYNC_CONFIGURATION, UserIdentityCacheConfiguration.class);
     }
     return userIdentityCacheConfiguration;
+  }
+
+  public void setUserIdentityCacheConfiguration(
+      final UserIdentityCacheConfiguration userIdentityCacheConfiguration) {
+    this.userIdentityCacheConfiguration = userIdentityCacheConfiguration;
   }
 
   public UserTaskIdentityCacheConfiguration getUserTaskIdentityCacheConfiguration() {
@@ -961,12 +1229,21 @@ public class ConfigurationService {
     return userTaskIdentityCacheConfiguration;
   }
 
+  public void setUserTaskIdentityCacheConfiguration(
+      final UserTaskIdentityCacheConfiguration userTaskIdentityCacheConfiguration) {
+    this.userTaskIdentityCacheConfiguration = userTaskIdentityCacheConfiguration;
+  }
+
   public OptimizeApiConfiguration getOptimizeApiConfiguration() {
     if (optimizeApiConfiguration == null) {
       optimizeApiConfiguration =
           configJsonContext.read(OPTIMIZE_API_CONFIGURATION, OptimizeApiConfiguration.class);
     }
     return optimizeApiConfiguration;
+  }
+
+  public void setOptimizeApiConfiguration(final OptimizeApiConfiguration optimizeApiConfiguration) {
+    this.optimizeApiConfiguration = optimizeApiConfiguration;
   }
 
   public TelemetryConfiguration getTelemetryConfiguration() {
@@ -977,6 +1254,10 @@ public class ConfigurationService {
     return telemetryConfiguration;
   }
 
+  public void setTelemetryConfiguration(final TelemetryConfiguration telemetryConfiguration) {
+    this.telemetryConfiguration = telemetryConfiguration;
+  }
+
   public ExternalVariableConfiguration getExternalVariableConfiguration() {
     if (externalVariableConfiguration == null) {
       externalVariableConfiguration =
@@ -984,6 +1265,11 @@ public class ConfigurationService {
               EXTERNAL_VARIABLE_CONFIGURATION, ExternalVariableConfiguration.class);
     }
     return externalVariableConfiguration;
+  }
+
+  public void setExternalVariableConfiguration(
+      final ExternalVariableConfiguration externalVariableConfiguration) {
+    this.externalVariableConfiguration = externalVariableConfiguration;
   }
 
   @JsonIgnore
@@ -1003,6 +1289,10 @@ public class ConfigurationService {
     return caches;
   }
 
+  public void setCaches(final GlobalCacheConfiguration caches) {
+    this.caches = caches;
+  }
+
   public AnalyticsConfiguration getAnalytics() {
     if (analytics == null) {
       analytics = configJsonContext.read(ANALYTICS_CONFIGURATION, AnalyticsConfiguration.class);
@@ -1010,11 +1300,19 @@ public class ConfigurationService {
     return analytics;
   }
 
+  public void setAnalytics(final AnalyticsConfiguration analytics) {
+    this.analytics = analytics;
+  }
+
   public OnboardingConfiguration getOnboarding() {
     if (onboarding == null) {
       onboarding = configJsonContext.read(ONBOARDING_CONFIGURATION, OnboardingConfiguration.class);
     }
     return onboarding;
+  }
+
+  public void setOnboarding(final OnboardingConfiguration onboarding) {
+    this.onboarding = onboarding;
   }
 
   public PanelNotificationConfiguration getPanelNotificationConfiguration() {
@@ -1026,6 +1324,11 @@ public class ConfigurationService {
     return panelNotificationConfiguration;
   }
 
+  public void setPanelNotificationConfiguration(
+      final PanelNotificationConfiguration panelNotificationConfiguration) {
+    this.panelNotificationConfiguration = panelNotificationConfiguration;
+  }
+
   public M2mAuth0ClientConfiguration getM2mAuth0ClientConfiguration() {
     if (m2mAuth0ClientConfiguration == null) {
       m2mAuth0ClientConfiguration =
@@ -1034,12 +1337,21 @@ public class ConfigurationService {
     return m2mAuth0ClientConfiguration;
   }
 
+  public void setM2mAuth0ClientConfiguration(
+      final M2mAuth0ClientConfiguration m2mAuth0ClientConfiguration) {
+    this.m2mAuth0ClientConfiguration = m2mAuth0ClientConfiguration;
+  }
+
   public boolean isMultiTenancyEnabled() {
     if (multiTenancyEnabled == null) {
       multiTenancyEnabled =
           configJsonContext.read(ConfigurationServiceConstants.MULTITENANCY_ENABLED, Boolean.class);
     }
     return multiTenancyEnabled;
+  }
+
+  public void setMultiTenancyEnabled(final Boolean multiTenancyEnabled) {
+    this.multiTenancyEnabled = multiTenancyEnabled;
   }
 
   public Integer getJobExecutorQueueSize() {
@@ -1051,6 +1363,10 @@ public class ConfigurationService {
     return jobExecutorQueueSize;
   }
 
+  public void setJobExecutorQueueSize(final Integer jobExecutorQueueSize) {
+    this.jobExecutorQueueSize = jobExecutorQueueSize;
+  }
+
   public Integer getJobExecutorThreadCount() {
     if (jobExecutorThreadCount == null) {
       jobExecutorThreadCount =
@@ -1058,5 +1374,13 @@ public class ConfigurationService {
               ConfigurationServiceConstants.DATABASE_IMPORT_EXECUTOR_THREAD_COUNT, Integer.class);
     }
     return jobExecutorThreadCount;
+  }
+
+  public void setJobExecutorThreadCount(final Integer jobExecutorThreadCount) {
+    this.jobExecutorThreadCount = jobExecutorThreadCount;
+  }
+
+  public void setCustomerOnboarding(final Boolean customerOnboarding) {
+    this.customerOnboarding = customerOnboarding;
   }
 }

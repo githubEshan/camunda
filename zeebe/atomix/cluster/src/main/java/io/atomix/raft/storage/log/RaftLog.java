@@ -24,9 +24,12 @@ import io.atomix.raft.storage.log.RaftLogFlusher.Factory;
 import io.atomix.raft.storage.log.entry.RaftLogEntry;
 import io.atomix.raft.storage.serializer.RaftEntrySBESerializer;
 import io.atomix.raft.storage.serializer.RaftEntrySerializer;
+import io.camunda.zeebe.journal.CheckedJournalException.FlushException;
 import io.camunda.zeebe.journal.Journal;
 import io.camunda.zeebe.journal.JournalRecord;
 import java.io.Closeable;
+import java.nio.file.Path;
+import java.util.SortedMap;
 import org.agrona.CloseHelper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -167,15 +170,29 @@ public final class RaftLog implements Closeable {
   }
 
   public void reset(final long index) {
+    if (index < commitIndex) {
+      throw new IllegalStateException(
+          String.format(
+              """
+               Expected to delete index after %d, but it is lower than the commit index %d.\
+               Deleting committed entries can lead to inconsistencies and is prohibited.\
+               This can happen if a quorum of nodes has experienced data loss and became leader.\
+               This situation probably requires manual intervention to resume operations""",
+              index, commitIndex));
+    }
     journal.reset(index);
     lastAppendedEntry = null;
   }
 
-  public void deleteAfter(final long index) {
+  public void deleteAfter(final long index) throws FlushException {
     if (index < commitIndex) {
       throw new IllegalStateException(
           String.format(
-              "Expected to delete index after %d, but it is lower than the commit index %d. Deleting committed entries can lead to inconsistencies and is prohibited.",
+              """
+                 Expected to delete index after %d, but it is lower than the commit index %d.\
+                 Deleting committed entries can lead to inconsistencies and is prohibited.\
+               This can happen if a quorum of nodes has experienced data loss and became leader.\
+               This situation probably requires manual intervention to resume operations""",
               index, commitIndex));
     }
     journal.deleteAfter(index);
@@ -189,7 +206,7 @@ public final class RaftLog implements Closeable {
    * Flushes the underlying journal using the configured flushing strategy. For guarantees, refer to
    * the configured {@link RaftLogFlusher}.
    */
-  public void flush() {
+  public void flush() throws FlushException {
     flusher.flush(journal);
   }
 
@@ -200,7 +217,7 @@ public final class RaftLog implements Closeable {
    * <p>NOTE: this bypasses the configured flushing strategy, and is meant to be used when certain
    * guarantees are required.
    */
-  public void forceFlush() {
+  public void forceFlush() throws FlushException {
     Factory.DIRECT.flush(journal);
   }
 
@@ -224,5 +241,9 @@ public final class RaftLog implements Closeable {
         + ", commitIndex="
         + commitIndex
         + '}';
+  }
+
+  public SortedMap<Long, Path> getTailSegments(final long index) {
+    return journal.getTailSegments(index);
   }
 }

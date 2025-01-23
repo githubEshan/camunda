@@ -15,6 +15,8 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import io.camunda.security.configuration.SecurityConfiguration;
+import io.camunda.service.UserServices;
 import io.camunda.zeebe.broker.SpringBrokerBridge;
 import io.camunda.zeebe.broker.client.api.BrokerClient;
 import io.camunda.zeebe.broker.clustering.ClusterServicesImpl;
@@ -34,6 +36,7 @@ import java.util.Collections;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
+import org.springframework.security.crypto.password.PasswordEncoder;
 
 class CommandApiServiceStepTest {
   public static final Duration TEST_SHUTDOWN_TIMEOUT = Duration.ofSeconds(10);
@@ -70,7 +73,10 @@ class CommandApiServiceStepTest {
             mock(ClusterServicesImpl.class, RETURNS_DEEP_STUBS),
             mock(BrokerClient.class),
             Collections.emptyList(),
-            TEST_SHUTDOWN_TIMEOUT);
+            TEST_SHUTDOWN_TIMEOUT,
+            new SecurityConfiguration(),
+            mock(UserServices.class),
+            mock(PasswordEncoder.class));
     testBrokerStartupContext.setConcurrencyControl(CONCURRENCY_CONTROL);
     testBrokerStartupContext.setDiskSpaceUsageMonitor(mock(DiskSpaceUsageMonitorActor.class));
     testBrokerStartupContext.setGatewayBrokerTransport(mock(AtomixServerTransport.class));
@@ -124,19 +130,6 @@ class CommandApiServiceStepTest {
     }
 
     @Test
-    void shouldAddCommandApiServiceAsPartitionListener() {
-      // when
-      sut.startupInternal(testBrokerStartupContext, CONCURRENCY_CONTROL, startupFuture);
-      await().until(startupFuture::isDone);
-
-      // then
-      final var commandApiService = testBrokerStartupContext.getCommandApiService();
-
-      assertThat(commandApiService).isNotNull();
-      assertThat(testBrokerStartupContext.getPartitionListeners()).contains(commandApiService);
-    }
-
-    @Test
     void shouldAddCommandApiServiceAsDiskSpaceUsageListener() {
       // given
       final var mockDiskSpaceUsageMonitor = mock(DiskSpaceUsageMonitorActor.class);
@@ -174,7 +167,6 @@ class CommandApiServiceStepTest {
 
       testBrokerStartupContext.setGatewayBrokerTransport(mockAtomixServerTransport);
       testBrokerStartupContext.setCommandApiService(mockCommandApiService);
-      testBrokerStartupContext.addPartitionListener(mockCommandApiService);
       testBrokerStartupContext.setDiskSpaceUsageMonitor(mock(DiskSpaceUsageMonitorActor.class));
       testBrokerStartupContext
           .getDiskSpaceUsageMonitor()
@@ -195,17 +187,6 @@ class CommandApiServiceStepTest {
 
       // then
       verify(mockDiskSpaceUsageMonitor).removeDiskUsageListener(mockCommandApiService);
-    }
-
-    @Test
-    void shouldRemoveCommandApiFromPartitionListenerList() {
-      // when
-      sut.shutdownInternal(testBrokerStartupContext, CONCURRENCY_CONTROL, shutdownFuture);
-      await().until(shutdownFuture::isDone);
-
-      // then
-      assertThat(testBrokerStartupContext.getPartitionListeners())
-          .doesNotContain(mockCommandApiService);
     }
 
     @Test

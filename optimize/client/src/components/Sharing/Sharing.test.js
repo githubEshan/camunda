@@ -57,7 +57,7 @@ it('should initially load data', () => {
 it('should display a loading indicator', () => {
   const node = shallow(<Sharing mightFail={() => {}} />);
 
-  expect(node.find('LoadingIndicator')).toExist();
+  expect(node.find('Loading')).toExist();
 });
 
 it('should display an error message if evaluation was unsuccessful', () => {
@@ -73,7 +73,7 @@ it('should display an error message if evaluation was unsuccessful', () => {
 it('should pass the error to reportRenderer if evaluation fails', async () => {
   useParams.mockReturnValueOnce({type: 'report'});
   const testError = {status: 400, message: 'testError', reportDefinition: {}};
-  const mightFail = (promise, cb, err, final) => {
+  const mightFail = (_promise, _cb, err, final) => {
     err(testError);
     final();
   };
@@ -127,7 +127,7 @@ it('should display the report name and include report details', () => {
   runLastEffect();
 
   expect(node.find('EntityName')).toExist();
-  expect(node.find('EntityName').prop('children')).toBe('My report name');
+  expect(node.find('EntityName').prop('name')).toBe('My report name');
   expect(node.find('EntityName').prop('details').props.report).toEqual({name: 'My report name'});
 });
 
@@ -188,7 +188,7 @@ it('should display the dashboard name and last modification info', () => {
   runLastEffect();
 
   expect(node.find('EntityName')).toExist();
-  expect(node.find('EntityName').prop('children')).toBe('My dashboard name');
+  expect(node.find('EntityName').prop('name')).toBe('My dashboard name');
   expect(node.find('EntityName').prop('details').props.entity).toEqual({name: 'My dashboard name'});
 });
 

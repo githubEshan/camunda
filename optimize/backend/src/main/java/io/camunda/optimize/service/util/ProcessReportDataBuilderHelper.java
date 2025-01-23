@@ -7,24 +7,24 @@
  */
 package io.camunda.optimize.service.util;
 
-import static io.camunda.optimize.service.db.es.report.command.process.util.ProcessDistributedByCreator.createDistributedByAssignee;
-import static io.camunda.optimize.service.db.es.report.command.process.util.ProcessDistributedByCreator.createDistributedByCandidateGroup;
-import static io.camunda.optimize.service.db.es.report.command.process.util.ProcessDistributedByCreator.createDistributedByEndDateDto;
-import static io.camunda.optimize.service.db.es.report.command.process.util.ProcessDistributedByCreator.createDistributedByFlowNode;
-import static io.camunda.optimize.service.db.es.report.command.process.util.ProcessDistributedByCreator.createDistributedByNone;
-import static io.camunda.optimize.service.db.es.report.command.process.util.ProcessDistributedByCreator.createDistributedByStartDateDto;
-import static io.camunda.optimize.service.db.es.report.command.process.util.ProcessDistributedByCreator.createDistributedByUserTasks;
-import static io.camunda.optimize.service.db.es.report.command.process.util.ProcessDistributedByCreator.createDistributedByVariable;
-import static io.camunda.optimize.service.db.es.report.command.process.util.ProcessGroupByDtoCreator.createGroupByAssignee;
-import static io.camunda.optimize.service.db.es.report.command.process.util.ProcessGroupByDtoCreator.createGroupByCandidateGroup;
-import static io.camunda.optimize.service.db.es.report.command.process.util.ProcessGroupByDtoCreator.createGroupByDuration;
-import static io.camunda.optimize.service.db.es.report.command.process.util.ProcessGroupByDtoCreator.createGroupByEndDateDto;
-import static io.camunda.optimize.service.db.es.report.command.process.util.ProcessGroupByDtoCreator.createGroupByFlowNode;
-import static io.camunda.optimize.service.db.es.report.command.process.util.ProcessGroupByDtoCreator.createGroupByNone;
-import static io.camunda.optimize.service.db.es.report.command.process.util.ProcessGroupByDtoCreator.createGroupByRunningDateDto;
-import static io.camunda.optimize.service.db.es.report.command.process.util.ProcessGroupByDtoCreator.createGroupByStartDateDto;
-import static io.camunda.optimize.service.db.es.report.command.process.util.ProcessGroupByDtoCreator.createGroupByUserTasks;
-import static io.camunda.optimize.service.db.es.report.command.process.util.ProcessGroupByDtoCreator.createGroupByVariable;
+import static io.camunda.optimize.service.db.report.interpreter.util.ProcessDistributedByCreator.createDistributedByAssignee;
+import static io.camunda.optimize.service.db.report.interpreter.util.ProcessDistributedByCreator.createDistributedByCandidateGroup;
+import static io.camunda.optimize.service.db.report.interpreter.util.ProcessDistributedByCreator.createDistributedByEndDateDto;
+import static io.camunda.optimize.service.db.report.interpreter.util.ProcessDistributedByCreator.createDistributedByFlowNode;
+import static io.camunda.optimize.service.db.report.interpreter.util.ProcessDistributedByCreator.createDistributedByNone;
+import static io.camunda.optimize.service.db.report.interpreter.util.ProcessDistributedByCreator.createDistributedByStartDateDto;
+import static io.camunda.optimize.service.db.report.interpreter.util.ProcessDistributedByCreator.createDistributedByUserTasks;
+import static io.camunda.optimize.service.db.report.interpreter.util.ProcessDistributedByCreator.createDistributedByVariable;
+import static io.camunda.optimize.service.db.report.interpreter.util.ProcessGroupByDtoCreator.createGroupByAssignee;
+import static io.camunda.optimize.service.db.report.interpreter.util.ProcessGroupByDtoCreator.createGroupByCandidateGroup;
+import static io.camunda.optimize.service.db.report.interpreter.util.ProcessGroupByDtoCreator.createGroupByDuration;
+import static io.camunda.optimize.service.db.report.interpreter.util.ProcessGroupByDtoCreator.createGroupByEndDateDto;
+import static io.camunda.optimize.service.db.report.interpreter.util.ProcessGroupByDtoCreator.createGroupByFlowNode;
+import static io.camunda.optimize.service.db.report.interpreter.util.ProcessGroupByDtoCreator.createGroupByNone;
+import static io.camunda.optimize.service.db.report.interpreter.util.ProcessGroupByDtoCreator.createGroupByRunningDateDto;
+import static io.camunda.optimize.service.db.report.interpreter.util.ProcessGroupByDtoCreator.createGroupByStartDateDto;
+import static io.camunda.optimize.service.db.report.interpreter.util.ProcessGroupByDtoCreator.createGroupByUserTasks;
+import static io.camunda.optimize.service.db.report.interpreter.util.ProcessGroupByDtoCreator.createGroupByVariable;
 
 import io.camunda.optimize.dto.optimize.query.report.combined.CombinedReportDataDto;
 import io.camunda.optimize.dto.optimize.query.report.combined.CombinedReportItemDto;
@@ -144,13 +144,13 @@ public class ProcessReportDataBuilderHelper {
     return this;
   }
 
-  public ProcessReportDataBuilderHelper processDefinitionKey(String processDefinitionKey) {
+  public ProcessReportDataBuilderHelper processDefinitionKey(final String processDefinitionKey) {
     this.definitions.get(0).setKey(processDefinitionKey);
     return this;
   }
 
   public ProcessReportDataBuilderHelper processDefinitionVersions(
-      List<String> processDefinitionVersions) {
+      final List<String> processDefinitionVersions) {
     this.definitions.get(0).setVersions(processDefinitionVersions);
     return this;
   }
@@ -161,72 +161,73 @@ public class ProcessReportDataBuilderHelper {
     return this;
   }
 
-  public ProcessReportDataBuilderHelper viewEntity(ProcessViewEntity viewEntity) {
+  public ProcessReportDataBuilderHelper viewEntity(final ProcessViewEntity viewEntity) {
     this.viewEntity = viewEntity;
     return this;
   }
 
-  public ProcessReportDataBuilderHelper viewProperty(ViewProperty viewProperty) {
+  public ProcessReportDataBuilderHelper viewProperty(final ViewProperty viewProperty) {
     this.viewProperty = viewProperty;
     return this;
   }
 
-  public ProcessReportDataBuilderHelper groupByType(ProcessGroupByType groupByType) {
+  public ProcessReportDataBuilderHelper groupByType(final ProcessGroupByType groupByType) {
     this.groupByType = groupByType;
     return this;
   }
 
-  public ProcessReportDataBuilderHelper distributedByType(DistributedByType distributedByType) {
+  public ProcessReportDataBuilderHelper distributedByType(
+      final DistributedByType distributedByType) {
     this.distributedByType = distributedByType;
     return this;
   }
 
-  public ProcessReportDataBuilderHelper visualization(ProcessVisualization visualization) {
+  public ProcessReportDataBuilderHelper visualization(final ProcessVisualization visualization) {
     this.visualization = visualization;
     return this;
   }
 
   public ProcessReportDataBuilderHelper groupByDateInterval(
-      AggregateByDateUnit groupByDateInterval) {
+      final AggregateByDateUnit groupByDateInterval) {
     this.groupByDateInterval = groupByDateInterval;
     return this;
   }
 
   public ProcessReportDataBuilderHelper distributeByDateInterval(
-      AggregateByDateUnit distributeByDateInterval) {
+      final AggregateByDateUnit distributeByDateInterval) {
     this.distributeByDateInterval = distributeByDateInterval;
     return this;
   }
 
-  public ProcessReportDataBuilderHelper variableName(String variableName) {
+  public ProcessReportDataBuilderHelper variableName(final String variableName) {
     this.variableName = variableName;
     return this;
   }
 
-  public ProcessReportDataBuilderHelper variableType(VariableType variableType) {
+  public ProcessReportDataBuilderHelper variableType(final VariableType variableType) {
     this.variableType = variableType;
     return this;
   }
 
-  public ProcessReportDataBuilderHelper processPartStart(String processPartStart) {
+  public ProcessReportDataBuilderHelper processPartStart(final String processPartStart) {
     this.processPartStart = processPartStart;
     return this;
   }
 
-  public ProcessReportDataBuilderHelper processPartEnd(String processPartEnd) {
+  public ProcessReportDataBuilderHelper processPartEnd(final String processPartEnd) {
     this.processPartEnd = processPartEnd;
     return this;
   }
 
-  public static CombinedReportDataDto createCombinedReportData(String... reportIds) {
-    CombinedReportDataDto combinedReportDataDto = new CombinedReportDataDto();
+  public static CombinedReportDataDto createCombinedReportData(final String... reportIds) {
+    final CombinedReportDataDto combinedReportDataDto = new CombinedReportDataDto();
     combinedReportDataDto.setReports(
         Arrays.stream(reportIds).map(CombinedReportItemDto::new).collect(Collectors.toList()));
     return combinedReportDataDto;
   }
 
-  private static ProcessPartDto createProcessPart(String start, String end) {
-    ProcessPartDto processPartDto = new ProcessPartDto();
+  private static ProcessPartDto createProcessPart(final String start, final String end) {
+    final ProcessPartDto processPartDto = new ProcessPartDto();
     processPartDto.setStart(start);
     processPartDto.setEnd(end);
     return processPartDto;

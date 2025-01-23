@@ -15,9 +15,14 @@
  */
 package io.camunda.zeebe.client.api.search.filter;
 
+import io.camunda.client.protocol.rest.ProcessInstanceVariableFilterRequest;
 import io.camunda.zeebe.client.api.search.query.TypedSearchQueryRequest.SearchRequestFilter;
-import io.camunda.zeebe.client.protocol.rest.ProcessInstanceVariableFilterRequest;
 
+/**
+ * @deprecated since 8.7 for removal in 8.8, replaced by {@link
+ *     io.camunda.client.api.search.filter.ProcessInstanceFilter}
+ */
+@Deprecated
 public interface ProcessInstanceFilter extends SearchRequestFilter {
 
   /** Filter by running */

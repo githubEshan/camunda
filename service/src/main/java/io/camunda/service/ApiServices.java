@@ -7,12 +7,9 @@
  */
 package io.camunda.service;
 
-import static java.util.Optional.ofNullable;
-
-import io.camunda.search.clients.CamundaSearchClient;
-import io.camunda.service.security.auth.Authentication;
-import io.camunda.service.transformers.ServiceTransformers;
-import io.camunda.util.ObjectBuilder;
+import io.camunda.security.auth.Authentication;
+import io.camunda.service.exception.CamundaBrokerException;
+import io.camunda.service.security.SecurityContextProvider;
 import io.camunda.zeebe.broker.client.api.BrokerClient;
 import io.camunda.zeebe.broker.client.api.dto.BrokerRequest;
 import io.camunda.zeebe.broker.client.api.dto.BrokerResponse;
@@ -27,32 +24,21 @@ import org.agrona.concurrent.UnsafeBuffer;
 public abstract class ApiServices<T extends ApiServices<T>> {
 
   protected final BrokerClient brokerClient;
-  protected final CamundaSearchClient searchClient;
+  protected final SecurityContextProvider securityContextProvider;
   protected final Authentication authentication;
-  protected final ServiceTransformers transformers;
 
   protected ApiServices(
       final BrokerClient brokerClient,
-      final CamundaSearchClient searchClient,
-      final Authentication authentication) {
-    this(brokerClient, searchClient, null, authentication);
-  }
-
-  protected ApiServices(
-      final BrokerClient brokerClient,
-      final CamundaSearchClient searchClient,
-      final ServiceTransformers transformers,
+      final SecurityContextProvider securityContextProvider,
       final Authentication authentication) {
     this.brokerClient = brokerClient;
-    this.searchClient = searchClient;
+    this.securityContextProvider = securityContextProvider;
     this.authentication = authentication;
-    this.transformers = ofNullable(transformers).orElseGet(ServiceTransformers::newInstance);
   }
 
   public abstract T withAuthentication(final Authentication authentication);
 
-  public T withAuthentication(
-      final Function<Authentication.Builder, ObjectBuilder<Authentication>> fn) {
+  public T withAuthentication(final Function<Authentication.Builder, Authentication.Builder> fn) {
     return withAuthentication(fn.apply(new Authentication.Builder()).build());
   }
 
@@ -62,19 +48,19 @@ public abstract class ApiServices<T extends ApiServices<T>> {
 
   protected <R> CompletableFuture<BrokerResponse<R>> sendBrokerRequestWithFullResponse(
       final BrokerRequest<R> brokerRequest) {
-    brokerRequest.setAuthorization(authentication.token());
+    brokerRequest.setAuthorization(authentication.claims());
     return brokerClient
         .sendRequest(brokerRequest)
         .handleAsync(
             (response, error) -> {
               if (error != null) {
-                throw new CamundaServiceException(error);
+                throw new CamundaBrokerException(error);
               }
               if (response.isError()) {
-                throw new CamundaServiceException(response.getError());
+                throw new CamundaBrokerException(response.getError());
               }
               if (response.isRejection()) {
-                throw new CamundaServiceException(response.getRejection());
+                throw new CamundaBrokerException(response.getRejection());
               }
               return response;
             });

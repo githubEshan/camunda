@@ -10,10 +10,16 @@ package io.camunda.optimize.service.db.os.schema;
 import static io.camunda.optimize.service.db.DatabaseConstants.INDEX_ALREADY_EXISTS_EXCEPTION_TYPE;
 import static io.camunda.optimize.service.db.es.schema.ElasticSearchSchemaManager.INDEX_EXIST_BATCH_SIZE;
 import static io.camunda.optimize.service.db.os.schema.OpenSearchIndexSettingsBuilder.buildDynamicSettings;
+import static io.camunda.optimize.service.util.mapper.ObjectMapperFactory.OPTIMIZE_MAPPER;
 import static java.net.HttpURLConnection.HTTP_BAD_REQUEST;
 import static java.util.stream.Collectors.toSet;
 
+import co.elastic.clients.util.Pair;
+import com.fasterxml.jackson.core.JsonFactory;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.common.collect.Iterables;
+import io.camunda.optimize.service.db.os.MappingMetadataUtilOS;
 import io.camunda.optimize.service.db.os.OptimizeOpenSearchClient;
 import io.camunda.optimize.service.db.os.schema.index.AlertIndexOS;
 import io.camunda.optimize.service.db.os.schema.index.BusinessKeyIndexOS;
@@ -39,7 +45,6 @@ import io.camunda.optimize.service.db.os.schema.index.report.SingleDecisionRepor
 import io.camunda.optimize.service.db.os.schema.index.report.SingleProcessReportIndexOS;
 import io.camunda.optimize.service.db.schema.DatabaseSchemaManager;
 import io.camunda.optimize.service.db.schema.IndexMappingCreator;
-import io.camunda.optimize.service.db.schema.MappingMetadataUtil;
 import io.camunda.optimize.service.db.schema.OptimizeIndexNameService;
 import io.camunda.optimize.service.exceptions.OptimizeRuntimeException;
 import io.camunda.optimize.service.util.configuration.ConfigurationService;
@@ -48,11 +53,13 @@ import jakarta.json.spi.JsonProvider;
 import jakarta.json.stream.JsonParser;
 import java.io.IOException;
 import java.io.StringReader;
+import java.io.StringWriter;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -60,36 +67,38 @@ import java.util.Set;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
 import java.util.stream.StreamSupport;
-import lombok.extern.slf4j.Slf4j;
-import org.apache.commons.lang3.NotImplementedException;
-import org.elasticsearch.common.Strings;
-import org.elasticsearch.common.util.set.Sets;
+import org.opensearch.client.json.JsonData;
 import org.opensearch.client.json.ObjectDeserializer;
+import org.opensearch.client.json.jackson.JacksonJsonpGenerator;
+import org.opensearch.client.json.jackson.JacksonJsonpMapper;
 import org.opensearch.client.json.jsonb.JsonbJsonpMapper;
 import org.opensearch.client.opensearch._types.OpenSearchException;
+import org.opensearch.client.opensearch._types.mapping.TypeMapping;
 import org.opensearch.client.opensearch.indices.Alias;
 import org.opensearch.client.opensearch.indices.CreateIndexRequest;
 import org.opensearch.client.opensearch.indices.GetIndicesSettingsRequest;
 import org.opensearch.client.opensearch.indices.GetIndicesSettingsResponse;
 import org.opensearch.client.opensearch.indices.IndexSettings;
 import org.opensearch.client.opensearch.indices.IndexSettings.Builder;
-import org.opensearch.client.opensearch.indices.PutIndexTemplateRequest;
 import org.opensearch.client.opensearch.indices.PutIndicesSettingsRequest;
 import org.opensearch.client.opensearch.indices.PutIndicesSettingsResponse;
 import org.opensearch.client.opensearch.indices.PutMappingRequest;
 import org.opensearch.client.opensearch.indices.PutMappingResponse;
+import org.opensearch.client.opensearch.indices.PutTemplateRequest;
 import org.opensearch.client.opensearch.indices.put_index_template.IndexTemplateMapping;
+import org.slf4j.Logger;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Conditional;
 import org.springframework.stereotype.Component;
 
 @Component
-@Slf4j
 @Conditional(OpenSearchCondition.class)
 public class OpenSearchSchemaManager
     extends DatabaseSchemaManager<OptimizeOpenSearchClient, IndexSettings.Builder> {
 
   public static final String ALL_INDEXES = "_all";
+  private static final Logger LOG =
+      org.slf4j.LoggerFactory.getLogger(OpenSearchSchemaManager.class);
   private final OpenSearchMetadataService metadataService;
 
   @Autowired
@@ -98,6 +107,15 @@ public class OpenSearchSchemaManager
       final ConfigurationService configurationService,
       final OptimizeIndexNameService indexNameService) {
     super(configurationService, indexNameService, new ArrayList<>(getAllNonDynamicMappings()));
+    this.metadataService = metadataService;
+  }
+
+  public OpenSearchSchemaManager(
+      final OpenSearchMetadataService metadataService,
+      final ConfigurationService configurationService,
+      final OptimizeIndexNameService indexNameService,
+      final List<IndexMappingCreator<Builder>> mappings) {
+    super(configurationService, indexNameService, mappings);
     this.metadataService = metadataService;
   }
 
@@ -110,9 +128,9 @@ public class OpenSearchSchemaManager
   public void initializeSchema(final OptimizeOpenSearchClient osClient) {
     unblockIndices(osClient);
     if (!schemaExists(osClient)) {
-      log.info("Initializing Optimize schema...");
+      LOG.info("Initializing Optimize schema...");
       createOptimizeIndices(osClient);
-      log.info("Optimize schema initialized successfully.");
+      LOG.info("Optimize schema initialized successfully.");
     } else {
       updateAllMappingsAndDynamicSettings(osClient);
     }
@@ -162,7 +180,7 @@ public class OpenSearchSchemaManager
         createOrUpdateOptimizeIndex(osClient, indexMapping, additionalReadOnlyAliases);
       }
     } catch (final Exception e) {
-      log.error("Failed ensuring index is present: {}", indexMapping.getIndexName(), e);
+      LOG.error("Failed ensuring index is present: {}", indexMapping.getIndexName(), e);
       throw e;
     }
   }
@@ -201,7 +219,7 @@ public class OpenSearchSchemaManager
     } catch (final OpenSearchException e) {
       if (e.status() == HTTP_BAD_REQUEST
           && e.getMessage().contains(INDEX_ALREADY_EXISTS_EXCEPTION_TYPE)) {
-        log.debug(
+        LOG.debug(
             "index {} already exists, updating mapping and dynamic settings.", suffixedIndexName);
         updateDynamicSettingsAndMappings(osClient, mapping);
       } else {
@@ -209,7 +227,7 @@ public class OpenSearchSchemaManager
       }
     } catch (final Exception e) {
       final String message = String.format("Could not create Index [%s]", suffixedIndexName);
-      log.warn(message, e);
+      LOG.warn(message, e);
       throw new OptimizeRuntimeException(message, e);
     }
   }
@@ -223,10 +241,32 @@ public class OpenSearchSchemaManager
 
   @Override
   public void createOrUpdateTemplateWithoutAliases(
-      final OptimizeOpenSearchClient dbClient,
-      final IndexMappingCreator<IndexSettings.Builder> mappingCreator) {
-    // TODO?
-    throw new NotImplementedException("Not implemented in OpenSearch");
+      final OptimizeOpenSearchClient dbClient, final IndexMappingCreator<Builder> mappingCreator) {
+    final String templateName =
+        indexNameService.getOptimizeIndexTemplateNameWithVersion(mappingCreator);
+    final IndexSettings indexSettings = createIndexSettings(mappingCreator);
+
+    LOG.debug("Creating or updating template with name {}.", templateName);
+    try {
+      dbClient
+          .getOpenSearchClient()
+          .indices()
+          .putTemplate(
+              (PutTemplateRequest.of(
+                  b ->
+                      b.name(templateName)
+                          .version((long) mappingCreator.getVersion())
+                          .mappings(getMappings(mappingCreator.getSource().toString()))
+                          .settings(convertToMap(indexSettings))
+                          .indexPatterns(
+                              Collections.singletonList(
+                                  indexNameService
+                                      .getOptimizeIndexNameWithVersionWithWildcardSuffix(
+                                          mappingCreator))))));
+    } catch (final Exception e) {
+      final String message = String.format("Could not create or update template %s.", templateName);
+      throw new OptimizeRuntimeException(message, e);
+    }
   }
 
   @Override
@@ -236,6 +276,36 @@ public class OpenSearchSchemaManager
     updateIndexDynamicSettingsAndMappings(osClient, indexMapping);
     if (indexMapping.isCreateFromTemplate()) {
       updateTemplateDynamicSettingsAndMappings(osClient, indexMapping);
+    }
+  }
+
+  // Needed for loading from JSON, opensearch doesn't provide something like .withJSON(...) for
+  // index creation from files
+  public static CreateIndexRequest createIndexFromJson(
+      final String jsonMappings,
+      final String indexName,
+      final Map<String, Alias> aliases,
+      final IndexSettings settings)
+      throws OptimizeRuntimeException {
+    final String jsonNew =
+        "{\"mappings\": "
+            + jsonMappings
+                .replace("TypeMapping: ", "")
+                .replace("\"match_mapping_type\":[\"string\"]", "\"match_mapping_type\":\"string\"")
+                .replace("\"path_match\":[\"*\"]", "\"path_match\":\"*\"")
+            + "}";
+    try (final JsonParser jsonParser =
+        JsonProvider.provider().createParser(new StringReader(jsonNew))) {
+      final Supplier<CreateIndexRequest.Builder> builderSupplier =
+          () ->
+              new CreateIndexRequest.Builder().index(indexName).aliases(aliases).settings(settings);
+      final ObjectDeserializer<CreateIndexRequest.Builder> deserializer =
+          getDeserializerWithPreconfiguredBuilder(builderSupplier);
+      try {
+        return deserializer.deserialize(jsonParser, new JsonbJsonpMapper()).build();
+      } catch (final Exception e) {
+        throw new OptimizeRuntimeException("Could not load schema for " + indexName, e);
+      }
     }
   }
 
@@ -261,7 +331,7 @@ public class OpenSearchSchemaManager
       final OptimizeOpenSearchClient osClient,
       final String indexNameWithSuffix,
       final String aliasName) {
-    log.info("Creating index {} from template with write alias {}", indexNameWithSuffix, aliasName);
+    LOG.info("Creating index {} from template with write alias {}", indexNameWithSuffix, aliasName);
     final CreateIndexRequest.Builder createIndexRequest =
         new CreateIndexRequest.Builder().index(indexNameWithSuffix);
     if (aliasName != null) {
@@ -272,7 +342,7 @@ public class OpenSearchSchemaManager
     } catch (final IOException e) {
       final String message =
           String.format("Could not create index %s from template.", indexNameWithSuffix);
-      log.warn(message, e);
+      LOG.warn(message, e);
       throw new OptimizeRuntimeException(message, e);
     }
   }
@@ -285,9 +355,9 @@ public class OpenSearchSchemaManager
     final boolean created =
         osClient.getRichOpenSearchClient().index().createIndex(createIndexRequest);
     if (created) {
-      log.info("Index [{}] was successfully created", indexName);
+      LOG.info("Index [{}] was successfully created", indexName);
     } else {
-      log.info("Index [{}] was not created", indexName);
+      LOG.info("Index [{}] was not created", indexName);
     }
   }
 
@@ -299,7 +369,7 @@ public class OpenSearchSchemaManager
       final IndexMappingCreator<IndexSettings.Builder> mapping,
       final IndexSettings indexSettings)
       throws IOException {
-    log.debug(
+    LOG.debug(
         "Creating Optimize Index with name {}, default alias {} and additional aliases {}",
         suffixedIndexName,
         defaultAliasName,
@@ -307,7 +377,7 @@ public class OpenSearchSchemaManager
 
     final CreateIndexRequest request =
         createIndexFromJson(
-            Strings.toString(mapping.getSource()),
+            mapping.getSource().toString(),
             suffixedIndexName,
             createAliasMap(prefixedReadOnlyAliases, defaultAliasName),
             indexSettings);
@@ -316,34 +386,18 @@ public class OpenSearchSchemaManager
 
   // Needed for loading from JSON, opensearch doesn't provide something like .withJSON(...) for
   // index creation from files
-  private CreateIndexRequest createIndexFromJson(
-      final String jsonMappings,
-      final String indexName,
-      final Map<String, Alias> aliases,
-      final IndexSettings settings)
-      throws OptimizeRuntimeException {
-    final String jsonNew = "{\"mappings\": " + jsonMappings + "}";
-    try (final JsonParser jsonParser =
-        JsonProvider.provider().createParser(new StringReader(jsonNew))) {
-      final Supplier<CreateIndexRequest.Builder> builderSupplier =
-          () ->
-              new CreateIndexRequest.Builder().index(indexName).aliases(aliases).settings(settings);
-      final ObjectDeserializer<CreateIndexRequest.Builder> deserializer =
-          getDeserializerWithPreconfiguredBuilder(builderSupplier);
-      try {
-        return deserializer.deserialize(jsonParser, new JsonbJsonpMapper()).build();
-      } catch (final Exception e) {
-        throw new OptimizeRuntimeException("Could not load schema for " + indexName, e);
-      }
-    }
-  }
-
-  // Needed for loading from JSON, opensearch doesn't provide something like .withJSON(...) for
-  // index creation from files
   private PutMappingRequest updateMappingFromJson(final String jsonMappings, final String indexName)
       throws OptimizeRuntimeException {
     try (final JsonParser jsonParser =
-        JsonProvider.provider().createParser(new StringReader(jsonMappings))) {
+        JsonProvider.provider()
+            .createParser(
+                new StringReader(
+                    jsonMappings
+                        .replace("TypeMapping: ", "")
+                        .replace(
+                            "\"match_mapping_type\":[\"string\"]",
+                            "\"match_mapping_type\":\"string\"")
+                        .replace("\"path_match\":[\"*\"]", "\"path_match\":\"*\"")))) {
       final Supplier<PutMappingRequest.Builder> builderSupplier =
           () -> new PutMappingRequest.Builder().index(indexName);
       final ObjectDeserializer<PutMappingRequest.Builder> deserializer =
@@ -356,14 +410,11 @@ public class OpenSearchSchemaManager
     }
   }
 
-  // TODO make this and the three methods below a parametrized method, since their build-up is very
-  // similar with
-  //  OPT-7352
-  private static ObjectDeserializer<PutMappingRequest.Builder> getDeserializerPutIndexMapping(
-      final Supplier<PutMappingRequest.Builder> builderSupplier) throws OptimizeRuntimeException {
-    final Class<PutMappingRequest> clazz = PutMappingRequest.class;
+  private static <T, B> ObjectDeserializer<B> getDeserializer(
+      final Class<T> clazz, final String methodName, final Supplier<B> builderSupplier)
+      throws OptimizeRuntimeException {
+
     final Method method;
-    final String methodName = "setupPutMappingRequestDeserializer";
     try {
       method = clazz.getDeclaredMethod(methodName, ObjectDeserializer.class);
     } catch (final NoSuchMethodException e) {
@@ -372,8 +423,7 @@ public class OpenSearchSchemaManager
     }
     method.setAccessible(true);
 
-    final ObjectDeserializer<PutMappingRequest.Builder> deserializer =
-        new ObjectDeserializer<>(builderSupplier);
+    final ObjectDeserializer<B> deserializer = new ObjectDeserializer<>(builderSupplier);
     try {
       method.invoke(null, deserializer);
     } catch (final IllegalAccessException | InvocationTargetException e) {
@@ -381,58 +431,26 @@ public class OpenSearchSchemaManager
           "Method " + methodName + " could not be invoked when deserializing " + clazz.getName());
     }
     return deserializer;
+  }
+
+  private static ObjectDeserializer<PutMappingRequest.Builder> getDeserializerPutIndexMapping(
+      final Supplier<PutMappingRequest.Builder> builderSupplier) {
+    return getDeserializer(
+        PutMappingRequest.class, "setupPutMappingRequestDeserializer", builderSupplier);
   }
 
   private static ObjectDeserializer<CreateIndexRequest.Builder>
       getDeserializerWithPreconfiguredBuilder(
-          final Supplier<CreateIndexRequest.Builder> builderSupplier)
-          throws OptimizeRuntimeException {
-    final Class<CreateIndexRequest> clazz = CreateIndexRequest.class;
-    final String methodName = "setupCreateIndexRequestDeserializer";
-    final Method method;
-    try {
-      method = clazz.getDeclaredMethod(methodName, ObjectDeserializer.class);
-    } catch (final NoSuchMethodException e) {
-      throw new OptimizeRuntimeException(
-          "Method " + methodName + " could not be found when deserializing " + clazz.getName());
-    }
-    method.setAccessible(true);
-
-    final ObjectDeserializer<CreateIndexRequest.Builder> deserializer =
-        new ObjectDeserializer<>(builderSupplier);
-    try {
-      method.invoke(null, deserializer);
-    } catch (final IllegalAccessException | InvocationTargetException e) {
-      throw new OptimizeRuntimeException(
-          "Method " + methodName + " could not be invoked when deserializing " + clazz.getName());
-    }
-    return deserializer;
+          final Supplier<CreateIndexRequest.Builder> builderSupplier) {
+    return getDeserializer(
+        CreateIndexRequest.class, "setupCreateIndexRequestDeserializer", builderSupplier);
   }
 
   private static ObjectDeserializer<IndexTemplateMapping.Builder>
       getDeserializerIndexTemplateMapping(
-          final Supplier<IndexTemplateMapping.Builder> builderSupplier)
-          throws OptimizeRuntimeException {
-    final Class<IndexTemplateMapping> clazz = IndexTemplateMapping.class;
-    final String methodName = "setupIndexTemplateMappingDeserializer";
-    final Method method;
-    try {
-      method = clazz.getDeclaredMethod(methodName, ObjectDeserializer.class);
-    } catch (final NoSuchMethodException e) {
-      throw new OptimizeRuntimeException(
-          "Method " + methodName + " could not be found when deserializing " + clazz.getName());
-    }
-    method.setAccessible(true);
-
-    final ObjectDeserializer<IndexTemplateMapping.Builder> deserializer =
-        new ObjectDeserializer<>(builderSupplier);
-    try {
-      method.invoke(null, deserializer);
-    } catch (final IllegalAccessException | InvocationTargetException e) {
-      throw new OptimizeRuntimeException(
-          "Method " + methodName + " could not be invoked when deserializing " + clazz.getName());
-    }
-    return deserializer;
+          final Supplier<IndexTemplateMapping.Builder> builderSupplier) {
+    return getDeserializer(
+        IndexTemplateMapping.class, "setupIndexTemplateMappingDeserializer", builderSupplier);
   }
 
   private Map<String, Alias> createAliasMap(
@@ -456,29 +474,26 @@ public class OpenSearchSchemaManager
       final IndexSettings indexSettings) {
     final String templateName =
         indexNameService.getOptimizeIndexNameWithVersionWithoutSuffix(mappingCreator);
-    log.info("Creating or updating template with name {}", templateName);
+    LOG.info("Creating or updating template with name {}", templateName);
 
-    final Map<String, Alias> aliases = createAliasMap(additionalAliases, defaultAliasName);
-
-    final IndexTemplateMapping template;
     try {
-      template =
-          createTemplateFromJson(
-              Strings.toString(mappingCreator.getSource()),
-              aliases,
-              OpenSearchIndexSettingsBuilder.buildAllSettings(
-                  configurationService, mappingCreator));
-      final PutIndexTemplateRequest request =
-          new PutIndexTemplateRequest.Builder()
-              .name(templateName)
-              .template(new IndexTemplateMapping.Builder().settings(indexSettings).build())
-              .indexPatterns(
-                  Collections.singletonList(
-                      indexNameService.getOptimizeIndexNameWithVersionForAllIndicesOf(
-                          mappingCreator)))
-              .template(template)
-              .version((long) mappingCreator.getVersion())
-              .build();
+      final PutTemplateRequest request =
+          PutTemplateRequest.of(
+              b -> {
+                b.name(templateName)
+                    .version((long) mappingCreator.getVersion())
+                    .mappings(getMappings(mappingCreator.getSource().toString()))
+                    .settings(convertToMap(indexSettings))
+                    .indexPatterns(
+                        Collections.singletonList(
+                            indexNameService.getOptimizeIndexNameWithVersionWithWildcardSuffix(
+                                mappingCreator)));
+                additionalAliases.stream()
+                    .filter(aliasName -> !aliasName.equals(defaultAliasName))
+                    .map(aliasName -> Pair.of(aliasName, Alias.of(a -> a.isWriteIndex(false))))
+                    .forEach((p) -> b.aliases(p.key(), p.value()));
+                return b;
+              });
       putIndexTemplate(osClient, request);
     } catch (final OptimizeRuntimeException | IOException e) {
       throw new OptimizeRuntimeException(
@@ -486,49 +501,74 @@ public class OpenSearchSchemaManager
     }
   }
 
-  // Needed for loading from JSON, opensearch doesn't provide something like .withJSON(...) for
-  // index creation from files
-  private IndexTemplateMapping createTemplateFromJson(
-      final String jsonMappings, final Map<String, Alias> aliases, final IndexSettings settings)
-      throws OptimizeRuntimeException {
-    final String jsonNew = "{\"mappings\": " + jsonMappings + "}";
-    try (final JsonParser jsonParser =
-        JsonProvider.provider().createParser(new StringReader(jsonNew))) {
-      final Supplier<IndexTemplateMapping.Builder> builderSupplier =
-          () -> new IndexTemplateMapping.Builder().aliases(aliases).settings(settings);
-      final ObjectDeserializer<IndexTemplateMapping.Builder> deserializer =
-          getDeserializerIndexTemplateMapping(builderSupplier);
-      try {
-        return deserializer.deserialize(jsonParser, new JsonbJsonpMapper()).build();
-      } catch (final Exception e) {
-        throw new OptimizeRuntimeException("Could not create template", e);
+  private Map<String, JsonData> convertToMap(final IndexSettings indexSettings) {
+    try {
+      final JacksonJsonpMapper jsonpMapper = new JacksonJsonpMapper(OPTIMIZE_MAPPER);
+      final StringWriter writer = new StringWriter();
+      final JacksonJsonpGenerator generator =
+          new JacksonJsonpGenerator(new JsonFactory().createGenerator(writer));
+      indexSettings.serialize(generator, jsonpMapper);
+      generator.flush();
+
+      try (final JsonParser jsonParser =
+          JsonProvider.provider().createParser(new StringReader(writer.toString()))) {
+
+        return ((Map<String, Object>) JsonData.from(jsonParser, jsonpMapper).to(Map.class))
+            .entrySet().stream()
+                .collect(
+                    Collectors.toMap(Map.Entry::getKey, entry -> JsonData.of(entry.getValue())));
       }
+    } catch (final IOException e) {
+      LOG.error("Could not create settings!", e);
+      throw new OptimizeRuntimeException("Could not create index settings");
     }
   }
 
+  private TypeMapping getMappings(final String json) {
+    final ObjectMapper objectMapper = new ObjectMapper();
+    JsonNode indexAsJSONNode = null;
+    final String jsonNew =
+        "{\"mappings\": "
+            + json.replace("TypeMapping: ", "")
+                .replace("\"match_mapping_type\":[\"string\"]", "\"match_mapping_type\":\"string\"")
+                .replace("\"path_match\":[\"*\"]", "\"path_match\":\"*\"")
+            + "}";
+    try {
+      indexAsJSONNode = objectMapper.readTree(new StringReader(jsonNew));
+    } catch (final IOException e) {
+      throw new RuntimeException(e);
+    }
+
+    final JsonParser jsonParser =
+        JsonProvider.provider()
+            .createParser(new StringReader(indexAsJSONNode.get("mappings").toPrettyString()));
+    return TypeMapping._DESERIALIZER.deserialize(jsonParser, new JsonbJsonpMapper());
+  }
+
   private void putIndexTemplate(
-      final OptimizeOpenSearchClient osClient, final PutIndexTemplateRequest request) {
+      final OptimizeOpenSearchClient osClient, final PutTemplateRequest request)
+      throws IOException {
     final boolean created =
-        osClient.getRichOpenSearchClient().template().createTemplateWithRetries(request);
+        osClient.getOpenSearchClient().indices().putTemplate(request).acknowledged();
     if (created) {
-      log.info("Template [{}] was successfully created", request.name());
+      LOG.info("Template [{}] was successfully created", request.name());
     } else {
-      log.info("Template [{}] was not created", request.name());
+      LOG.info("Template [{}] was not created", request.name());
     }
   }
 
   private void updateAllMappingsAndDynamicSettings(final OptimizeOpenSearchClient osClient) {
-    log.info("Updating Optimize schema...");
+    LOG.info("Updating Optimize schema...");
     for (final IndexMappingCreator<IndexSettings.Builder> mapping : mappings) {
       updateDynamicSettingsAndMappings(osClient, mapping);
     }
-    final List<IndexMappingCreator<?>> allDynamicMappings =
-        new MappingMetadataUtil(osClient).getAllDynamicMappings(indexNameService.getIndexPrefix());
-    for (final IndexMappingCreator<?> mapping : allDynamicMappings) {
-      updateDynamicSettingsAndMappings(
-          osClient, (IndexMappingCreator<IndexSettings.Builder>) mapping);
+    final List<IndexMappingCreator<Builder>> allDynamicMappings =
+        new MappingMetadataUtilOS(osClient)
+            .getAllDynamicMappings(indexNameService.getIndexPrefix());
+    for (final IndexMappingCreator<Builder> mapping : allDynamicMappings) {
+      updateDynamicSettingsAndMappings(osClient, mapping);
     }
-    log.info("Finished updating Optimize schema.");
+    LOG.info("Finished updating Optimize schema.");
   }
 
   private void unblockIndices(final OptimizeOpenSearchClient osClient) {
@@ -553,7 +593,7 @@ public class OpenSearchSchemaManager
               .toList();
     } catch (final IOException e) {
       final String errorMsg = "Could not retrieve index settings!";
-      log.error(errorMsg, e);
+      LOG.error(errorMsg, e);
       throw new OptimizeRuntimeException(errorMsg, e);
     }
     for (final String indexBlocked : indexesBlocked) {
@@ -568,15 +608,15 @@ public class OpenSearchSchemaManager
       try {
         response = osClient.getOpenSearchClient().indices().putSettings(indexUpdateRequest);
         if (!response.acknowledged()) {
-          log.warn(stdErrorMessage);
+          LOG.warn(stdErrorMessage);
         } else {
-          log.debug("Successfully unblocked index " + indexBlocked);
+          LOG.debug("Successfully unblocked index " + indexBlocked);
         }
       } catch (final IOException e) {
         throw new OptimizeRuntimeException(stdErrorMessage + ": " + e.getMessage());
       }
     }
-    log.debug("No indexes blocked");
+    LOG.debug("No indexes blocked");
   }
 
   private void updateTemplateDynamicSettingsAndMappings(
@@ -586,7 +626,7 @@ public class OpenSearchSchemaManager
         indexNameService.getOptimizeIndexAliasForIndex(mappingCreator.getIndexName());
     final IndexSettings indexSettings = createIndexSettings(mappingCreator);
     createOrUpdateTemplateWithAliases(
-        osClient, mappingCreator, defaultAliasName, Sets.newHashSet(), indexSettings);
+        osClient, mappingCreator, defaultAliasName, new HashSet<>(), indexSettings);
   }
 
   private void updateIndexDynamicSettingsAndMappings(
@@ -612,7 +652,7 @@ public class OpenSearchSchemaManager
 
     try {
       final PutMappingRequest mappingUpdateRequest =
-          updateMappingFromJson(Strings.toString(indexMapping.getSource()), indexName);
+          updateMappingFromJson(indexMapping.getSource().toString(), indexName);
       final PutMappingResponse response =
           osClient.getOpenSearchClient().indices().putMapping(mappingUpdateRequest);
       if (!response.acknowledged()) {
@@ -623,7 +663,7 @@ public class OpenSearchSchemaManager
       throw new OptimizeRuntimeException(
           String.format(errorMsgTemplate, "mappings", indexName) + e.getMessage());
     }
-    log.debug("Successfully updated settings and mapping for index " + indexName);
+    LOG.debug("Successfully updated settings and mapping for index " + indexName);
   }
 
   private IndexSettings createIndexSettings(
@@ -632,13 +672,12 @@ public class OpenSearchSchemaManager
       return OpenSearchIndexSettingsBuilder.buildAllSettings(
           configurationService, indexMappingCreator);
     } catch (final IOException e) {
-      log.error("Could not create settings!", e);
+      LOG.error("Could not create settings!", e);
       throw new OptimizeRuntimeException("Could not create index settings");
     }
   }
 
   public static List<IndexMappingCreator<IndexSettings.Builder>> getAllNonDynamicMappings() {
-    // TODO Add test that all indexes are created when doing OPT-7225
     return Arrays.asList(
         new AlertIndexOS(),
         new BusinessKeyIndexOS(),

@@ -8,15 +8,18 @@
 package io.camunda.zeebe.gateway.rest;
 
 import static io.camunda.zeebe.gateway.rest.validator.AuthorizationRequestValidator.validateAuthorizationAssignRequest;
+import static io.camunda.zeebe.gateway.rest.validator.AuthorizationRequestValidator.validateAuthorizationCreateRequest;
 import static io.camunda.zeebe.gateway.rest.validator.ClockValidator.validateClockPinRequest;
+import static io.camunda.zeebe.gateway.rest.validator.DocumentValidator.validateDocumentLinkParams;
 import static io.camunda.zeebe.gateway.rest.validator.DocumentValidator.validateDocumentMetadata;
 import static io.camunda.zeebe.gateway.rest.validator.ElementRequestValidator.validateVariableRequest;
+import static io.camunda.zeebe.gateway.rest.validator.EvaluateDecisionRequestValidator.validateEvaluateDecisionRequest;
 import static io.camunda.zeebe.gateway.rest.validator.JobRequestValidator.validateJobActivationRequest;
 import static io.camunda.zeebe.gateway.rest.validator.JobRequestValidator.validateJobErrorRequest;
 import static io.camunda.zeebe.gateway.rest.validator.JobRequestValidator.validateJobUpdateRequest;
+import static io.camunda.zeebe.gateway.rest.validator.MappingValidator.validateMappingRequest;
 import static io.camunda.zeebe.gateway.rest.validator.MessageRequestValidator.validateMessageCorrelationRequest;
 import static io.camunda.zeebe.gateway.rest.validator.MessageRequestValidator.validateMessagePublicationRequest;
-import static io.camunda.zeebe.gateway.rest.validator.MultiTenancyValidator.validateAuthorization;
 import static io.camunda.zeebe.gateway.rest.validator.MultiTenancyValidator.validateTenantId;
 import static io.camunda.zeebe.gateway.rest.validator.ProcessInstanceRequestValidator.validateCancelProcessInstanceRequest;
 import static io.camunda.zeebe.gateway.rest.validator.ProcessInstanceRequestValidator.validateCreateProcessInstanceRequest;
@@ -27,13 +30,24 @@ import static io.camunda.zeebe.gateway.rest.validator.SignalRequestValidator.val
 import static io.camunda.zeebe.gateway.rest.validator.UserTaskRequestValidator.validateAssignmentRequest;
 import static io.camunda.zeebe.gateway.rest.validator.UserTaskRequestValidator.validateUpdateRequest;
 import static io.camunda.zeebe.gateway.rest.validator.UserValidator.validateUserCreateRequest;
+import static io.camunda.zeebe.gateway.rest.validator.UserValidator.validateUserUpdateRequest;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
+import io.camunda.authentication.entity.CamundaPrincipal;
+import io.camunda.authentication.entity.CamundaUser;
+import io.camunda.authentication.tenant.TenantAttributeHolder;
+import io.camunda.document.api.DocumentMetadataModel;
+import io.camunda.search.entities.RoleEntity;
+import io.camunda.security.auth.Authentication;
+import io.camunda.security.auth.Authentication.Builder;
+import io.camunda.service.AuthorizationServices.CreateAuthorizationRequest;
 import io.camunda.service.AuthorizationServices.PatchAuthorizationRequest;
 import io.camunda.service.DocumentServices.DocumentCreateRequest;
-import io.camunda.service.DocumentServices.DocumentMetadataModel;
+import io.camunda.service.DocumentServices.DocumentLinkParams;
 import io.camunda.service.ElementInstanceServices.SetVariablesRequest;
 import io.camunda.service.JobServices.ActivateJobsRequest;
 import io.camunda.service.JobServices.UpdateJobChangeset;
+import io.camunda.service.MappingServices.MappingDTO;
 import io.camunda.service.MessageServices.CorrelateMessageRequest;
 import io.camunda.service.MessageServices.PublicationMessageRequest;
 import io.camunda.service.ProcessInstanceServices.ProcessInstanceCancelRequest;
@@ -42,61 +56,99 @@ import io.camunda.service.ProcessInstanceServices.ProcessInstanceMigrateRequest;
 import io.camunda.service.ProcessInstanceServices.ProcessInstanceModifyRequest;
 import io.camunda.service.ResourceServices.DeployResourcesRequest;
 import io.camunda.service.ResourceServices.ResourceDeletionRequest;
-import io.camunda.service.UserServices.CreateUserRequest;
-import io.camunda.service.security.auth.Authentication;
-import io.camunda.service.security.auth.Authentication.Builder;
-import io.camunda.zeebe.auth.api.JwtAuthorizationBuilder;
-import io.camunda.zeebe.auth.impl.Authorization;
+import io.camunda.service.TenantServices.TenantDTO;
+import io.camunda.service.UserServices.UserDTO;
+import io.camunda.zeebe.auth.Authorization;
+import io.camunda.zeebe.auth.ClaimTransformer;
+import io.camunda.zeebe.gateway.protocol.rest.AuthorizationCreateRequest;
 import io.camunda.zeebe.gateway.protocol.rest.AuthorizationPatchRequest;
 import io.camunda.zeebe.gateway.protocol.rest.CancelProcessInstanceRequest;
 import io.camunda.zeebe.gateway.protocol.rest.Changeset;
 import io.camunda.zeebe.gateway.protocol.rest.ClockPinRequest;
 import io.camunda.zeebe.gateway.protocol.rest.CreateProcessInstanceRequest;
 import io.camunda.zeebe.gateway.protocol.rest.DeleteResourceRequest;
+import io.camunda.zeebe.gateway.protocol.rest.DocumentLinkRequest;
 import io.camunda.zeebe.gateway.protocol.rest.DocumentMetadata;
+import io.camunda.zeebe.gateway.protocol.rest.EvaluateDecisionRequest;
+import io.camunda.zeebe.gateway.protocol.rest.GroupCreateRequest;
+import io.camunda.zeebe.gateway.protocol.rest.GroupUpdateRequest;
 import io.camunda.zeebe.gateway.protocol.rest.JobActivationRequest;
 import io.camunda.zeebe.gateway.protocol.rest.JobCompletionRequest;
 import io.camunda.zeebe.gateway.protocol.rest.JobErrorRequest;
 import io.camunda.zeebe.gateway.protocol.rest.JobFailRequest;
 import io.camunda.zeebe.gateway.protocol.rest.JobUpdateRequest;
+import io.camunda.zeebe.gateway.protocol.rest.MappingRuleCreateRequest;
 import io.camunda.zeebe.gateway.protocol.rest.MessageCorrelationRequest;
 import io.camunda.zeebe.gateway.protocol.rest.MessagePublicationRequest;
 import io.camunda.zeebe.gateway.protocol.rest.MigrateProcessInstanceRequest;
 import io.camunda.zeebe.gateway.protocol.rest.ModifyProcessInstanceActivateInstruction;
 import io.camunda.zeebe.gateway.protocol.rest.ModifyProcessInstanceRequest;
+import io.camunda.zeebe.gateway.protocol.rest.PermissionTypeEnum;
+import io.camunda.zeebe.gateway.protocol.rest.RoleCreateRequest;
+import io.camunda.zeebe.gateway.protocol.rest.RoleUpdateRequest;
 import io.camunda.zeebe.gateway.protocol.rest.SetVariableRequest;
 import io.camunda.zeebe.gateway.protocol.rest.SignalBroadcastRequest;
+import io.camunda.zeebe.gateway.protocol.rest.TenantCreateRequest;
+import io.camunda.zeebe.gateway.protocol.rest.TenantUpdateRequest;
+import io.camunda.zeebe.gateway.protocol.rest.UserChangeset;
 import io.camunda.zeebe.gateway.protocol.rest.UserRequest;
 import io.camunda.zeebe.gateway.protocol.rest.UserTaskAssignmentRequest;
 import io.camunda.zeebe.gateway.protocol.rest.UserTaskCompletionRequest;
 import io.camunda.zeebe.gateway.protocol.rest.UserTaskUpdateRequest;
+import io.camunda.zeebe.gateway.protocol.rest.UserUpdateRequest;
+import io.camunda.zeebe.gateway.rest.validator.DocumentValidator;
+import io.camunda.zeebe.gateway.rest.validator.GroupRequestValidator;
+import io.camunda.zeebe.gateway.rest.validator.RoleRequestValidator;
+import io.camunda.zeebe.gateway.rest.validator.TenantRequestValidator;
 import io.camunda.zeebe.protocol.impl.encoding.MsgPackConverter;
+import io.camunda.zeebe.protocol.impl.record.value.job.JobResult;
+import io.camunda.zeebe.protocol.impl.record.value.job.JobResultCorrections;
 import io.camunda.zeebe.protocol.impl.record.value.processinstance.ProcessInstanceMigrationMappingInstruction;
 import io.camunda.zeebe.protocol.impl.record.value.processinstance.ProcessInstanceModificationActivateInstruction;
 import io.camunda.zeebe.protocol.impl.record.value.processinstance.ProcessInstanceModificationTerminateInstruction;
 import io.camunda.zeebe.protocol.impl.record.value.processinstance.ProcessInstanceModificationVariableInstruction;
 import io.camunda.zeebe.protocol.impl.record.value.usertask.UserTaskRecord;
+import io.camunda.zeebe.protocol.record.value.AuthorizationOwnerType;
 import io.camunda.zeebe.protocol.record.value.AuthorizationResourceType;
 import io.camunda.zeebe.protocol.record.value.PermissionAction;
 import io.camunda.zeebe.protocol.record.value.PermissionType;
 import io.camunda.zeebe.util.Either;
+import jakarta.servlet.http.Part;
 import java.io.IOException;
 import java.io.InputStream;
-import java.time.ZonedDateTime;
+import java.time.Duration;
+import java.time.OffsetDateTime;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.function.Function;
 import java.util.function.Supplier;
+import java.util.stream.Collectors;
 import org.agrona.concurrent.UnsafeBuffer;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.http.ProblemDetail;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
 import org.springframework.web.multipart.MultipartFile;
 
 public class RequestMapper {
+
+  public static final String VND_CAMUNDA_API_KEYS_STRING_JSON = "vnd.camunda.api.keys.string+json";
+  public static final String VND_CAMUNDA_API_KEYS_NUMBER_JSON = "vnd.camunda.api.keys.number+json";
+  public static final MediaType MEDIA_TYPE_KEYS_STRING =
+      new MediaType("application", VND_CAMUNDA_API_KEYS_STRING_JSON);
+  public static final MediaType MEDIA_TYPE_KEYS_NUMBER =
+      new MediaType("application", VND_CAMUNDA_API_KEYS_NUMBER_JSON);
+  public static final String MEDIA_TYPE_KEYS_STRING_VALUE =
+      "application/" + VND_CAMUNDA_API_KEYS_STRING_JSON;
+  public static final String MEDIA_TYPE_KEYS_NUMBER_VALUE =
+      "application/" + VND_CAMUNDA_API_KEYS_NUMBER_JSON;
 
   public static CompleteUserTaskRequest toUserTaskCompletionRequest(
       final UserTaskCompletionRequest completionRequest, final long userTaskKey) {
@@ -140,6 +192,16 @@ public class RequestMapper {
                 userTaskKey,
                 getRecordWithChangedAttributes(updateRequest),
                 getStringOrEmpty(updateRequest, UserTaskUpdateRequest::getAction)));
+  }
+
+  public static Either<ProblemDetail, UserDTO> toUserUpdateRequest(
+      final UserUpdateRequest updateRequest, final String username) {
+    final UserChangeset changeset = updateRequest.getChangeset();
+    return getResult(
+        validateUserUpdateRequest(updateRequest),
+        () ->
+            new UserDTO(
+                username, changeset.getName(), changeset.getEmail(), changeset.getPassword()));
   }
 
   public static Either<ProblemDetail, Long> getPinnedEpoch(final ClockPinRequest pinRequest) {
@@ -193,11 +255,6 @@ public class RequestMapper {
         validateTenantId(correlationRequest.getTenantId(), multiTenancyEnabled, "Correlate Message")
             .flatMap(
                 tenantId ->
-                    validateAuthorization(tenantId, multiTenancyEnabled, "Correlate Message")
-                        .map(Either::<ProblemDetail, String>left)
-                        .orElseGet(() -> Either.right(tenantId)))
-            .flatMap(
-                tenantId ->
                     validateMessageCorrelationRequest(correlationRequest)
                         .map(Either::<ProblemDetail, String>left)
                         .orElseGet(() -> Either.right(tenantId)));
@@ -213,9 +270,10 @@ public class RequestMapper {
 
   public static CompleteJobRequest toJobCompletionRequest(
       final JobCompletionRequest completionRequest, final long jobKey) {
-
     return new CompleteJobRequest(
-        jobKey, getMapOrEmpty(completionRequest, JobCompletionRequest::getVariables));
+        jobKey,
+        getMapOrEmpty(completionRequest, JobCompletionRequest::getVariables),
+        getJobResultOrDefault(completionRequest));
   }
 
   public static Either<ProblemDetail, UpdateJobRequest> toJobUpdateRequest(
@@ -231,20 +289,67 @@ public class RequestMapper {
                     updateRequest.getChangeset().getTimeout())));
   }
 
+  public static Either<ProblemDetail, UpdateRoleRequest> toRoleUpdateRequest(
+      final RoleUpdateRequest roleUpdateRequest, final long roleKey) {
+    return getResult(
+        RoleRequestValidator.validateUpdateRequest(roleUpdateRequest),
+        () -> new UpdateRoleRequest(roleKey, roleUpdateRequest.getChangeset().getName()));
+  }
+
+  public static Either<ProblemDetail, CreateRoleRequest> toRoleCreateRequest(
+      final RoleCreateRequest roleCreateRequest) {
+    return getResult(
+        RoleRequestValidator.validateCreateRequest(roleCreateRequest),
+        () -> new CreateRoleRequest(roleCreateRequest.getName()));
+  }
+
+  public static Either<ProblemDetail, CreateGroupRequest> toGroupCreateRequest(
+      final GroupCreateRequest groupCreateRequest) {
+    return getResult(
+        GroupRequestValidator.validateCreateRequest(groupCreateRequest),
+        () -> new CreateGroupRequest(groupCreateRequest.getName()));
+  }
+
+  public static Either<ProblemDetail, UpdateGroupRequest> toGroupUpdateRequest(
+      final GroupUpdateRequest groupUpdateRequest, final long groupKey) {
+    return getResult(
+        GroupRequestValidator.validateUpdateRequest(groupUpdateRequest),
+        () -> new UpdateGroupRequest(groupKey, groupUpdateRequest.getChangeset().getName()));
+  }
+
+  public static Either<ProblemDetail, CreateAuthorizationRequest> toCreateAuthorizationRequest(
+      final AuthorizationCreateRequest request) {
+    return getResult(
+        validateAuthorizationCreateRequest(request),
+        () ->
+            new CreateAuthorizationRequest(
+                request.getOwnerId(),
+                AuthorizationOwnerType.valueOf(request.getOwnerType().name()),
+                request.getResourceId(),
+                AuthorizationResourceType.valueOf(request.getResourceType().name()),
+                transfomPermissions(request.getPermissions())));
+  }
+
+  private static Set<PermissionType> transfomPermissions(
+      final List<PermissionTypeEnum> permissions) {
+    return permissions.stream()
+        .map(permission -> PermissionType.valueOf(permission.name()))
+        .collect(Collectors.toSet());
+  }
+
   public static Either<ProblemDetail, PatchAuthorizationRequest> toAuthorizationPatchRequest(
       final long ownerKey, final AuthorizationPatchRequest authorizationPatchRequest) {
     return getResult(
         validateAuthorizationAssignRequest(authorizationPatchRequest),
         () -> {
-          final Map<PermissionType, List<String>> permissions = new HashMap<>();
+          final Map<PermissionType, Set<String>> permissions = new HashMap<>();
           authorizationPatchRequest
               .getPermissions()
               .forEach(
-                  permission -> {
-                    permissions.put(
-                        PermissionType.valueOf(permission.getPermissionType().name()),
-                        permission.getResourceIds());
-                  });
+                  permission ->
+                      permissions.put(
+                          PermissionType.valueOf(permission.getPermissionType().name()),
+                          permission.getResourceIds()));
 
           return new PatchAuthorizationRequest(
               ownerKey,
@@ -257,7 +362,7 @@ public class RequestMapper {
   public static Either<ProblemDetail, DocumentCreateRequest> toDocumentCreateRequest(
       final String documentId,
       final String storeId,
-      final MultipartFile file,
+      final Part file,
       final DocumentMetadata metadata) {
     final InputStream inputStream;
     try {
@@ -272,16 +377,81 @@ public class RequestMapper {
         () -> new DocumentCreateRequest(documentId, storeId, inputStream, internalMetadata));
   }
 
-  public static Either<ProblemDetail, CreateUserRequest> toCreateUserRequest(
-      final UserRequest request) {
+  public static Either<ProblemDetail, List<DocumentCreateRequest>> toDocumentCreateRequestBatch(
+      final List<Part> parts, final String storeId, final ObjectMapper objectMapper) {
+    final Map<Part, DocumentMetadata> metadataMap =
+        parts.stream()
+            .collect(
+                Collectors.toMap(
+                    part -> part,
+                    part ->
+                        Optional.ofNullable(part.getHeader("X-Document-Metadata"))
+                            .map(
+                                header -> {
+                                  try {
+                                    return objectMapper.readValue(header, DocumentMetadata.class);
+                                  } catch (final IOException e) {
+                                    throw new RuntimeException(e);
+                                  }
+                                })
+                            .orElse(new DocumentMetadata())));
+
+    final ProblemDetail validationErrors =
+        metadataMap.values().stream()
+            .map(DocumentValidator::validateDocumentMetadata)
+            .filter(Optional::isPresent)
+            .map(Optional::get)
+            .reduce( // combine violations from each problem detail
+                ProblemDetail.forStatus(HttpStatus.BAD_REQUEST),
+                (acc, detail) -> {
+                  acc.setDetail(acc.getDetail() + ". " + detail.getDetail());
+                  return acc;
+                });
+
+    if (validationErrors.getDetail() != null) {
+      return Either.left(validationErrors);
+    }
+
+    final var requests = new HashMap<Part, DocumentCreateRequest>();
+    for (final var part : parts) {
+      final var metadata = metadataMap.get(part);
+      final InputStream inputStream;
+      try {
+        inputStream = part.getInputStream();
+      } catch (final IOException e) {
+        return Either.left(createInternalErrorProblemDetail(e, "Failed to read document content"));
+      }
+      requests.put(
+          part,
+          new DocumentCreateRequest(
+              null, storeId, inputStream, toInternalDocumentMetadata(metadata, part)));
+    }
+    return Either.right(List.copyOf(requests.values()));
+  }
+
+  public static Either<ProblemDetail, DocumentLinkParams> toDocumentLinkParams(
+      final DocumentLinkRequest documentLinkRequest) {
+    return getResult(
+        validateDocumentLinkParams(documentLinkRequest),
+        () -> new DocumentLinkParams(Duration.ofMillis(documentLinkRequest.getTimeToLive())));
+  }
+
+  public static Either<ProblemDetail, UserDTO> toUserDTO(final UserRequest request) {
     return getResult(
         validateUserCreateRequest(request),
         () ->
-            new CreateUserRequest(
+            new UserDTO(
                 request.getUsername(),
                 request.getName(),
                 request.getEmail(),
                 request.getPassword()));
+  }
+
+  public static Either<ProblemDetail, MappingDTO> toMappingDTO(
+      final MappingRuleCreateRequest request) {
+    return getResult(
+        validateMappingRequest(request),
+        () -> new MappingDTO(request.getClaimName(), request.getClaimValue(), request.getName()));
   }
 
   public static <BrokerResponseT> CompletableFuture<ResponseEntity<Object>> executeServiceMethod(
@@ -302,10 +472,23 @@ public class RequestMapper {
         method, ignored -> ResponseEntity.noContent().build());
   }
 
+  public static <BrokerResponseT>
+      CompletableFuture<ResponseEntity<Object>> executeServiceMethodWithAcceptedResult(
+          final Supplier<CompletableFuture<BrokerResponseT>> method) {
+    return RequestMapper.executeServiceMethod(method, ignored -> ResponseEntity.accepted().build());
+  }
+
   public static Either<ProblemDetail, DeployResourcesRequest> toDeployResourceRequest(
-      final List<MultipartFile> resources, final String tenantId) {
+      final List<MultipartFile> resources,
+      final String tenantId,
+      final boolean multiTenancyEnabled) {
     try {
-      return Either.right(createDeployResourceRequest(resources, tenantId));
+      final Either<ProblemDetail, String> validationResponse =
+          validateTenantId(tenantId, multiTenancyEnabled, "Deploy Resources");
+      if (validationResponse.isLeft()) {
+        return Either.left(validationResponse.getLeft());
+      }
+      return Either.right(createDeployResourceRequest(resources, validationResponse.get()));
     } catch (final IOException e) {
       return Either.left(createInternalErrorProblemDetail(e, "Failed to read resources content"));
     }
@@ -324,10 +507,19 @@ public class RequestMapper {
   }
 
   public static Either<ProblemDetail, PublicationMessageRequest> toMessagePublicationRequest(
-      final MessagePublicationRequest messagePublicationRequest) {
-    return getResult(
-        validateMessagePublicationRequest(messagePublicationRequest),
-        () ->
+      final MessagePublicationRequest messagePublicationRequest,
+      final boolean multiTenancyEnabled) {
+    final Either<ProblemDetail, String> validationResponse =
+        validateTenantId(
+                messagePublicationRequest.getTenantId(), multiTenancyEnabled, "Publish Message")
+            .flatMap(
+                tenantId ->
+                    validateMessagePublicationRequest(messagePublicationRequest)
+                        .map(Either::<ProblemDetail, String>left)
+                        .orElseGet(() -> Either.right(tenantId)));
+
+    return validationResponse.map(
+        tenantId ->
             new PublicationMessageRequest(
                 messagePublicationRequest.getName(),
                 messagePublicationRequest.getCorrelationKey(),
@@ -335,8 +527,7 @@ public class RequestMapper {
                 getStringOrEmpty(
                     messagePublicationRequest, MessagePublicationRequest::getMessageId),
                 getMapOrEmpty(messagePublicationRequest, MessagePublicationRequest::getVariables),
-                getStringOrEmpty(
-                    messagePublicationRequest, MessagePublicationRequest::getTenantId)));
+                tenantId));
   }
 
   public static Either<ProblemDetail, ResourceDeletionRequest> toResourceDeletion(
@@ -349,25 +540,58 @@ public class RequestMapper {
   }
 
   public static Either<ProblemDetail, BroadcastSignalRequest> toBroadcastSignalRequest(
-      final SignalBroadcastRequest request) {
-    return getResult(
-        validateSignalBroadcastRequest(request),
-        () ->
-            new BroadcastSignalRequest(
-                request.getSignalName(), request.getVariables(), request.getTenantId()));
+      final SignalBroadcastRequest request, final boolean multiTenancyEnabled) {
+    final Either<ProblemDetail, String> validationResponse =
+        validateTenantId(request.getTenantId(), multiTenancyEnabled, "Broadcast Signal")
+            .flatMap(
+                tenantId ->
+                    validateSignalBroadcastRequest(request)
+                        .map(Either::<ProblemDetail, String>left)
+                        .orElseGet(() -> Either.right(tenantId)));
+    return validationResponse.map(
+        tenantId ->
+            new BroadcastSignalRequest(request.getSignalName(), request.getVariables(), tenantId));
   }
 
   public static Authentication getAuthentication() {
-    final List<String> authorizedTenants = TenantAttributeHolder.tenantIds();
+    Long authenticatedUserKey = null;
+    final List<Long> authenticatedRoleKeys = new ArrayList<>();
+    final List<String> authorizedTenants = TenantAttributeHolder.getTenantIds();
 
-    final String token =
-        Authorization.jwtEncoder()
-            .withIssuer(JwtAuthorizationBuilder.DEFAULT_ISSUER)
-            .withAudience(JwtAuthorizationBuilder.DEFAULT_AUDIENCE)
-            .withSubject(JwtAuthorizationBuilder.DEFAULT_SUBJECT)
-            .withClaim(Authorization.AUTHORIZED_TENANTS, authorizedTenants)
-            .encode();
-    return new Builder().token(token).tenants(authorizedTenants).build();
+    final var requestAuthentication = SecurityContextHolder.getContext().getAuthentication();
+
+    final Map<String, Object> claims = new HashMap<>();
+
+    if (requestAuthentication != null) {
+      if (requestAuthentication.getPrincipal()
+          instanceof final CamundaPrincipal authenticatedPrincipal) {
+        authenticatedRoleKeys.addAll(
+            authenticatedPrincipal.getAuthenticationContext().roles().stream()
+                .map(RoleEntity::roleKey)
+                .toList());
+        if (authenticatedPrincipal instanceof final CamundaUser user) {
+          authenticatedUserKey = user.getUserKey();
+          claims.put(Authorization.AUTHORIZED_USERNAME, user.getUsername());
+        }
+      }
+
+      if (requestAuthentication instanceof final JwtAuthenticationToken jwtAuthenticationToken) {
+        jwtAuthenticationToken
+            .getTokenAttributes()
+            .forEach((key, value) -> ClaimTransformer.applyUserClaim(claims, key, value));
+      }
+    }
+
+    return new Builder()
+        .claims(claims)
+        .user(authenticatedUserKey)
+        .roleKeys(authenticatedRoleKeys)
+        .tenants(authorizedTenants)
+        .build();
+  }
+
+  public static Authentication getAnonymousAuthentication() {
+    return new Builder().claims(Map.of(Authorization.AUTHORIZED_ANONYMOUS_USER, true)).build();
   }
 
   public static <T> Either<ProblemDetail, T> getResult(
@@ -403,25 +627,37 @@ public class RequestMapper {
   }
 
   private static DocumentMetadataModel toInternalDocumentMetadata(
-      final DocumentMetadata metadata, final MultipartFile file) {
+      final DocumentMetadata metadata, final Part file) {
 
     if (metadata == null) {
       return new DocumentMetadataModel(
-          file.getContentType(), file.getOriginalFilename(), null, Map.of());
+          file.getContentType(),
+          file.getSubmittedFileName(),
+          null,
+          file.getSize(),
+          null,
+          null,
+          Map.of());
     }
-    final ZonedDateTime expiresAt;
+    final OffsetDateTime expiresAt;
     if (metadata.getExpiresAt() == null || metadata.getExpiresAt().isBlank()) {
       expiresAt = null;
     } else {
-      expiresAt = ZonedDateTime.parse(metadata.getExpiresAt());
+      expiresAt = OffsetDateTime.parse(metadata.getExpiresAt());
     }
     final var fileName =
-        Optional.ofNullable(metadata.getFileName()).orElse(file.getOriginalFilename());
+        Optional.ofNullable(metadata.getFileName()).orElse(file.getSubmittedFileName());
     final var contentType =
         Optional.ofNullable(metadata.getContentType()).orElse(file.getContentType());
 
     return new DocumentMetadataModel(
-        contentType, fileName, expiresAt, metadata.getAdditionalProperties());
+        contentType,
+        fileName,
+        expiresAt,
+        file.getSize(),
+        metadata.getProcessDefinitionId(),
+        metadata.getProcessInstanceKey(),
+        metadata.getCustomProperties());
   }
 
   private static DeployResourcesRequest createDeployResourceRequest(
@@ -440,17 +676,24 @@ public class RequestMapper {
   }
 
   public static Either<ProblemDetail, ProcessInstanceCreateRequest> toCreateProcessInstance(
-      final CreateProcessInstanceRequest request) {
-    return getResult(
-        validateCreateProcessInstanceRequest(request),
-        () ->
+      final CreateProcessInstanceRequest request, final boolean multiTenancyEnabled) {
+    final Either<ProblemDetail, String> validationResponse =
+        validateTenantId(request.getTenantId(), multiTenancyEnabled, "Create Process Instance")
+            .flatMap(
+                tenant ->
+                    validateCreateProcessInstanceRequest(request)
+                        .map(Either::<ProblemDetail, String>left)
+                        .orElseGet(() -> Either.right(tenant)));
+    return validationResponse.map(
+        tenantId ->
             new ProcessInstanceCreateRequest(
                 getLongOrDefault(
                     request, CreateProcessInstanceRequest::getProcessDefinitionKey, -1L),
-                getStringOrEmpty(request, CreateProcessInstanceRequest::getBpmnProcessId),
-                getIntOrDefault(request, CreateProcessInstanceRequest::getVersion, -1),
+                getStringOrEmpty(request, CreateProcessInstanceRequest::getProcessDefinitionId),
+                getIntOrDefault(
+                    request, CreateProcessInstanceRequest::getProcessDefinitionVersion, -1),
                 getMapOrEmpty(request, CreateProcessInstanceRequest::getVariables),
-                request.getTenantId(),
+                tenantId,
                 request.getAwaitCompletion(),
                 request.getRequestTimeout(),
                 request.getOperationReference(),
@@ -460,7 +703,8 @@ public class RequestMapper {
                             new io.camunda.zeebe.protocol.impl.record.value.processinstance
                                     .ProcessInstanceCreationStartInstruction()
                                 .setElementId(instruction.getElementId()))
-                    .toList()));
+                    .toList(),
+                request.getFetchVariables()));
   }
 
   public static Either<ProblemDetail, ProcessInstanceCancelRequest> toCancelProcessInstance(
@@ -508,6 +752,48 @@ public class RequestMapper {
                 request.getOperationReference()));
   }
 
+  public static Either<ProblemDetail, DecisionEvaluationRequest> toEvaluateDecisionRequest(
+      final EvaluateDecisionRequest request, final boolean multiTenancyEnabled) {
+    final Either<ProblemDetail, String> validationResponse =
+        validateTenantId(request.getTenantId(), multiTenancyEnabled, "Evaluate Decision")
+            .flatMap(
+                tenantId ->
+                    validateEvaluateDecisionRequest(request)
+                        .map(Either::<ProblemDetail, String>left)
+                        .orElseGet(() -> Either.right(tenantId)));
+    return validationResponse.map(
+        tenantId ->
+            new DecisionEvaluationRequest(
+                getStringOrEmpty(request, EvaluateDecisionRequest::getDecisionDefinitionId),
+                getLongOrDefault(request, EvaluateDecisionRequest::getDecisionDefinitionKey, -1L),
+                getMapOrEmpty(request, EvaluateDecisionRequest::getVariables),
+                tenantId));
+  }
+
+  public static Either<ProblemDetail, TenantDTO> toTenantCreateDto(
+      final TenantCreateRequest tenantCreateRequest) {
+    return getResult(
+        TenantRequestValidator.validateTenantCreateRequest(tenantCreateRequest),
+        () ->
+            new TenantDTO(
+                null,
+                tenantCreateRequest.getTenantId(),
+                tenantCreateRequest.getName(),
+                tenantCreateRequest.getDescription()));
+  }
+
+  public static Either<ProblemDetail, TenantDTO> toTenantUpdateDto(
+      final String tenantId, final TenantUpdateRequest tenantUpdateRequest) {
+    return getResult(
+        TenantRequestValidator.validateTenantUpdateRequest(tenantUpdateRequest),
+        () ->
+            new TenantDTO(
+                null,
+                tenantId,
+                tenantUpdateRequest.getName(),
+                tenantUpdateRequest.getDescription()));
+  }
+
   private static List<ProcessInstanceModificationActivateInstruction>
       mapProcessInstanceModificationActivateInstruction(
           final List<ModifyProcessInstanceActivateInstruction> instructions) {
@@ -534,7 +820,60 @@ public class RequestMapper {
 
   private static <R> Map<String, Object> getMapOrEmpty(
       final R request, final Function<R, Map<String, Object>> mapExtractor) {
-    return request == null ? Map.of() : mapExtractor.apply(request);
+    final Map<String, Object> value = request == null ? null : mapExtractor.apply(request);
+    return value == null ? Map.of() : value;
+  }
+
+  private static JobResult getJobResultOrDefault(final JobCompletionRequest request) {
+    if (request == null || request.getResult() == null) {
+      return new JobResult();
+    }
+
+    final JobResult jobResult = new JobResult();
+    jobResult.setDenied(getBooleanOrDefault(request, r -> r.getResult().getDenied(), false));
+
+    final var jobResultCorrections = request.getResult().getCorrections();
+    if (jobResultCorrections == null) {
+      return jobResult;
+    }
+
+    final JobResultCorrections corrections = new JobResultCorrections();
+    final List<String> correctedAttributes = new ArrayList<>();
+
+    if (jobResultCorrections.getAssignee() != null) {
+      corrections.setAssignee(jobResultCorrections.getAssignee());
+      correctedAttributes.add(UserTaskRecord.ASSIGNEE);
+    }
+    if (jobResultCorrections.getDueDate() != null) {
+      corrections.setDueDate(jobResultCorrections.getDueDate());
+      correctedAttributes.add(UserTaskRecord.DUE_DATE);
+    }
+    if (jobResultCorrections.getFollowUpDate() != null) {
+      corrections.setFollowUpDate(jobResultCorrections.getFollowUpDate());
+      correctedAttributes.add(UserTaskRecord.FOLLOW_UP_DATE);
+    }
+    if (jobResultCorrections.getCandidateUsers() != null) {
+      corrections.setCandidateUsersList(jobResultCorrections.getCandidateUsers());
+      correctedAttributes.add(UserTaskRecord.CANDIDATE_USERS);
+    }
+    if (jobResultCorrections.getCandidateGroups() != null) {
+      corrections.setCandidateGroupsList(jobResultCorrections.getCandidateGroups());
+      correctedAttributes.add(UserTaskRecord.CANDIDATE_GROUPS);
+    }
+    if (jobResultCorrections.getPriority() != null) {
+      corrections.setPriority(jobResultCorrections.getPriority());
+      correctedAttributes.add(UserTaskRecord.PRIORITY);
+    }
+
+    jobResult.setCorrections(corrections);
+    jobResult.setCorrectedAttributes(correctedAttributes);
+    return jobResult;
+  }
+
+  private static <R> boolean getBooleanOrDefault(
+      final R request, final Function<R, Boolean> valueExtractor, final boolean defaultValue) {
+    final Boolean value = request == null ? null : valueExtractor.apply(request);
+    return value == null ? defaultValue : value;
   }
 
   private static <R> String getStringOrEmpty(
@@ -587,10 +926,21 @@ public class RequestMapper {
   public record ErrorJobRequest(
       long jobKey, String errorCode, String errorMessage, Map<String, Object> variables) {}
 
-  public record CompleteJobRequest(long jobKey, Map<String, Object> variables) {}
+  public record CompleteJobRequest(long jobKey, Map<String, Object> variables, JobResult result) {}
 
   public record UpdateJobRequest(long jobKey, UpdateJobChangeset changeset) {}
 
   public record BroadcastSignalRequest(
       String signalName, Map<String, Object> variables, String tenantId) {}
+
+  public record DecisionEvaluationRequest(
+      String decisionId, Long decisionKey, Map<String, Object> variables, String tenantId) {}
+
+  public record CreateRoleRequest(String name) {}
+
+  public record UpdateRoleRequest(long roleKey, String name) {}
+
+  public record CreateGroupRequest(String name) {}
+
+  public record UpdateGroupRequest(long groupKey, String name) {}
 }

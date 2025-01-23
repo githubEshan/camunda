@@ -7,38 +7,29 @@
  */
 package io.camunda.optimize.upgrade.steps.schema;
 
-import io.camunda.optimize.service.db.schema.IndexMappingCreator;
 import io.camunda.optimize.service.db.schema.OptimizeIndexNameService;
-import io.camunda.optimize.upgrade.es.SchemaUpgradeClient;
-import io.camunda.optimize.upgrade.exception.UpgradeRuntimeException;
+import io.camunda.optimize.upgrade.db.SchemaUpgradeClient;
 import io.camunda.optimize.upgrade.steps.UpgradeStep;
 import io.camunda.optimize.upgrade.steps.UpgradeStepType;
-import lombok.EqualsAndHashCode;
-import lombok.Getter;
 
-@EqualsAndHashCode(callSuper = true)
 public class DeleteIndexIfExistsStep extends UpgradeStep {
 
   // This should be the name of the index without prefix and without version suffix
-  @Getter private final String indexName;
-  @Getter private final int indexVersion;
+  private final String indexName;
+  private final int indexVersion;
 
   public DeleteIndexIfExistsStep(final String indexName, final int indexVersion) {
     super(null);
     this.indexName = indexName;
     this.indexVersion = indexVersion;
+    skipIndexConversion = true;
   }
 
   @Override
-  public IndexMappingCreator getIndex() {
-    throw new UpgradeRuntimeException("Index class does not exist as it is being deleted");
-  }
-
-  @Override
-  public void execute(final SchemaUpgradeClient schemaUpgradeClient) {
+  public void performUpgradeStep(final SchemaUpgradeClient<?, ?, ?> schemaUpgradeClient) {
     final OptimizeIndexNameService indexNameService = schemaUpgradeClient.getIndexNameService();
     final String indexAlias = indexNameService.getOptimizeIndexAliasForIndex(indexName);
-    schemaUpgradeClient.getAliasMap(indexAlias).keySet().stream()
+    schemaUpgradeClient.getAliases(indexAlias).stream()
         .filter(indexName -> indexName.contains(this.indexName))
         .forEach(schemaUpgradeClient::deleteIndexIfExists);
   }
@@ -51,5 +42,28 @@ public class DeleteIndexIfExistsStep extends UpgradeStep {
   @Override
   public UpgradeStepType getType() {
     return UpgradeStepType.SCHEMA_DELETE_INDEX;
+  }
+
+  @Override
+  public boolean equals(final Object o) {
+    return org.apache.commons.lang3.builder.EqualsBuilder.reflectionEquals(this, o);
+  }
+
+  @Override
+  protected boolean canEqual(final Object other) {
+    return other instanceof DeleteIndexIfExistsStep;
+  }
+
+  @Override
+  public int hashCode() {
+    return org.apache.commons.lang3.builder.HashCodeBuilder.reflectionHashCode(this);
+  }
+
+  public String getIndexName() {
+    return this.indexName;
+  }
+
+  public int getIndexVersion() {
+    return this.indexVersion;
   }
 }

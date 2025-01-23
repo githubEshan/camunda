@@ -9,6 +9,7 @@ package io.camunda.zeebe.journal.file;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import io.camunda.zeebe.journal.CheckedJournalException.FlushException;
 import io.camunda.zeebe.util.buffer.BufferUtil;
 import java.io.IOException;
 import java.nio.MappedByteBuffer;
@@ -30,6 +31,8 @@ final class SegmentedJournalWriterTest {
 
   private SegmentsManager segments;
   private SegmentedJournalWriter writer;
+  private final SegmentDescriptorSerializer descriptorSerializer =
+      new SegmentDescriptorSerializerSbe();
 
   private void fillWithOnes(final FileChannel channel, final long size) {
     // Fill with ones to verify in tests that the append invalidates next entry by overwriting with
@@ -50,7 +53,7 @@ final class SegmentedJournalWriterTest {
   }
 
   @Test
-  void shouldResetLastFlushedIndexOnDeleteAfter() {
+  void shouldResetLastFlushedIndexOnDeleteAfter() throws FlushException {
     // given
     writer.append(1, journalFactory.entry());
     writer.append(2, journalFactory.entry());
@@ -67,7 +70,7 @@ final class SegmentedJournalWriterTest {
   }
 
   @Test
-  void shouldResetLastFlushedIndexOnReset() {
+  void shouldResetLastFlushedIndexOnReset() throws FlushException {
     // given
     writer.append(1, journalFactory.entry());
     writer.append(2, journalFactory.entry());
@@ -107,15 +110,17 @@ final class SegmentedJournalWriterTest {
     }
     final var lastIndexInFirstSegment = segments.getLastSegment().index() - 1;
 
-    final SegmentDescriptor descriptorToCorrupt = segments.getFirstSegment().descriptor();
-    final Segment firstSegment = segments.getFirstSegment();
-    descriptorToCorrupt.setLastPosition(firstSegment.descriptor().lastPosition() + 1);
+    final var descriptor = segments.getFirstSegment().descriptor();
+    final var firstSegment = segments.getFirstSegment();
+    final var corruptedDescriptor =
+        descriptor.withUpdatedIndices(
+            descriptor.lastIndex(), firstSegment.descriptor().lastPosition() + 1);
     final var segmentFile = firstSegment.file().file().toPath();
     try (final FileChannel channel =
         FileChannel.open(segmentFile, StandardOpenOption.READ, StandardOpenOption.WRITE)) {
       final MappedByteBuffer buffer =
-          channel.map(MapMode.READ_WRITE, 0, descriptorToCorrupt.length());
-      descriptorToCorrupt.updateIfCurrentVersion(buffer);
+          channel.map(MapMode.READ_WRITE, 0, descriptorSerializer.encodingLength());
+      descriptorSerializer.writeTo(corruptedDescriptor, buffer);
     }
 
     // when

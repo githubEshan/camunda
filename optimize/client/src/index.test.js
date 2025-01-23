@@ -6,9 +6,9 @@
  * except in compliance with the Camunda License 1.0.
  */
 
-const fs = require('fs');
+import fs from 'fs';
 
-const blacklistedFiles = ['setupTests.ts'];
+const blacklistedFiles = ['setupTests.ts', 'jest.polyfills.ts'];
 const blacklistedDependencies = ['@lexical/'];
 
 function getAllFilesInDirectory(dir, filelist) {

@@ -15,6 +15,10 @@
  */
 package io.camunda.zeebe.protocol.record.intent;
 
+import java.util.Set;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
+
 public enum UserTaskIntent implements ProcessInstanceRelatedIntent {
   CREATING(0),
   CREATED(1),
@@ -36,7 +40,58 @@ public enum UserTaskIntent implements ProcessInstanceRelatedIntent {
   UPDATING(12),
   UPDATED(13),
 
-  MIGRATED(14);
+  MIGRATED(14),
+
+  /**
+   * Represents the intent that signals about the completion of task listener job, allowing either
+   * the creation of the next task listener or the finalization of the original user task command
+   * (e.g., COMPLETE, UPDATE, ASSIGN) once all task listeners have been processed.
+   *
+   * <p>Until this intent is written, the processing of the user task is paused, ensuring that the
+   * operations defined by the listener are fully executed before proceeding with the original task
+   * command.
+   */
+  COMPLETE_TASK_LISTENER(15),
+
+  /**
+   * Represents the intent that means Task Listener denied the operation and the creation of the
+   * next task listener or the finalization of the original user task command (COMPLETE) is not
+   * happening, but instead, COMPLETION_DENIED event will be written in order to revert the User
+   * Task to CREATED state. The job for the Task Listener itself in this case completes
+   * successfully.
+   *
+   * <p>Until this intent is written, the processing of the user task is paused, ensuring that the
+   * operations defined by the listener are fully executed before reverting the User Task to the
+   * CREATED state.
+   */
+  DENY_TASK_LISTENER(16),
+
+  /**
+   * Represents the intent indicating that the User Task will not be completed, but rather will be
+   * reverted to the CREATED state.
+   */
+  COMPLETION_DENIED(17),
+
+  /**
+   * Represents the intent indicating that the User Task data was corrected by a Task Listener. This
+   * means the user task data available to any subsequent Task Listeners uses the corrected values.
+   * Note that the changes are only applied to the User Task instance after all Task Listeners have
+   * been handled and none denied the operation.
+   */
+  CORRECTED(18),
+
+  /**
+   * Represents the intent indicating that the User Task will not be assigned and the user task's
+   * assignee remains unchanged. The user task will be reverted to the CREATED lifecycle state.
+   */
+  ASSIGNMENT_DENIED(19),
+
+  /**
+   * Represents the intent indicating that a User Task is being claimed by a user for themselves.
+   * This intent is written during the processing of a CLAIM command and marks the User Task with
+   * the `CLAIMING` lifecycle state.
+   */
+  CLAIMING(20);
 
   private final short value;
   private final boolean shouldBanInstance;
@@ -86,6 +141,18 @@ public enum UserTaskIntent implements ProcessInstanceRelatedIntent {
         return UPDATED;
       case 14:
         return MIGRATED;
+      case 15:
+        return COMPLETE_TASK_LISTENER;
+      case 16:
+        return DENY_TASK_LISTENER;
+      case 17:
+        return COMPLETION_DENIED;
+      case 18:
+        return CORRECTED;
+      case 19:
+        return ASSIGNMENT_DENIED;
+      case 20:
+        return CLAIMING;
       default:
         return UNKNOWN;
     }
@@ -110,6 +177,10 @@ public enum UserTaskIntent implements ProcessInstanceRelatedIntent {
       case UPDATING:
       case UPDATED:
       case MIGRATED:
+      case COMPLETION_DENIED:
+      case CORRECTED:
+      case ASSIGNMENT_DENIED:
+      case CLAIMING:
         return true;
       default:
         return false;
@@ -119,5 +190,11 @@ public enum UserTaskIntent implements ProcessInstanceRelatedIntent {
   @Override
   public boolean shouldBanInstanceOnError() {
     return shouldBanInstance;
+  }
+
+  public static Set<UserTaskIntent> commands() {
+    return Stream.of(UserTaskIntent.values())
+        .filter(intent -> !intent.isEvent())
+        .collect(Collectors.toSet());
   }
 }

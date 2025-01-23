@@ -10,23 +10,87 @@ package io.camunda.optimize.dto.optimize.persistence;
 import io.camunda.optimize.dto.optimize.OptimizeDto;
 import java.io.Serializable;
 import java.time.OffsetDateTime;
-import lombok.AllArgsConstructor;
-import lombok.Data;
-import lombok.EqualsAndHashCode;
-import lombok.NoArgsConstructor;
 
-@NoArgsConstructor
-@AllArgsConstructor
-@Data
-@EqualsAndHashCode(onlyExplicitlyIncluded = true)
 public class CandidateGroupOperationDto implements OptimizeDto, Serializable {
 
-  @EqualsAndHashCode.Include private String id;
-
+  private String id;
   private String groupId;
   private String operationType;
   private OffsetDateTime timestamp;
 
+  public CandidateGroupOperationDto(
+      final String id,
+      final String groupId,
+      final String operationType,
+      final OffsetDateTime timestamp) {
+    this.id = id;
+    this.groupId = groupId;
+    this.operationType = operationType;
+    this.timestamp = timestamp;
+  }
+
+  public CandidateGroupOperationDto() {}
+
+  public String getId() {
+    return id;
+  }
+
+  public void setId(final String id) {
+    this.id = id;
+  }
+
+  public String getGroupId() {
+    return groupId;
+  }
+
+  public void setGroupId(final String groupId) {
+    this.groupId = groupId;
+  }
+
+  public String getOperationType() {
+    return operationType;
+  }
+
+  public void setOperationType(final String operationType) {
+    this.operationType = operationType;
+  }
+
+  public OffsetDateTime getTimestamp() {
+    return timestamp;
+  }
+
+  public void setTimestamp(final OffsetDateTime timestamp) {
+    this.timestamp = timestamp;
+  }
+
+  protected boolean canEqual(final Object other) {
+    return other instanceof CandidateGroupOperationDto;
+  }
+
+  @Override
+  public int hashCode() {
+    return org.apache.commons.lang3.builder.HashCodeBuilder.reflectionHashCode(this);
+  }
+
+  @Override
+  public boolean equals(final Object o) {
+    return org.apache.commons.lang3.builder.EqualsBuilder.reflectionEquals(this, o);
+  }
+
+  @Override
+  public String toString() {
+    return "CandidateGroupOperationDto(id="
+        + getId()
+        + ", groupId="
+        + getGroupId()
+        + ", operationType="
+        + getOperationType()
+        + ", timestamp="
+        + getTimestamp()
+        + ")";
+  }
+
+  @SuppressWarnings("checkstyle:ConstantName")
   public static final class Fields {
 
     public static final String id = "id";

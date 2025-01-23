@@ -12,10 +12,9 @@ import com.fasterxml.jackson.annotation.JsonProperty;
 import io.camunda.optimize.util.SuppressionConstants;
 import java.util.Map;
 import java.util.Optional;
-import lombok.Data;
 
-@Data
 public class AuthConfiguration {
+
   @JsonProperty("cloud")
   private CloudAuthConfiguration cloudAuthConfiguration;
 
@@ -31,6 +30,8 @@ public class AuthConfiguration {
   @JsonProperty("cookie")
   private CookieConfiguration cookieConfiguration;
 
+  public AuthConfiguration() {}
+
   @JsonIgnore
   public int getTokenLifeTimeMinutes() {
     return tokenLifeTime;
@@ -40,10 +41,80 @@ public class AuthConfiguration {
     return Optional.ofNullable(tokenSecret);
   }
 
+  @JsonProperty("token.secret")
+  public void setTokenSecret(final String tokenSecret) {
+    this.tokenSecret = tokenSecret;
+  }
+
   @SuppressWarnings(SuppressionConstants.UNUSED)
   @JsonProperty("token")
   private void unpackToken(final Map<String, String> token) {
     tokenLifeTime = Integer.valueOf(token.get("lifeMin"));
     tokenSecret = token.get("secret");
+  }
+
+  public CloudAuthConfiguration getCloudAuthConfiguration() {
+    return cloudAuthConfiguration;
+  }
+
+  @JsonProperty("cloud")
+  public void setCloudAuthConfiguration(final CloudAuthConfiguration cloudAuthConfiguration) {
+    this.cloudAuthConfiguration = cloudAuthConfiguration;
+  }
+
+  public CCSMAuthConfiguration getCcsmAuthConfiguration() {
+    return ccsmAuthConfiguration;
+  }
+
+  @JsonProperty("ccsm")
+  public void setCcsmAuthConfiguration(final CCSMAuthConfiguration ccsmAuthConfiguration) {
+    this.ccsmAuthConfiguration = ccsmAuthConfiguration;
+  }
+
+  public Integer getTokenLifeTime() {
+    return tokenLifeTime;
+  }
+
+  @JsonProperty("token.lifeMin")
+  public void setTokenLifeTime(final Integer tokenLifeTime) {
+    this.tokenLifeTime = tokenLifeTime;
+  }
+
+  public CookieConfiguration getCookieConfiguration() {
+    return cookieConfiguration;
+  }
+
+  @JsonProperty("cookie")
+  public void setCookieConfiguration(final CookieConfiguration cookieConfiguration) {
+    this.cookieConfiguration = cookieConfiguration;
+  }
+
+  protected boolean canEqual(final Object other) {
+    return other instanceof AuthConfiguration;
+  }
+
+  @Override
+  public int hashCode() {
+    return org.apache.commons.lang3.builder.HashCodeBuilder.reflectionHashCode(this);
+  }
+
+  @Override
+  public boolean equals(final Object o) {
+    return org.apache.commons.lang3.builder.EqualsBuilder.reflectionEquals(this, o);
+  }
+
+  @Override
+  public String toString() {
+    return "AuthConfiguration(cloudAuthConfiguration="
+        + getCloudAuthConfiguration()
+        + ", ccsmAuthConfiguration="
+        + getCcsmAuthConfiguration()
+        + ", tokenLifeTime="
+        + getTokenLifeTime()
+        + ", tokenSecret="
+        + getTokenSecret()
+        + ", cookieConfiguration="
+        + getCookieConfiguration()
+        + ")";
   }
 }

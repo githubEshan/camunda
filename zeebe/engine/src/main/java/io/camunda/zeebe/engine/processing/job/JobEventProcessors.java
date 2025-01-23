@@ -11,6 +11,7 @@ import io.camunda.zeebe.engine.EngineConfiguration;
 import io.camunda.zeebe.engine.metrics.JobMetrics;
 import io.camunda.zeebe.engine.processing.bpmn.behavior.BpmnBehaviors;
 import io.camunda.zeebe.engine.processing.common.EventHandle;
+import io.camunda.zeebe.engine.processing.identity.AuthorizationCheckBehavior;
 import io.camunda.zeebe.engine.processing.streamprocessor.TypedRecordProcessors;
 import io.camunda.zeebe.engine.processing.streamprocessor.writers.Writers;
 import io.camunda.zeebe.engine.state.immutable.ScheduledTaskState;
@@ -31,7 +32,8 @@ public final class JobEventProcessors {
       final Writers writers,
       final JobMetrics jobMetrics,
       final EngineConfiguration config,
-      final InstantSource clock) {
+      final InstantSource clock,
+      final AuthorizationCheckBehavior authCheckBehavior) {
 
     final var keyGenerator = processingState.getKeyGenerator();
 
@@ -50,7 +52,7 @@ public final class JobEventProcessors {
         .onCommand(
             ValueType.JOB,
             JobIntent.COMPLETE,
-            new JobCompleteProcessor(processingState, jobMetrics, eventHandle))
+            new JobCompleteProcessor(processingState, jobMetrics, eventHandle, authCheckBehavior))
         .onCommand(
             ValueType.JOB,
             JobIntent.FAIL,
@@ -60,11 +62,12 @@ public final class JobEventProcessors {
                 processingState.getKeyGenerator(),
                 jobMetrics,
                 jobBackoffChecker,
-                bpmnBehaviors))
+                bpmnBehaviors,
+                authCheckBehavior))
         .onCommand(
             ValueType.JOB,
             JobIntent.YIELD,
-            new JobYieldProcessor(processingState, bpmnBehaviors, writers))
+            new JobYieldProcessor(processingState, bpmnBehaviors, writers, authCheckBehavior))
         .onCommand(
             ValueType.JOB,
             JobIntent.THROW_ERROR,
@@ -72,7 +75,8 @@ public final class JobEventProcessors {
                 processingState,
                 bpmnBehaviors.eventPublicationBehavior(),
                 keyGenerator,
-                jobMetrics))
+                jobMetrics,
+                authCheckBehavior))
         .onCommand(
             ValueType.JOB,
             JobIntent.TIME_OUT,
@@ -101,7 +105,11 @@ public final class JobEventProcessors {
             ValueType.JOB_BATCH,
             JobBatchIntent.ACTIVATE,
             new JobBatchActivateProcessor(
-                writers, processingState, processingState.getKeyGenerator(), jobMetrics))
+                writers,
+                processingState,
+                processingState.getKeyGenerator(),
+                jobMetrics,
+                authCheckBehavior))
         .withListener(
             new JobTimeoutCheckerScheduler(
                 scheduledTaskStateFactory.get().getJobState(),

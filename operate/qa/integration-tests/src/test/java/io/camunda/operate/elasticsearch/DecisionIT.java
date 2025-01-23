@@ -12,8 +12,6 @@ import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.when;
 
 import com.fasterxml.jackson.core.type.TypeReference;
-import io.camunda.operate.entities.dmn.definition.DecisionDefinitionEntity;
-import io.camunda.operate.entities.dmn.definition.DecisionRequirementsEntity;
 import io.camunda.operate.property.OperateProperties;
 import io.camunda.operate.util.OperateAbstractIT;
 import io.camunda.operate.util.SearchTestRule;
@@ -23,8 +21,10 @@ import io.camunda.operate.webapp.rest.dto.DecisionRequestDto;
 import io.camunda.operate.webapp.rest.dto.dmn.DecisionGroupDto;
 import io.camunda.operate.webapp.rest.exception.NotFoundException;
 import io.camunda.operate.webapp.security.identity.IdentityPermission;
-import io.camunda.operate.webapp.security.identity.PermissionsService;
+import io.camunda.operate.webapp.security.permission.PermissionsService;
 import io.camunda.operate.webapp.security.tenant.TenantService;
+import io.camunda.webapps.schema.entities.operate.dmn.definition.DecisionDefinitionEntity;
+import io.camunda.webapps.schema.entities.operate.dmn.definition.DecisionRequirementsEntity;
 import java.util.List;
 import java.util.Set;
 import java.util.stream.Collectors;
@@ -42,7 +42,7 @@ import org.springframework.test.web.servlet.MvcResult;
       OperateProperties.PREFIX + ".importer.startLoadingDataOnStartup = false",
       OperateProperties.PREFIX + ".archiver.rolloverEnabled = false",
       "spring.mvc.pathmatch.matching-strategy=ANT_PATH_MATCHER",
-      OperateProperties.PREFIX + ".multiTenancy.enabled = true"
+      "camunda.security.multiTenancy.enabled = true"
     })
 public class DecisionIT extends OperateAbstractIT {
 
@@ -72,6 +72,7 @@ public class DecisionIT extends OperateAbstractIT {
     searchTestRule.persistNew(decision1, decision2, decision3);
 
     // when
+    when(permissionsService.permissionsEnabled()).thenReturn(true);
     when(permissionsService.getDecisionsWithPermission(IdentityPermission.READ))
         .thenReturn(PermissionsService.ResourcesAllowed.withIds(Set.of()));
     final MvcResult mvcResult = postRequest(QUERY_DECISION_GROUPED_URL, new DecisionRequestDto());
@@ -102,6 +103,7 @@ public class DecisionIT extends OperateAbstractIT {
     searchTestRule.persistNew(decision1, decision2, decision3);
 
     // when
+    when(permissionsService.permissionsEnabled()).thenReturn(true);
     when(permissionsService.getDecisionsWithPermission(IdentityPermission.READ))
         .thenReturn(PermissionsService.ResourcesAllowed.all());
     final MvcResult mvcResult = postRequest(QUERY_DECISION_GROUPED_URL, new DecisionRequestDto());
@@ -134,6 +136,7 @@ public class DecisionIT extends OperateAbstractIT {
     searchTestRule.persistNew(decision1, decision2, decision3);
 
     // when
+    when(permissionsService.permissionsEnabled()).thenReturn(true);
     when(permissionsService.getDecisionsWithPermission(IdentityPermission.READ))
         .thenReturn(PermissionsService.ResourcesAllowed.withIds(Set.of(decisionId2)));
     final MvcResult mvcResult = postRequest(QUERY_DECISION_GROUPED_URL, new DecisionRequestDto());

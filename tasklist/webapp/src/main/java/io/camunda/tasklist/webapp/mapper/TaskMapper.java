@@ -13,10 +13,10 @@ import io.camunda.tasklist.webapp.api.rest.v1.entities.TaskResponse;
 import io.camunda.tasklist.webapp.api.rest.v1.entities.TaskSearchRequest;
 import io.camunda.tasklist.webapp.api.rest.v1.entities.TaskSearchResponse;
 import io.camunda.tasklist.webapp.api.rest.v1.entities.VariableSearchResponse;
+import io.camunda.tasklist.webapp.dto.TaskDTO;
+import io.camunda.tasklist.webapp.dto.TaskQueryDTO;
+import io.camunda.tasklist.webapp.dto.VariableDTO;
 import io.camunda.tasklist.webapp.es.cache.ProcessCache;
-import io.camunda.tasklist.webapp.graphql.entity.TaskDTO;
-import io.camunda.tasklist.webapp.graphql.entity.TaskQueryDTO;
-import io.camunda.tasklist.webapp.graphql.entity.VariableDTO;
 import java.util.Arrays;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -43,7 +43,11 @@ public class TaskMapper {
             .setTaskState(taskDTO.getTaskState())
             .setSortValues(taskDTO.getSortValues())
             .setIsFirst(taskDTO.getIsFirst())
-            .setFormKey(taskDTO.getFormKey())
+            .setFormKey(
+                (taskDTO.getExternalFormReference() == null
+                        || taskDTO.getExternalFormReference().isBlank())
+                    ? taskDTO.getFormKey()
+                    : taskDTO.getExternalFormReference())
             .setFormId(taskDTO.getFormId())
             .setFormVersion(taskDTO.getFormVersion())
             .setIsFormEmbedded(taskDTO.getIsFormEmbedded())
@@ -113,7 +117,11 @@ public class TaskMapper {
         .setCompletionDate(taskDTO.getCompletionTime())
         .setAssignee(taskDTO.getAssignee())
         .setTaskState(taskDTO.getTaskState())
-        .setFormKey(taskDTO.getFormKey())
+        .setFormKey(
+            taskDTO.getExternalFormReference() == null
+                    || taskDTO.getExternalFormReference().isBlank()
+                ? taskDTO.getFormKey()
+                : taskDTO.getExternalFormReference())
         .setFormId(taskDTO.getFormId())
         .setFormVersion(taskDTO.getFormVersion())
         .setIsFormEmbedded(taskDTO.getIsFormEmbedded())

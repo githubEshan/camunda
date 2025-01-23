@@ -7,39 +7,65 @@
  */
 package io.camunda.optimize.dto.optimize.query.report.combined.configuration.target_value;
 
-import java.util.Objects;
-import lombok.AllArgsConstructor;
-import lombok.Getter;
-import lombok.NoArgsConstructor;
-import lombok.Setter;
-import lombok.ToString;
-
-@Setter
-@Getter
-@AllArgsConstructor
-@NoArgsConstructor
-@ToString
 public class CombinedReportTargetValueDto {
 
   private CombinedReportCountChartDto countChart = new CombinedReportCountChartDto();
   private Boolean active = false;
   private CombinedReportDurationChartDto durationChart = new CombinedReportDurationChartDto();
 
-  @Override
-  public boolean equals(final Object o) {
-    if (this == o) {
-      return true;
-    }
-    if (!(o instanceof final CombinedReportTargetValueDto that)) {
-      return false;
-    }
-    return Objects.equals(countChart, that.countChart)
-        && Objects.equals(active, that.active)
-        && Objects.equals(durationChart, that.durationChart);
+  public CombinedReportTargetValueDto(
+      final CombinedReportCountChartDto countChart,
+      final Boolean active,
+      final CombinedReportDurationChartDto durationChart) {
+    this.countChart = countChart;
+    this.active = active;
+    this.durationChart = durationChart;
   }
+
+  public CombinedReportTargetValueDto() {}
 
   @Override
   public int hashCode() {
-    return Objects.hash(countChart, active, durationChart);
+    return org.apache.commons.lang3.builder.HashCodeBuilder.reflectionHashCode(this);
+  }
+
+  @Override
+  public boolean equals(final Object o) {
+    return org.apache.commons.lang3.builder.EqualsBuilder.reflectionEquals(this, o);
+  }
+
+  @Override
+  public String toString() {
+    return "CombinedReportTargetValueDto(countChart="
+        + getCountChart()
+        + ", active="
+        + getActive()
+        + ", durationChart="
+        + getDurationChart()
+        + ")";
+  }
+
+  public CombinedReportCountChartDto getCountChart() {
+    return countChart;
+  }
+
+  public void setCountChart(final CombinedReportCountChartDto countChart) {
+    this.countChart = countChart;
+  }
+
+  public Boolean getActive() {
+    return active;
+  }
+
+  public void setActive(final Boolean active) {
+    this.active = active;
+  }
+
+  public CombinedReportDurationChartDto getDurationChart() {
+    return durationChart;
+  }
+
+  public void setDurationChart(final CombinedReportDurationChartDto durationChart) {
+    this.durationChart = durationChart;
   }
 }

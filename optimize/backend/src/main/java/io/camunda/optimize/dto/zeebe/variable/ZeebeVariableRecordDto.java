@@ -9,7 +9,21 @@ package io.camunda.optimize.dto.zeebe.variable;
 
 import io.camunda.optimize.dto.zeebe.ZeebeRecordDto;
 import io.camunda.zeebe.protocol.record.intent.VariableIntent;
-import lombok.EqualsAndHashCode;
 
-@EqualsAndHashCode(callSuper = true)
-public class ZeebeVariableRecordDto extends ZeebeRecordDto<ZeebeVariableDataDto, VariableIntent> {}
+public class ZeebeVariableRecordDto extends ZeebeRecordDto<ZeebeVariableDataDto, VariableIntent> {
+
+  @Override
+  protected boolean canEqual(final Object other) {
+    return other instanceof ZeebeVariableRecordDto;
+  }
+
+  @Override
+  public int hashCode() {
+    return org.apache.commons.lang3.builder.HashCodeBuilder.reflectionHashCode(this);
+  }
+
+  @Override
+  public boolean equals(final Object o) {
+    return org.apache.commons.lang3.builder.EqualsBuilder.reflectionEquals(this, o);
+  }
+}

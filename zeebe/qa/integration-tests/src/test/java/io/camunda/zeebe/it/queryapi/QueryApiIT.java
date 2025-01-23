@@ -9,12 +9,12 @@ package io.camunda.zeebe.it.queryapi;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import io.camunda.zeebe.client.ZeebeClient;
-import io.camunda.zeebe.client.api.response.ActivatedJob;
-import io.camunda.zeebe.client.api.response.CancelProcessInstanceResponse;
-import io.camunda.zeebe.client.api.response.CompleteJobResponse;
-import io.camunda.zeebe.client.api.response.ProcessInstanceEvent;
-import io.camunda.zeebe.client.api.worker.JobHandler;
+import io.camunda.client.CamundaClient;
+import io.camunda.client.api.response.ActivatedJob;
+import io.camunda.client.api.response.CancelProcessInstanceResponse;
+import io.camunda.client.api.response.CompleteJobResponse;
+import io.camunda.client.api.response.ProcessInstanceEvent;
+import io.camunda.client.api.worker.JobHandler;
 import io.camunda.zeebe.gateway.impl.configuration.InterceptorCfg;
 import io.camunda.zeebe.it.queryapi.util.TestAuthorizationClientInterceptor;
 import io.camunda.zeebe.it.queryapi.util.TestAuthorizationListener;
@@ -49,24 +49,29 @@ final class QueryApiIT {
           .endEvent()
           .done();
 
-  @TestZeebe
-  private static final TestStandaloneBroker BROKER =
-      new TestStandaloneBroker()
-          .withBrokerConfig(cfg -> cfg.getExperimental().getQueryApi().setEnabled(true))
-          .withBrokerConfig(
-              cfg -> {
-                final var config = new InterceptorCfg();
-                config.setId("auth");
-                config.setClassName(TestAuthorizationServerInterceptor.class.getName());
-                config.setJarPath(createInterceptorJar().getAbsolutePath());
-                cfg.getGateway().getInterceptors().add(config);
-              });
+  @TestZeebe(initMethod = "initTestStandaloneBroker")
+  private static TestStandaloneBroker broker;
 
   private static long processDefinitionKey;
 
+  @SuppressWarnings("unused")
+  static void initTestStandaloneBroker() {
+    broker =
+        new TestStandaloneBroker()
+            .withBrokerConfig(cfg -> cfg.getExperimental().getQueryApi().setEnabled(true))
+            .withBrokerConfig(
+                cfg -> {
+                  final var config = new InterceptorCfg();
+                  config.setId("auth");
+                  config.setClassName(TestAuthorizationServerInterceptor.class.getName());
+                  config.setJarPath(createInterceptorJar().getAbsolutePath());
+                  cfg.getGateway().getInterceptors().add(config);
+                });
+  }
+
   @BeforeAll
   static void beforeAll() {
-    try (final var client = createZeebeClient("beforeAll")) {
+    try (final var client = createCamundaClient("beforeAll")) {
       final var deployment =
           client.newDeployResourceCommand().addProcessModel(PROCESS, "process.bpmn").send().join();
       processDefinitionKey = deployment.getProcesses().get(0).getProcessDefinitionKey();
@@ -76,7 +81,7 @@ final class QueryApiIT {
   @Test
   void shouldAuthorizeCreateProcessInstance() {
     // given
-    try (final var client = createZeebeClient("tenantA")) {
+    try (final var client = createCamundaClient("tenantA")) {
       // when
       final Future<ProcessInstanceEvent> result =
           client.newCreateInstanceCommand().processDefinitionKey(processDefinitionKey).send();
@@ -89,7 +94,7 @@ final class QueryApiIT {
   @Test
   void shouldDenyCreateProcessInstance() {
     // given
-    try (final var client = createZeebeClient("tenantB")) {
+    try (final var client = createCamundaClient("tenantB")) {
       // when
       final Future<ProcessInstanceEvent> result =
           client.newCreateInstanceCommand().processDefinitionKey(processDefinitionKey).send();
@@ -112,7 +117,7 @@ final class QueryApiIT {
     final long jobKey = activateJob().getKey();
 
     // when
-    try (final var client = createZeebeClient("tenantA")) {
+    try (final var client = createCamundaClient("tenantA")) {
       final Future<CompleteJobResponse> result = client.newCompleteCommand(jobKey).send();
 
       // then
@@ -126,7 +131,7 @@ final class QueryApiIT {
     final long jobKey = activateJob().getKey();
 
     // when
-    try (final var client = createZeebeClient("tenantB")) {
+    try (final var client = createCamundaClient("tenantB")) {
       final Future<CompleteJobResponse> result = client.newCompleteCommand(jobKey).send();
 
       // then
@@ -146,7 +151,7 @@ final class QueryApiIT {
     final long processInstanceKey = activateProcess();
 
     // when
-    try (final var client = createZeebeClient("tenantA")) {
+    try (final var client = createCamundaClient("tenantA")) {
       final Future<CancelProcessInstanceResponse> result =
           client.newCancelInstanceCommand(processInstanceKey).send();
 
@@ -161,7 +166,7 @@ final class QueryApiIT {
     final long processInstanceKey = activateProcess();
 
     // when
-    try (final var client = createZeebeClient("tenantB")) {
+    try (final var client = createCamundaClient("tenantB")) {
       final Future<CancelProcessInstanceResponse> result =
           client.newCancelInstanceCommand(processInstanceKey).send();
 
@@ -188,7 +193,7 @@ final class QueryApiIT {
   private ActivatedJob activateJob() {
     final List<ActivatedJob> jobs = new CopyOnWriteArrayList<>();
     final JobHandler handler = (client, job) -> jobs.add(job);
-    try (final var client = createZeebeClient("tenantA");
+    try (final var client = createCamundaClient("tenantA");
         final var ignored = client.newWorker().jobType("type").handler(handler).open()) {
       client.newCreateInstanceCommand().processDefinitionKey(processDefinitionKey).send().join();
       Awaitility.await("until one job is activated")
@@ -198,8 +203,8 @@ final class QueryApiIT {
     return jobs.get(0);
   }
 
-  private static ZeebeClient createZeebeClient(final String tenant) {
-    return BROKER
+  private static CamundaClient createCamundaClient(final String tenant) {
+    return broker
         .newClientBuilder()
         .withInterceptors(new TestAuthorizationClientInterceptor(tenant))
         .defaultRequestTimeout(Duration.ofMinutes(1))

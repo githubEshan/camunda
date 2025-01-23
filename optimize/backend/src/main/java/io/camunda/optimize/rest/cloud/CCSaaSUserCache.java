@@ -10,11 +10,11 @@ package io.camunda.optimize.rest.cloud;
 import com.github.benmanes.caffeine.cache.Cache;
 import com.github.benmanes.caffeine.cache.Caffeine;
 import io.camunda.optimize.dto.optimize.cloud.CloudUserDto;
+import io.camunda.optimize.rest.exceptions.NotAuthorizedException;
 import io.camunda.optimize.service.security.util.LocalDateUtil;
 import io.camunda.optimize.service.util.configuration.CloudUserCacheConfiguration;
 import io.camunda.optimize.service.util.configuration.ConfigurationService;
 import io.camunda.optimize.service.util.configuration.condition.CCSaaSCondition;
-import jakarta.ws.rs.NotAuthorizedException;
 import java.time.OffsetDateTime;
 import java.time.temporal.ChronoUnit;
 import java.util.Collection;
@@ -23,7 +23,7 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.function.Function;
 import java.util.stream.Collectors;
-import lombok.extern.slf4j.Slf4j;
+import org.slf4j.Logger;
 import org.springframework.context.annotation.Conditional;
 import org.springframework.stereotype.Component;
 
@@ -33,12 +33,12 @@ import org.springframework.stereotype.Component;
  * cache, a request to fetch that user is made directly to the user client
  */
 @Component
-@Slf4j
 @Conditional(CCSaaSCondition.class)
 public class CCSaaSUserCache {
 
   private static final String ERROR_MISSING_ACCESS_TOKEN =
       "Missing user access token for service access.";
+  private static final Logger LOG = org.slf4j.LoggerFactory.getLogger(CCSaaSUserCache.class);
   private final Cache<String, CloudUserDto> cloudUsersCache;
   private final CCSaaSUserClient userClient;
   private final AccountsUserAccessTokenProvider accessTokenProvider;

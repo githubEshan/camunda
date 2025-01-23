@@ -7,6 +7,9 @@
  */
 package io.camunda.tasklist.util;
 
+import static io.camunda.webapps.schema.descriptors.AbstractIndexDescriptor.formatIndexPrefix;
+import static io.camunda.webapps.schema.descriptors.ComponentNames.TASK_LIST;
+
 import com.google.common.collect.Maps;
 import io.camunda.tasklist.exceptions.TasklistRuntimeException;
 import io.camunda.tasklist.property.TasklistProperties;
@@ -15,8 +18,8 @@ import io.camunda.tasklist.schema.IndexMapping.IndexMappingProperty;
 import io.camunda.tasklist.schema.IndexMappingDifference;
 import io.camunda.tasklist.schema.IndexMappingDifference.PropertyDifference;
 import io.camunda.tasklist.schema.SemanticVersion;
-import io.camunda.tasklist.schema.indices.IndexDescriptor;
 import io.camunda.tasklist.schema.manager.SchemaManager;
+import io.camunda.webapps.schema.descriptors.IndexDescriptor;
 import java.io.IOException;
 import java.util.HashMap;
 import java.util.Map;
@@ -141,7 +144,7 @@ public class IndexSchemaValidatorUtil {
       final Set<IndexDescriptor> indexDescriptors) throws IOException {
     final Map<IndexDescriptor, Set<IndexMappingProperty>> newFields = new HashMap<>();
     final Map<String, IndexMapping> indexMappings =
-        schemaManager.getIndexMappings(schemaManager.getIndexPrefix() + "*");
+        schemaManager.getIndexMappings(getTasklistIndexPattern());
     for (final IndexDescriptor indexDescriptor : indexDescriptors) {
       final Map<String, IndexMapping> indexMappingsGroup =
           filterIndexMappings(indexMappings, indexDescriptor);
@@ -153,6 +156,10 @@ public class IndexSchemaValidatorUtil {
       }
     }
     return newFields;
+  }
+
+  private String getTasklistIndexPattern() {
+    return formatIndexPrefix(schemaManager.getIndexPrefix()) + TASK_LIST + "*";
   }
 
   private IndexMappingDifference getDifference(

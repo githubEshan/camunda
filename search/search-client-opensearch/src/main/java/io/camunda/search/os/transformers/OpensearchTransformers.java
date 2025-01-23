@@ -7,9 +7,17 @@
  */
 package io.camunda.search.os.transformers;
 
+import io.camunda.search.clients.aggregator.SearchTermsAggregator;
+import io.camunda.search.clients.core.SearchDeleteRequest;
+import io.camunda.search.clients.core.SearchGetRequest;
+import io.camunda.search.clients.core.SearchGetResponse;
+import io.camunda.search.clients.core.SearchIndexRequest;
 import io.camunda.search.clients.core.SearchQueryHit;
 import io.camunda.search.clients.core.SearchQueryRequest;
 import io.camunda.search.clients.core.SearchQueryResponse;
+import io.camunda.search.clients.core.SearchWriteResponse;
+import io.camunda.search.clients.index.IndexAliasRequest;
+import io.camunda.search.clients.index.IndexAliasResponse;
 import io.camunda.search.clients.query.SearchBoolQuery;
 import io.camunda.search.clients.query.SearchConstantScoreQuery;
 import io.camunda.search.clients.query.SearchExistsQuery;
@@ -25,11 +33,13 @@ import io.camunda.search.clients.query.SearchRangeQuery;
 import io.camunda.search.clients.query.SearchTermQuery;
 import io.camunda.search.clients.query.SearchTermsQuery;
 import io.camunda.search.clients.query.SearchWildcardQuery;
-import io.camunda.search.clients.sort.SearchFieldSort;
-import io.camunda.search.clients.sort.SearchSortOptions;
 import io.camunda.search.clients.source.SearchSourceConfig;
 import io.camunda.search.clients.source.SearchSourceFilter;
+import io.camunda.search.clients.transformers.SearchTransfomer;
 import io.camunda.search.clients.types.TypedValue;
+import io.camunda.search.os.transformers.aggregator.TermsAggregationTransformer;
+import io.camunda.search.os.transformers.index.IndexAliasRequestTransformer;
+import io.camunda.search.os.transformers.index.IndexAliasResponseTransformer;
 import io.camunda.search.os.transformers.query.BoolQueryTransformer;
 import io.camunda.search.os.transformers.query.ConstantScoreQueryTransformer;
 import io.camunda.search.os.transformers.query.ExistsQueryTransformer;
@@ -45,15 +55,21 @@ import io.camunda.search.os.transformers.query.RangeQueryTransformer;
 import io.camunda.search.os.transformers.query.TermQueryTransformer;
 import io.camunda.search.os.transformers.query.TermsQueryTransformer;
 import io.camunda.search.os.transformers.query.WildcardQueryTransformer;
+import io.camunda.search.os.transformers.search.SearchDeleteRequestTransformer;
+import io.camunda.search.os.transformers.search.SearchGetRequestTransformer;
+import io.camunda.search.os.transformers.search.SearchGetResponseTransformer;
+import io.camunda.search.os.transformers.search.SearchIndexRequestTransformer;
 import io.camunda.search.os.transformers.search.SearchQueryHitTransformer;
 import io.camunda.search.os.transformers.search.SearchRequestTransformer;
 import io.camunda.search.os.transformers.search.SearchResponseTransformer;
+import io.camunda.search.os.transformers.search.SearchWriteResponseTransformer;
 import io.camunda.search.os.transformers.sort.FieldSortTransformer;
 import io.camunda.search.os.transformers.sort.SortOptionsTransformer;
 import io.camunda.search.os.transformers.source.SourceConfigTransformer;
 import io.camunda.search.os.transformers.source.SourceFilterTransformer;
 import io.camunda.search.os.transformers.types.TypedValueTransformer;
-import io.camunda.search.transformers.SearchTransfomer;
+import io.camunda.search.sort.SearchFieldSort;
+import io.camunda.search.sort.SearchSortOptions;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -80,6 +96,15 @@ public final class OpensearchTransformers {
     mappers.put(SearchQueryResponse.class, new SearchResponseTransformer(mappers));
     mappers.put(SearchQueryHit.class, new SearchQueryHitTransformer(mappers));
 
+    // get request/response
+    mappers.put(SearchGetRequest.class, new SearchGetRequestTransformer(mappers));
+    mappers.put(SearchGetResponse.class, new SearchGetResponseTransformer(mappers));
+
+    // write request/response
+    mappers.put(SearchIndexRequest.class, new SearchIndexRequestTransformer(mappers));
+    mappers.put(SearchDeleteRequest.class, new SearchDeleteRequestTransformer(mappers));
+    mappers.put(SearchWriteResponse.class, new SearchWriteResponseTransformer(mappers));
+
     // queries
     mappers.put(SearchQuery.class, new QueryTransformer(mappers));
     mappers.put(SearchBoolQuery.class, new BoolQueryTransformer(mappers));
@@ -96,6 +121,12 @@ public final class OpensearchTransformers {
     mappers.put(SearchTermsQuery.class, new TermsQueryTransformer(mappers));
     mappers.put(SearchWildcardQuery.class, new WildcardQueryTransformer(mappers));
     mappers.put(SearchHasParentQuery.class, new HasParentQueryTransformer(mappers));
+    mappers.put(SearchTermsAggregator.class, new TermsAggregationTransformer(mappers));
+
+    // index
+
+    mappers.put(IndexAliasResponse.class, new IndexAliasResponseTransformer(mappers));
+    mappers.put(IndexAliasRequest.class, new IndexAliasRequestTransformer(mappers));
 
     // sort
     mappers.put(SearchSortOptions.class, new SortOptionsTransformer(mappers));

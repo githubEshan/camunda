@@ -12,8 +12,7 @@ import java.util.Locale;
 
 public enum DefinitionType {
   PROCESS,
-  DECISION,
-  ;
+  DECISION;
 
   @JsonValue
   public String getId() {
@@ -23,12 +22,5 @@ public enum DefinitionType {
   @Override
   public String toString() {
     return getId();
-  }
-
-  // This is used by jersey on unmarshalling query/path parameters
-  // see
-  // https://docs.jboss.org/resteasy/docs/3.5.0.Final/userguide/html/StringConverter.html#d4e1541
-  public static DefinitionType fromString(final String name) {
-    return valueOf(name.toUpperCase());
   }
 }

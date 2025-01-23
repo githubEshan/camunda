@@ -9,17 +9,20 @@ package io.camunda.operate.zeebeimport;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import io.camunda.operate.entities.ProcessEntity;
-import io.camunda.operate.schema.indices.ProcessIndex;
 import io.camunda.operate.util.j5templates.OperateZeebeSearchAbstractIT;
+import io.camunda.webapps.schema.descriptors.operate.index.ProcessIndex;
+import io.camunda.webapps.schema.entities.operate.ProcessEntity;
 import java.io.IOException;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Qualifier;
 
 public class MultiProcessZeebeImportIT extends OperateZeebeSearchAbstractIT {
 
-  @Autowired private ProcessIndex processIndex;
+  @Autowired
+  @Qualifier("operateProcessIndex")
+  private ProcessIndex processIndex;
 
   @Test
   public void shouldReadFromMultiProcessDiagram() throws IOException {

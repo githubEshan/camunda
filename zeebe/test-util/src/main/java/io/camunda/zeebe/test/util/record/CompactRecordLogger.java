@@ -27,10 +27,12 @@ import io.camunda.zeebe.protocol.record.value.DecisionEvaluationRecordValue;
 import io.camunda.zeebe.protocol.record.value.DeploymentDistributionRecordValue;
 import io.camunda.zeebe.protocol.record.value.DeploymentRecordValue;
 import io.camunda.zeebe.protocol.record.value.ErrorRecordValue;
+import io.camunda.zeebe.protocol.record.value.GroupRecordValue;
 import io.camunda.zeebe.protocol.record.value.IncidentRecordValue;
 import io.camunda.zeebe.protocol.record.value.JobBatchRecordValue;
 import io.camunda.zeebe.protocol.record.value.JobKind;
 import io.camunda.zeebe.protocol.record.value.JobRecordValue;
+import io.camunda.zeebe.protocol.record.value.MappingRecordValue;
 import io.camunda.zeebe.protocol.record.value.MessageBatchRecordValue;
 import io.camunda.zeebe.protocol.record.value.MessageCorrelationRecordValue;
 import io.camunda.zeebe.protocol.record.value.MessageRecordValue;
@@ -45,8 +47,10 @@ import io.camunda.zeebe.protocol.record.value.ProcessInstanceModificationRecordV
 import io.camunda.zeebe.protocol.record.value.ProcessInstanceModificationRecordValue.ProcessInstanceModificationVariableInstructionValue;
 import io.camunda.zeebe.protocol.record.value.ProcessInstanceRecordValue;
 import io.camunda.zeebe.protocol.record.value.ProcessMessageSubscriptionRecordValue;
+import io.camunda.zeebe.protocol.record.value.RoleRecordValue;
 import io.camunda.zeebe.protocol.record.value.SignalRecordValue;
 import io.camunda.zeebe.protocol.record.value.SignalSubscriptionRecordValue;
+import io.camunda.zeebe.protocol.record.value.TenantRecordValue;
 import io.camunda.zeebe.protocol.record.value.TimerRecordValue;
 import io.camunda.zeebe.protocol.record.value.UserTaskRecordValue;
 import io.camunda.zeebe.protocol.record.value.VariableRecordValue;
@@ -99,7 +103,10 @@ public class CompactRecordLogger {
           entry("SIGNAL_SUBSCRIPTION", "SIG_SUBSCRIPTION"),
           entry("SIGNAL", "SIG"),
           entry("COMMAND_DISTRIBUTION", "DSTR"),
-          entry("USER_TASK", "UT"));
+          entry("USER_TASK", "UT"),
+          entry("ROLE", "RL"),
+          entry("GROUP", "GR"),
+          entry("MAPPING", "MAP"));
 
   private static final Map<RecordType, Character> RECORD_TYPE_ABBREVIATIONS =
       ofEntries(
@@ -149,6 +156,10 @@ public class CompactRecordLogger {
     valueLoggers.put(ValueType.COMMAND_DISTRIBUTION, this::summarizeCommandDistribution);
     valueLoggers.put(ValueType.MESSAGE_CORRELATION, this::summarizeMessageCorrelation);
     valueLoggers.put(ValueType.CLOCK, this::summarizeClock);
+    valueLoggers.put(ValueType.ROLE, this::summarizeRole);
+    valueLoggers.put(ValueType.TENANT, this::summarizeTenant);
+    valueLoggers.put(ValueType.GROUP, this::summarizeGroup);
+    valueLoggers.put(ValueType.MAPPING, this::summarizeMapping);
   }
 
   public CompactRecordLogger(final Collection<Record<?>> records) {
@@ -792,12 +803,14 @@ public class CompactRecordLogger {
           summarizeElementInformation(value.getElementId(), value.getElementInstanceKey()));
     }
 
+    addIfNotEmpty(result, value.getChangedAttributes(), " changedAttributes");
     addIfNotEmpty(result, value.getAssignee(), " assignee");
     addIfNotEmpty(result, value.getCandidateUsersList(), " candidateUsersList");
     addIfNotEmpty(result, value.getCandidateGroupsList(), " candidateGroupsList");
     addIfNotEmpty(result, value.getDueDate(), " dueDate");
     addIfNotEmpty(result, value.getFollowUpDate(), " followUpDate");
-    result.append(" priority").append(value.getPriority());
+    result.append(" priority").append(" '").append(value.getPriority()).append("'");
+    addIfNotEmpty(result, value.getAction(), " action");
 
     if (value.getFormKey() != -1) {
       result.append(" with <form ").append(shortenKey(value.getFormKey())).append(">");
@@ -826,7 +839,7 @@ public class CompactRecordLogger {
     final var intent = (CommandDistributionIntent) record.getIntent();
     final var targetPartitionWord =
         switch (intent) {
-          case STARTED, FINISHED -> "on";
+          case STARTED, FINISH, FINISHED, CONTINUATION_REQUESTED, CONTINUE, CONTINUED -> "on";
           case DISTRIBUTING, ENQUEUED -> "to";
           case ACKNOWLEDGE, ACKNOWLEDGED -> "for";
         };
@@ -867,6 +880,76 @@ public class CompactRecordLogger {
         };
 
     return "to %s".formatted(clockValue);
+  }
+
+  private String summarizeRole(final Record<?> record) {
+    final var value = (RoleRecordValue) record.getValue();
+
+    final StringBuilder builder = new StringBuilder("Role[");
+    builder
+        .append("Key=")
+        .append(shortenKey(value.getRoleKey()))
+        .append(", Name=")
+        .append(formatId(value.getName()))
+        .append(", EntityKey=")
+        .append(shortenKey(value.getEntityKey()))
+        .append("]");
+
+    return builder.toString();
+  }
+
+  private String summarizeTenant(final Record<?> record) {
+    final var value = (TenantRecordValue) record.getValue();
+
+    final StringBuilder builder = new StringBuilder("Tenant[");
+    builder
+        .append("Key=")
+        .append(shortenKey(value.getTenantKey()))
+        .append(", Id=")
+        .append(formatId(value.getTenantId()))
+        .append(", Name=")
+        .append(formatId(value.getName()))
+        .append(", EntityKey=")
+        .append(shortenKey(value.getEntityKey()))
+        .append(", EntityId=")
+        .append(formatId(value.getEntityId()))
+        .append("]");
+
+    return builder.toString();
+  }
+
+  private String summarizeGroup(final Record<?> record) {
+    final var value = (GroupRecordValue) record.getValue();
+
+    final StringBuilder builder = new StringBuilder("Group[");
+    builder
+        .append("Key=")
+        .append(shortenKey(value.getGroupKey()))
+        .append(", Name=")
+        .append(formatId(value.getName()))
+        .append(", EntityKey=")
+        .append(shortenKey(value.getEntityKey()))
+        .append(", EntityType=")
+        .append(value.getEntityType())
+        .append("]");
+
+    return builder.toString();
+  }
+
+  private String summarizeMapping(final Record<?> record) {
+    final var value = (MappingRecordValue) record.getValue();
+
+    final StringBuilder builder = new StringBuilder("Mapping[");
+    builder
+        .append("Key=")
+        .append(shortenKey(value.getMappingKey()))
+        .append(", claimName=")
+        .append(value.getClaimName())
+        .append(", claimValue=")
+        .append(value.getClaimValue())
+        .append("]");
+
+    return builder.toString();
   }
 
   private String formatPinnedTime(final long time) {

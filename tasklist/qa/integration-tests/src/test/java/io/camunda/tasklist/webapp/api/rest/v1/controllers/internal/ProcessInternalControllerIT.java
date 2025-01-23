@@ -11,7 +11,6 @@ import static io.camunda.tasklist.util.TestCheck.PROCESS_IS_DEPLOYED_CHECK;
 import static io.camunda.tasklist.util.assertions.CustomAssertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.AssertionsForClassTypes.tuple;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 
@@ -24,8 +23,8 @@ import io.camunda.tasklist.util.ZeebeTestUtil;
 import io.camunda.tasklist.webapp.api.rest.v1.entities.ProcessPublicEndpointsResponse;
 import io.camunda.tasklist.webapp.api.rest.v1.entities.ProcessResponse;
 import io.camunda.tasklist.webapp.api.rest.v1.entities.StartProcessRequest;
-import io.camunda.tasklist.webapp.graphql.entity.ProcessInstanceDTO;
-import io.camunda.tasklist.webapp.graphql.entity.VariableInputDTO;
+import io.camunda.tasklist.webapp.dto.ProcessInstanceDTO;
+import io.camunda.tasklist.webapp.dto.VariableInputDTO;
 import io.camunda.tasklist.webapp.security.TasklistURIs;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
@@ -82,7 +81,7 @@ public class ProcessInternalControllerIT extends TasklistZeebeIntegrationTest {
     final StartProcessRequest startProcessRequest =
         new StartProcessRequest().setVariables(variables);
 
-    final String processId1 = ZeebeTestUtil.deployProcess(zeebeClient, pathProcess);
+    final String processId1 = ZeebeTestUtil.deployProcess(camundaClient, pathProcess);
 
     databaseTestExtension.processAllRecordsAndWait(processIsDeployedCheck, processId1);
 
@@ -106,11 +105,11 @@ public class ProcessInternalControllerIT extends TasklistZeebeIntegrationTest {
     public void searchProcessesByProcessIdWithAndWithoutQuery() {
       tasklistProperties.setVersion(TasklistProperties.ALPHA_RELEASES_SUFIX);
       // given
-      final String processId1 = ZeebeTestUtil.deployProcess(zeebeClient, "simple_process.bpmn");
-      final String processId2 = ZeebeTestUtil.deployProcess(zeebeClient, "simple_process_2.bpmn");
-      final String processId3 = ZeebeTestUtil.deployProcess(zeebeClient, "userTaskForm.bpmn");
+      final String processId1 = ZeebeTestUtil.deployProcess(camundaClient, "simple_process.bpmn");
+      final String processId2 = ZeebeTestUtil.deployProcess(camundaClient, "simple_process_2.bpmn");
+      final String processId3 = ZeebeTestUtil.deployProcess(camundaClient, "userTaskForm.bpmn");
       final String processId4 =
-          ZeebeTestUtil.deployProcess(zeebeClient, "subscribeFormProcess.bpmn");
+          ZeebeTestUtil.deployProcess(camundaClient, "subscribeFormProcess.bpmn");
 
       databaseTestExtension.processAllRecordsAndWait(processIsDeployedCheck, processId1);
       databaseTestExtension.processAllRecordsAndWait(processIsDeployedCheck, processId2);
@@ -196,9 +195,9 @@ public class ProcessInternalControllerIT extends TasklistZeebeIntegrationTest {
     public void searchProcessesWhenWrongQueryProvidedThenEmptyResultReturned() {
       // given
       final String query = "WRONG QUERY";
-      final String processId1 = ZeebeTestUtil.deployProcess(zeebeClient, "simple_process.bpmn");
-      final String processId2 = ZeebeTestUtil.deployProcess(zeebeClient, "simple_process_2.bpmn");
-      final String processId3 = ZeebeTestUtil.deployProcess(zeebeClient, "userTaskForm.bpmn");
+      final String processId1 = ZeebeTestUtil.deployProcess(camundaClient, "simple_process.bpmn");
+      final String processId2 = ZeebeTestUtil.deployProcess(camundaClient, "simple_process_2.bpmn");
+      final String processId3 = ZeebeTestUtil.deployProcess(camundaClient, "userTaskForm.bpmn");
 
       databaseTestExtension.processAllRecordsAndWait(processIsDeployedCheck, processId1);
       databaseTestExtension.processAllRecordsAndWait(processIsDeployedCheck, processId2);
@@ -220,9 +219,9 @@ public class ProcessInternalControllerIT extends TasklistZeebeIntegrationTest {
     public void searchShouldReturnLatestVersionOfProcessWithoutForm() {
       // given
       final String processId1 =
-          ZeebeTestUtil.deployProcess(zeebeClient, "travelSearchProcess.bpmn");
+          ZeebeTestUtil.deployProcess(camundaClient, "travelSearchProcess.bpmn");
       final String processId2 =
-          ZeebeTestUtil.deployProcess(zeebeClient, "travelSearchProcess_v2.bpmn");
+          ZeebeTestUtil.deployProcess(camundaClient, "travelSearchProcess_v2.bpmn");
       databaseTestExtension.processAllRecordsAndWait(processIsDeployedCheck, processId1);
       databaseTestExtension.processAllRecordsAndWait(processIsDeployedCheck, processId2);
 
@@ -270,9 +269,9 @@ public class ProcessInternalControllerIT extends TasklistZeebeIntegrationTest {
     public void searchShouldReturnLatestVersionOfProcessWithForm() {
       // given
       final String processId1 =
-          ZeebeTestUtil.deployProcess(zeebeClient, "travelSearchProcess_v2.bpmn");
+          ZeebeTestUtil.deployProcess(camundaClient, "travelSearchProcess_v2.bpmn");
       final String processId2 =
-          ZeebeTestUtil.deployProcess(zeebeClient, "travelSearchProcess.bpmn");
+          ZeebeTestUtil.deployProcess(camundaClient, "travelSearchProcess.bpmn");
       databaseTestExtension.processAllRecordsAndWait(processIsDeployedCheck, processId1);
       databaseTestExtension.processAllRecordsAndWait(processIsDeployedCheck, processId2);
 
@@ -331,42 +330,6 @@ public class ProcessInternalControllerIT extends TasklistZeebeIntegrationTest {
                 Assertions.assertThat(processInstanceDTO.getId()).isNotNull();
               });
     }
-
-    @Test
-    public void deleteProcessInstance() {
-      final String bpmnProcessId = "testProcess";
-      final String flowNodeBpmnId = "taskA";
-      final String processInstanceId =
-          tester
-              .createAndDeploySimpleProcess(bpmnProcessId, flowNodeBpmnId)
-              .waitUntil()
-              .processIsDeployed()
-              .and()
-              .startProcessInstance(bpmnProcessId)
-              .waitUntil()
-              .taskIsCreated(flowNodeBpmnId)
-              .claimAndCompleteHumanTask(
-                  flowNodeBpmnId,
-                  "delete",
-                  "\"me\"",
-                  "by",
-                  "\"REST API\"",
-                  "when",
-                  "\"processInstance is completed\"")
-              .then()
-              .waitUntil()
-              .processInstanceIsCompleted()
-              .getProcessInstanceId();
-
-      // when
-      final var result =
-          mockMvcHelper.doRequest(
-              delete(
-                  TasklistURIs.PROCESSES_URL_V1.concat("/{processInstanceId}"), processInstanceId));
-
-      // then
-      assertThat(result).hasHttpStatus(HttpStatus.NO_CONTENT).hasNoContent();
-    }
   }
 
   @Nested
@@ -376,11 +339,11 @@ public class ProcessInternalControllerIT extends TasklistZeebeIntegrationTest {
       tasklistProperties.getFeatureFlag().setProcessPublicEndpoints(true);
       // given
       final String processId1 =
-          ZeebeTestUtil.deployProcess(zeebeClient, "subscribeFormProcess.bpmn");
+          ZeebeTestUtil.deployProcess(camundaClient, "subscribeFormProcess.bpmn");
       final String processId2 =
-          ZeebeTestUtil.deployProcess(zeebeClient, "travelSearchProcess.bpmn");
+          ZeebeTestUtil.deployProcess(camundaClient, "travelSearchProcess.bpmn");
       final String processId3 =
-          ZeebeTestUtil.deployProcess(zeebeClient, "travelSearchProcess_v2.bpmn");
+          ZeebeTestUtil.deployProcess(camundaClient, "travelSearchProcess_v2.bpmn");
 
       databaseTestExtension.processAllRecordsAndWait(processIsDeployedCheck, processId1);
       databaseTestExtension.processAllRecordsAndWait(processIsDeployedCheck, processId2);
@@ -407,7 +370,7 @@ public class ProcessInternalControllerIT extends TasklistZeebeIntegrationTest {
     @Test
     public void shouldNotReturnPublicEndpoints() {
       // given
-      final String processId1 = ZeebeTestUtil.deployProcess(zeebeClient, "simple_process.bpmn");
+      final String processId1 = ZeebeTestUtil.deployProcess(camundaClient, "simple_process.bpmn");
       databaseTestExtension.processAllRecordsAndWait(processIsDeployedCheck, processId1);
 
       // when
@@ -427,11 +390,11 @@ public class ProcessInternalControllerIT extends TasklistZeebeIntegrationTest {
       tasklistProperties.getFeatureFlag().setProcessPublicEndpoints(false);
       // given
       final String processId1 =
-          ZeebeTestUtil.deployProcess(zeebeClient, "subscribeFormProcess.bpmn");
+          ZeebeTestUtil.deployProcess(camundaClient, "subscribeFormProcess.bpmn");
       final String processId2 =
-          ZeebeTestUtil.deployProcess(zeebeClient, "travelSearchProcess.bpmn");
+          ZeebeTestUtil.deployProcess(camundaClient, "travelSearchProcess.bpmn");
       final String processId3 =
-          ZeebeTestUtil.deployProcess(zeebeClient, "travelSearchProcess_v2.bpmn");
+          ZeebeTestUtil.deployProcess(camundaClient, "travelSearchProcess_v2.bpmn");
 
       databaseTestExtension.processAllRecordsAndWait(processIsDeployedCheck, processId1);
       databaseTestExtension.processAllRecordsAndWait(processIsDeployedCheck, processId2);
@@ -457,7 +420,7 @@ public class ProcessInternalControllerIT extends TasklistZeebeIntegrationTest {
 
       // given
       final String processId1 =
-          ZeebeTestUtil.deployProcess(zeebeClient, "subscribeFormProcess.bpmn");
+          ZeebeTestUtil.deployProcess(camundaClient, "subscribeFormProcess.bpmn");
       databaseTestExtension.processAllRecordsAndWait(processIsDeployedCheck, processId1);
 
       // when
@@ -488,9 +451,9 @@ public class ProcessInternalControllerIT extends TasklistZeebeIntegrationTest {
 
       // given
       final String processId1 =
-          ZeebeTestUtil.deployProcess(zeebeClient, "travelSearchProcess.bpmn");
+          ZeebeTestUtil.deployProcess(camundaClient, "travelSearchProcess.bpmn");
       final String processId2 =
-          ZeebeTestUtil.deployProcess(zeebeClient, "travelSearchProcess_v2.bpmn");
+          ZeebeTestUtil.deployProcess(camundaClient, "travelSearchProcess_v2.bpmn");
       databaseTestExtension.processAllRecordsAndWait(processIsDeployedCheck, processId1);
       databaseTestExtension.processAllRecordsAndWait(processIsDeployedCheck, processId2);
 
@@ -517,7 +480,7 @@ public class ProcessInternalControllerIT extends TasklistZeebeIntegrationTest {
 
       // given
       final String processId1 =
-          ZeebeTestUtil.deployProcess(zeebeClient, "startedByFormProcessWithoutPublic.bpmn");
+          ZeebeTestUtil.deployProcess(camundaClient, "startedByFormProcessWithoutPublic.bpmn");
       databaseTestExtension.processAllRecordsAndWait(processIsDeployedCheck, processId1);
 
       final var result =

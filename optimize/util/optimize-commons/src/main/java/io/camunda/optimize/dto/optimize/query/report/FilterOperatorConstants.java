@@ -7,11 +7,7 @@
  */
 package io.camunda.optimize.dto.optimize.query.report;
 
-import lombok.AccessLevel;
-import lombok.NoArgsConstructor;
-
-@NoArgsConstructor(access = AccessLevel.PRIVATE)
-public class FilterOperatorConstants {
+public final class FilterOperatorConstants {
 
   public static final String IN = "in";
   public static final String NOT_IN = "not in";
@@ -23,4 +19,6 @@ public class FilterOperatorConstants {
   public static final String LESS_THAN_EQUALS = "<=";
   public static final String GREATER_THAN = ">";
   public static final String GREATER_THAN_EQUALS = ">=";
+
+  private FilterOperatorConstants() {}
 }

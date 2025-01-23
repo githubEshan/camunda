@@ -7,10 +7,10 @@
  */
 package io.camunda.operate.util;
 
-import io.camunda.operate.entities.OperateEntity;
 import io.camunda.operate.exceptions.PersistenceException;
 import io.camunda.operate.zeebe.ImportValueType;
 import io.camunda.operate.zeebeimport.RecordsReader;
+import io.camunda.webapps.schema.entities.ExporterEntity;
 import java.io.IOException;
 import java.util.Collection;
 import java.util.List;
@@ -42,41 +42,26 @@ public interface SearchTestRuleProvider {
   void processAllRecordsAndWait(
       Predicate<Object[]> predicate, Supplier<Object> supplier, Object... arguments);
 
-  void processAllRecordsAndWait(
-      boolean runPostImport,
-      Predicate<Object[]> predicate,
-      Supplier<Object> supplier,
-      Object... arguments);
-
   void processRecordsWithTypeAndWait(
       ImportValueType importValueType, Predicate<Object[]> predicate, Object... arguments);
-
-  void processRecordsWithTypeAndWait(
-      ImportValueType importValueType,
-      boolean runPostImport,
-      Predicate<Object[]> predicate,
-      Object... arguments);
 
   void processRecordsAndWaitFor(
       Collection<RecordsReader> readers,
       Integer maxWaitingRounds,
-      boolean runPostImport,
       Predicate<Object[]> predicate,
       Supplier<Object> supplier,
       Object... arguments);
-
-  void runPostImportActions();
 
   boolean areIndicesCreatedAfterChecks(String indexPrefix, int minCountOfIndices, int maxChecks);
 
   List<RecordsReader> getRecordsReaders(ImportValueType importValueType);
 
-  void persistNew(OperateEntity... entitiesToPersist);
+  void persistNew(ExporterEntity... entitiesToPersist);
 
-  void persistOperateEntitiesNew(List<? extends OperateEntity> operateEntities)
+  void persistOperateEntitiesNew(List<? extends ExporterEntity> operateEntities)
       throws PersistenceException;
 
-  Map<Class<? extends OperateEntity>, String> getEntityToAliasMap();
+  Map<Class<? extends ExporterEntity>, String> getEntityToAliasMap();
 
   int getOpenScrollcontextSize();
 

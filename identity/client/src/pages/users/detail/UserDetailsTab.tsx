@@ -15,10 +15,7 @@ type UserDetailsProps = {
   loading: boolean;
 };
 
-const UserDetails: FC<UserDetailsProps> = ({
-  user: { username, email, id },
-  loading,
-}) => {
+const UserDetails: FC<UserDetailsProps> = ({ user, loading }) => {
   const { t } = useTranslate();
 
   return (
@@ -26,14 +23,14 @@ const UserDetails: FC<UserDetailsProps> = ({
       label={t("User details")}
       data={[
         {
-          label: t("Username"),
-          value: username,
+          label: t("Name"),
+          value: user.name,
         },
-        { label: t("Email"), value: email || "-" },
         {
-          label: t("ID"),
-          value: id,
+          label: t("Username"),
+          value: user.username,
         },
+        { label: t("Email"), value: user.email || "-" },
       ]}
       loading={loading}
     />

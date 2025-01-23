@@ -7,9 +7,6 @@
  */
 package io.camunda.optimize.dto.optimize.rest;
 
-import lombok.Getter;
-
-@Getter
 public class ConflictedItemDto {
 
   private String id;
@@ -24,6 +21,19 @@ public class ConflictedItemDto {
     this.name = name;
   }
 
+  public String getId() {
+    return id;
+  }
+
+  public ConflictedItemType getType() {
+    return type;
+  }
+
+  public String getName() {
+    return name;
+  }
+
+  @SuppressWarnings("checkstyle:ConstantName")
   public static final class Fields {
 
     public static final String id = "id";

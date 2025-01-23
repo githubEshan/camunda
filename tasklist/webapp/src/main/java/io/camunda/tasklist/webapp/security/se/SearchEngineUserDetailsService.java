@@ -7,11 +7,12 @@
  */
 package io.camunda.tasklist.webapp.security.se;
 
-import static io.camunda.tasklist.util.CollectionUtil.map;
+import static io.camunda.authentication.entity.CamundaUser.CamundaUserBuilder.aCamundaUser;
 import static io.camunda.tasklist.webapp.security.TasklistProfileService.AUTH_BASIC;
 import static io.camunda.tasklist.webapp.security.TasklistProfileService.IDENTITY_AUTH_PROFILE;
 import static io.camunda.tasklist.webapp.security.TasklistProfileService.SSO_AUTH_PROFILE;
 
+import io.camunda.authentication.entity.CamundaUser;
 import io.camunda.tasklist.entities.UserEntity;
 import io.camunda.tasklist.property.TasklistProperties;
 import io.camunda.tasklist.webapp.rest.exception.NotFoundApiException;
@@ -26,7 +27,7 @@ import org.springframework.context.annotation.Primary;
 import org.springframework.context.annotation.Profile;
 import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.security.core.userdetails.UsernameNotFoundException;
-import org.springframework.security.crypto.factory.PasswordEncoderFactories;
+import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Component;
 
@@ -50,7 +51,7 @@ public class SearchEngineUserDetailsService implements UserDetailsService {
   @Bean
   @Primary
   public PasswordEncoder getPasswordEncoder() {
-    return PasswordEncoderFactories.createDelegatingPasswordEncoder();
+    return new BCryptPasswordEncoder();
   }
 
   public void initializeUsers() {
@@ -113,15 +114,15 @@ public class SearchEngineUserDetailsService implements UserDetailsService {
   }
 
   @Override
-  public User loadUserByUsername(final String username) throws UsernameNotFoundException {
+  public CamundaUser loadUserByUsername(final String username) throws UsernameNotFoundException {
     try {
       final UserEntity userEntity = userStore.getByUserId(username);
-      return new User(
-              userEntity.getUserId(),
-              userEntity.getPassword(),
-              map(userEntity.getRoles(), Role::fromString))
-          .setDisplayName(userEntity.getDisplayName())
-          .setRoles(map(userEntity.getRoles(), Role::fromString));
+      return aCamundaUser()
+          .withName(userEntity.getDisplayName())
+          .withUsername(userEntity.getUserId())
+          .withPassword(userEntity.getPassword())
+          .withAuthorities(userEntity.getRoles())
+          .build();
     } catch (final NotFoundApiException e) {
       throw new UsernameNotFoundException(
           String.format("User with user id '%s' not found.", username), e);

@@ -48,6 +48,8 @@ import static io.camunda.optimize.util.ZeebeBpmnModels.createTerminateEndEventPr
 import static io.camunda.zeebe.protocol.record.intent.ProcessInstanceIntent.ELEMENT_COMPLETED;
 import static org.assertj.core.api.Assertions.assertThat;
 
+import io.camunda.client.api.response.Process;
+import io.camunda.client.api.response.ProcessInstanceEvent;
 import io.camunda.optimize.AbstractCCSMIT;
 import io.camunda.optimize.dto.optimize.ProcessInstanceConstants;
 import io.camunda.optimize.dto.optimize.ProcessInstanceDto;
@@ -58,12 +60,11 @@ import io.camunda.optimize.exception.OptimizeIntegrationTestException;
 import io.camunda.optimize.service.db.DatabaseConstants;
 import io.camunda.optimize.service.exceptions.OptimizeRuntimeException;
 import io.camunda.optimize.test.it.extension.db.TermsQueryContainer;
-import io.camunda.zeebe.client.api.response.Process;
-import io.camunda.zeebe.client.api.response.ProcessInstanceEvent;
 import io.camunda.zeebe.model.bpmn.BpmnModelInstance;
 import io.camunda.zeebe.protocol.record.intent.ProcessInstanceIntent;
 import io.camunda.zeebe.protocol.record.intent.VariableIntent;
 import io.camunda.zeebe.protocol.record.value.BpmnElementType;
+import java.io.IOException;
 import java.time.Instant;
 import java.time.OffsetDateTime;
 import java.time.ZoneId;
@@ -72,7 +73,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
-import lombok.SneakyThrows;
 import org.assertj.core.groups.Tuple;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.condition.DisabledIf;
@@ -250,6 +250,18 @@ public class ZeebeProcessInstanceImportIT extends AbstractCCSMIT {
                           exportedEvents.get(deployedInstance.getBpmnProcessId())));
               assertThat(savedInstance.getEndDate()).isNull();
               assertThat(savedInstance.getDuration()).isNull();
+              final FlowNodeInstanceDto flowNodeInstanceDto =
+                  new FlowNodeInstanceDto(
+                      String.valueOf(deployedInstance.getBpmnProcessId()),
+                      String.valueOf(deployedInstance.getVersion()),
+                      ZEEBE_DEFAULT_TENANT_ID,
+                      String.valueOf(deployedInstance.getProcessInstanceKey()),
+                      USER_TASK,
+                      getBpmnElementTypeNameForType(BpmnElementType.USER_TASK),
+                      String.valueOf(exportedEvents.get(USER_TASK).get(0).getKey()));
+              flowNodeInstanceDto.setStartDate(
+                  getExpectedStartDateForEvents(exportedEvents.get(USER_TASK)));
+              flowNodeInstanceDto.setCanceled(false);
               assertThat(savedInstance.getFlowNodeInstances())
                   .hasSize(2)
                   .containsExactlyInAnyOrder(
@@ -258,17 +270,7 @@ public class ZeebeProcessInstanceImportIT extends AbstractCCSMIT {
                           exportedEvents,
                           START_EVENT,
                           BpmnElementType.START_EVENT),
-                      new FlowNodeInstanceDto(
-                              String.valueOf(deployedInstance.getBpmnProcessId()),
-                              String.valueOf(deployedInstance.getVersion()),
-                              ZEEBE_DEFAULT_TENANT_ID,
-                              String.valueOf(deployedInstance.getProcessInstanceKey()),
-                              USER_TASK,
-                              getBpmnElementTypeNameForType(BpmnElementType.USER_TASK),
-                              String.valueOf(exportedEvents.get(USER_TASK).get(0).getKey()))
-                          .setStartDate(
-                              getExpectedStartDateForEvents(exportedEvents.get(USER_TASK)))
-                          .setCanceled(false));
+                      flowNodeInstanceDto);
             });
   }
 
@@ -333,16 +335,15 @@ public class ZeebeProcessInstanceImportIT extends AbstractCCSMIT {
                           START_EVENT,
                           BpmnElementType.START_EVENT),
                       createFlowNodeInstance(
-                              deployedInstance,
-                              exportedEvents,
-                              SERVICE_TASK,
-                              BpmnElementType.SERVICE_TASK)
-                          .setCanceled(true));
+                          deployedInstance,
+                          exportedEvents,
+                          SERVICE_TASK,
+                          BpmnElementType.SERVICE_TASK,
+                          true));
             });
   }
 
   @Test
-  @SneakyThrows
   public void
       importZeebeProcessInstanceDataFromMultipleDays_allDataSavedToOptimizeProcessInstance() {
     // given
@@ -352,7 +353,11 @@ public class ZeebeProcessInstanceImportIT extends AbstractCCSMIT {
 
     // when
     waitUntilMinimumProcessInstanceEventsExportedCount(4);
-    zeebeExtension.setClock(Instant.now().plus(1, ChronoUnit.DAYS));
+    try {
+      zeebeExtension.setClock(Instant.now().plus(1, ChronoUnit.DAYS));
+    } catch (final IOException | InterruptedException e) {
+      throw new OptimizeRuntimeException(e);
+    }
     zeebeExtension.completeTaskForInstanceWithJobType(SERVICE_TASK);
     waitUntilMinimumProcessInstanceEventsExportedCount(8);
     importAllZeebeEntitiesFromScratch();
@@ -865,18 +870,29 @@ public class ZeebeProcessInstanceImportIT extends AbstractCCSMIT {
       final Map<String, List<ZeebeProcessInstanceRecordDto>> events,
       final String eventId,
       final BpmnElementType eventType) {
-    return new FlowNodeInstanceDto(
+    return createFlowNodeInstance(deployedInstance, events, eventId, eventType, false);
+  }
+
+  private FlowNodeInstanceDto createFlowNodeInstance(
+      final ProcessInstanceEvent deployedInstance,
+      final Map<String, List<ZeebeProcessInstanceRecordDto>> events,
+      final String eventId,
+      final BpmnElementType eventType,
+      final boolean canceled) {
+    final FlowNodeInstanceDto flowNodeInstanceDto =
+        new FlowNodeInstanceDto(
             String.valueOf(deployedInstance.getBpmnProcessId()),
             String.valueOf(deployedInstance.getVersion()),
             ZEEBE_DEFAULT_TENANT_ID,
             String.valueOf(deployedInstance.getProcessInstanceKey()),
             eventId,
             getBpmnElementTypeNameForType(eventType),
-            String.valueOf(events.get(eventId).get(0).getKey()))
-        .setStartDate(getExpectedStartDateForEvents(events.get(eventId)))
-        .setEndDate(getExpectedEndDateForEvents(events.get(eventId)))
-        .setTotalDurationInMs(getExpectedDurationForEvents(events.get(eventId)))
-        .setCanceled(false);
+            String.valueOf(events.get(eventId).get(0).getKey()));
+    flowNodeInstanceDto.setStartDate(getExpectedStartDateForEvents(events.get(eventId)));
+    flowNodeInstanceDto.setEndDate(getExpectedEndDateForEvents(events.get(eventId)));
+    flowNodeInstanceDto.setTotalDurationInMs(getExpectedDurationForEvents(events.get(eventId)));
+    flowNodeInstanceDto.setCanceled(canceled);
+    return flowNodeInstanceDto;
   }
 
   private long getExpectedDurationForEvents(
@@ -942,7 +958,6 @@ public class ZeebeProcessInstanceImportIT extends AbstractCCSMIT {
         + instance.getIncidents().size();
   }
 
-  @SneakyThrows
   private void updateProcessInstanceNestedDocLimit(
       final String processDefinitionKey, final int nestedDocLimit) {
     databaseIntegrationTestExtension.updateProcessInstanceNestedDocLimit(

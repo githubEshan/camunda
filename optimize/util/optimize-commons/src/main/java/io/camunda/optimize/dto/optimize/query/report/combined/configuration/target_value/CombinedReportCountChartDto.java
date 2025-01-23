@@ -7,36 +7,46 @@
  */
 package io.camunda.optimize.dto.optimize.query.report.combined.configuration.target_value;
 
-import java.util.Objects;
-import lombok.AllArgsConstructor;
-import lombok.Getter;
-import lombok.NoArgsConstructor;
-import lombok.Setter;
-import lombok.ToString;
-
-@Getter
-@Setter
-@AllArgsConstructor
-@NoArgsConstructor
-@ToString
 public class CombinedReportCountChartDto {
 
   private Boolean isBelow = false;
   private String value = "100";
 
-  @Override
-  public boolean equals(final Object o) {
-    if (this == o) {
-      return true;
-    }
-    if (!(o instanceof final CombinedReportCountChartDto that)) {
-      return false;
-    }
-    return Objects.equals(isBelow, that.isBelow) && Objects.equals(value, that.value);
+  public CombinedReportCountChartDto(final Boolean isBelow, final String value) {
+    this.isBelow = isBelow;
+    this.value = value;
   }
+
+  public CombinedReportCountChartDto() {}
 
   @Override
   public int hashCode() {
-    return Objects.hash(isBelow, value);
+    return org.apache.commons.lang3.builder.HashCodeBuilder.reflectionHashCode(this);
+  }
+
+  @Override
+  public boolean equals(final Object o) {
+    return org.apache.commons.lang3.builder.EqualsBuilder.reflectionEquals(this, o);
+  }
+
+  @Override
+  public String toString() {
+    return "CombinedReportCountChartDto(isBelow=" + getIsBelow() + ", value=" + getValue() + ")";
+  }
+
+  public Boolean getIsBelow() {
+    return isBelow;
+  }
+
+  public void setIsBelow(final Boolean isBelow) {
+    this.isBelow = isBelow;
+  }
+
+  public String getValue() {
+    return value;
+  }
+
+  public void setValue(final String value) {
+    this.value = value;
   }
 }

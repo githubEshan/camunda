@@ -17,6 +17,7 @@ import static io.camunda.optimize.util.ZeebeBpmnModels.createIncidentProcess;
 import static io.camunda.optimize.util.ZeebeBpmnModels.createSimpleServiceTaskProcess;
 import static org.assertj.core.api.Assertions.assertThat;
 
+import io.camunda.client.api.response.ProcessInstanceEvent;
 import io.camunda.optimize.AbstractCCSMIT;
 import io.camunda.optimize.dto.optimize.ProcessInstanceConstants;
 import io.camunda.optimize.dto.optimize.ProcessInstanceDto;
@@ -31,7 +32,6 @@ import io.camunda.optimize.dto.zeebe.process.ZeebeProcessInstanceRecordDto;
 import io.camunda.optimize.exception.OptimizeIntegrationTestException;
 import io.camunda.optimize.service.db.DatabaseConstants;
 import io.camunda.optimize.test.it.extension.db.TermsQueryContainer;
-import io.camunda.zeebe.client.api.response.ProcessInstanceEvent;
 import io.camunda.zeebe.protocol.record.intent.IncidentIntent;
 import java.time.Instant;
 import java.time.OffsetDateTime;
@@ -42,7 +42,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.stream.Collectors;
-import lombok.SneakyThrows;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.condition.DisabledIf;
 import org.junit.jupiter.api.condition.EnabledIf;
@@ -295,7 +294,6 @@ public class ZeebeIncidentImportIT extends AbstractCCSMIT {
     return incident;
   }
 
-  @SneakyThrows
   private Map<Long, List<ZeebeIncidentRecordDto>> getZeebeExportedIncidentEventsByElementId() {
     final String expectedIndex =
         zeebeExtension.getZeebeRecordPrefix() + "-" + DatabaseConstants.ZEEBE_INCIDENT_INDEX_NAME;

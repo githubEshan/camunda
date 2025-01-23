@@ -15,15 +15,19 @@
  */
 package io.camunda.zeebe.client.impl.http;
 
+import com.fasterxml.jackson.core.JsonGenerator;
 import com.fasterxml.jackson.core.JsonToken;
 import com.fasterxml.jackson.core.json.async.NonBlockingByteBufferJsonParser;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.util.TokenBuffer;
-import io.camunda.zeebe.client.protocol.rest.ProblemDetail;
+import io.camunda.client.protocol.rest.ProblemDetail;
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * A generic interface for consuming API entities from an asynchronous data stream. This interface
@@ -69,6 +73,7 @@ public interface TypedApiEntityConsumer<T> {
    * Jackson's non-blocking parser to incrementally parse JSON data as it is streamed.
    */
   class JsonApiEntityConsumer<T> implements TypedApiEntityConsumer<T> {
+    private static final Logger LOGGER = LoggerFactory.getLogger(JsonApiEntityConsumer.class);
     private final ObjectMapper json;
     private final Class<T> type;
     private final NonBlockingByteBufferJsonParser parser;
@@ -88,13 +93,17 @@ public interface TypedApiEntityConsumer<T> {
 
     @Override
     public ApiEntity<T> generateContent() throws IOException {
-      buffer.asParserOnFirstToken();
-
-      if (isResponse) {
-        return ApiEntity.of(json.readValue(buffer.asParserOnFirstToken(), type));
+      try {
+        if (isResponse) {
+          return ApiEntity.of(json.readValue(buffer.asParserOnFirstToken(), type));
+        }
+        return ApiEntity.of(json.readValue(buffer.asParserOnFirstToken(), ProblemDetail.class));
+      } catch (final IOException ioe) {
+        // write the original JSON response into an error response
+        final String jsonString = getJsonString();
+        return ApiEntity.of(
+            new ProblemDetail().title("Unexpected server response").status(500).detail(jsonString));
       }
-
-      return ApiEntity.of(json.readValue(buffer.asParserOnFirstToken(), ProblemDetail.class));
     }
 
     @Override
@@ -118,11 +127,13 @@ public interface TypedApiEntityConsumer<T> {
         parser.close();
       } catch (final Exception e) {
         // log but otherwise ignore
+        LOGGER.warn("Failed to close JSON parser", e);
       }
       try {
         buffer.close();
       } catch (final IOException e) {
         // log but otherwise ignore
+        LOGGER.warn("Failed to close JSON buffer", e);
       }
       bufferedBytes = 0;
     }
@@ -130,6 +141,18 @@ public interface TypedApiEntityConsumer<T> {
     @Override
     public int getBufferedBytes() {
       return bufferedBytes;
+    }
+
+    private String getJsonString() {
+      try (final ByteArrayOutputStream output = new ByteArrayOutputStream();
+          final JsonGenerator generator = json.createGenerator(output)) {
+        buffer.serialize(generator);
+        generator.flush();
+        return output.toString(StandardCharsets.UTF_8.name());
+      } catch (final Exception ex) {
+        LOGGER.warn("Failed to serialize JSON string", ex);
+        return "Original response cannot be constructed";
+      }
     }
   }
 
@@ -141,13 +164,15 @@ public interface TypedApiEntityConsumer<T> {
   class RawApiEntityConsumer<T> implements TypedApiEntityConsumer<T> {
 
     private final boolean isResponse;
+    private final int maxCapacity;
 
     private byte[] body = new byte[1024];
 
     private int bufferedBytes;
 
-    public RawApiEntityConsumer(final boolean isResponse) {
+    public RawApiEntityConsumer(final boolean isResponse, final int maxCapacity) {
       this.isResponse = isResponse;
+      this.maxCapacity = maxCapacity;
     }
 
     @Override
@@ -168,7 +193,11 @@ public interface TypedApiEntityConsumer<T> {
       final int offset = bufferedBytes;
       bufferedBytes += src.remaining();
       if (body.length < bufferedBytes) {
-        body = Arrays.copyOf(body, body.length + 1024);
+        if (bufferedBytes > maxCapacity) {
+          throw new IllegalArgumentException(
+              "The message size exceeds the maximum allowed size of " + maxCapacity);
+        }
+        body = Arrays.copyOf(body, bufferedBytes);
       }
       src.get(body, offset, src.remaining());
     }

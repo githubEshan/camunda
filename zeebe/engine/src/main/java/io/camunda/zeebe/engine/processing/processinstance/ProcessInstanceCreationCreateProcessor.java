@@ -11,6 +11,7 @@ import static io.camunda.zeebe.util.buffer.BufferUtil.bufferAsString;
 import static io.camunda.zeebe.util.buffer.BufferUtil.wrapString;
 
 import io.camunda.zeebe.engine.metrics.ProcessEngineMetrics;
+import io.camunda.zeebe.engine.processing.Rejection;
 import io.camunda.zeebe.engine.processing.bpmn.behavior.BpmnBehaviors;
 import io.camunda.zeebe.engine.processing.common.ElementActivationBehavior;
 import io.camunda.zeebe.engine.processing.common.EventSubscriptionException;
@@ -18,6 +19,8 @@ import io.camunda.zeebe.engine.processing.deployment.model.element.ExecutableFlo
 import io.camunda.zeebe.engine.processing.deployment.model.element.ExecutableFlowNode;
 import io.camunda.zeebe.engine.processing.deployment.model.element.ExecutableProcess;
 import io.camunda.zeebe.engine.processing.deployment.model.element.ExecutableSequenceFlow;
+import io.camunda.zeebe.engine.processing.identity.AuthorizationCheckBehavior;
+import io.camunda.zeebe.engine.processing.identity.AuthorizationCheckBehavior.AuthorizationRequest;
 import io.camunda.zeebe.engine.processing.streamprocessor.CommandProcessor;
 import io.camunda.zeebe.engine.processing.streamprocessor.TypedRecordProcessor.ProcessingError;
 import io.camunda.zeebe.engine.processing.streamprocessor.writers.TypedCommandWriter;
@@ -34,7 +37,9 @@ import io.camunda.zeebe.protocol.impl.record.value.processinstance.ProcessInstan
 import io.camunda.zeebe.protocol.record.RejectionType;
 import io.camunda.zeebe.protocol.record.intent.ProcessInstanceCreationIntent;
 import io.camunda.zeebe.protocol.record.intent.ProcessInstanceIntent;
+import io.camunda.zeebe.protocol.record.value.AuthorizationResourceType;
 import io.camunda.zeebe.protocol.record.value.BpmnElementType;
+import io.camunda.zeebe.protocol.record.value.PermissionType;
 import io.camunda.zeebe.stream.api.records.TypedRecord;
 import io.camunda.zeebe.stream.api.state.KeyGenerator;
 import io.camunda.zeebe.util.Either;
@@ -79,13 +84,15 @@ public final class ProcessInstanceCreationCreateProcessor
   private final ProcessEngineMetrics metrics;
 
   private final ElementActivationBehavior elementActivationBehavior;
+  private final AuthorizationCheckBehavior authCheckBehavior;
 
   public ProcessInstanceCreationCreateProcessor(
       final ProcessState processState,
       final KeyGenerator keyGenerator,
       final Writers writers,
       final BpmnBehaviors bpmnBehaviors,
-      final ProcessEngineMetrics metrics) {
+      final ProcessEngineMetrics metrics,
+      final AuthorizationCheckBehavior authCheckBehavior) {
     this.processState = processState;
     variableBehavior = bpmnBehaviors.variableBehavior();
     this.keyGenerator = keyGenerator;
@@ -94,6 +101,7 @@ public final class ProcessInstanceCreationCreateProcessor
     responseWriter = writers.response();
     this.metrics = metrics;
     elementActivationBehavior = bpmnBehaviors.elementActivationBehavior();
+    this.authCheckBehavior = authCheckBehavior;
   }
 
   @Override
@@ -104,10 +112,11 @@ public final class ProcessInstanceCreationCreateProcessor
     final ProcessInstanceCreationRecord record = command.getValue();
 
     getProcess(record)
+        .flatMap(process -> isAuthorized(command, process))
         .flatMap(process -> validateCommand(command.getValue(), process))
         .ifRightOrLeft(
             process -> createProcessInstance(controller, record, process),
-            rejection -> controller.reject(rejection.type, rejection.reason));
+            rejection -> controller.reject(rejection.type(), rejection.reason()));
 
     return true;
   }
@@ -124,6 +133,34 @@ public final class ProcessInstanceCreationCreateProcessor
       return ProcessingError.EXPECTED_ERROR;
     }
     return ProcessingError.UNEXPECTED_ERROR;
+  }
+
+  private Either<Rejection, DeployedProcess> isAuthorized(
+      final TypedRecord<ProcessInstanceCreationRecord> command,
+      final DeployedProcess deployedProcess) {
+    final var processId = bufferAsString(deployedProcess.getBpmnProcessId());
+    final var request =
+        new AuthorizationRequest(
+                command,
+                AuthorizationResourceType.PROCESS_DEFINITION,
+                PermissionType.CREATE_PROCESS_INSTANCE,
+                command.getValue().getTenantId())
+            .addResourceId(processId);
+
+    final var isAuthorized = authCheckBehavior.isAuthorized(request);
+    if (isAuthorized.isRight()) {
+      return Either.right(deployedProcess);
+    }
+
+    final var rejection = isAuthorized.getLeft();
+    final String errorMessage =
+        RejectionType.NOT_FOUND.equals(rejection.type())
+            ? AuthorizationCheckBehavior.NOT_FOUND_ERROR_MESSAGE.formatted(
+                "create an instance of process",
+                command.getValue().getProcessDefinitionKey(),
+                "such process")
+            : rejection.reason();
+    return Either.left(new Rejection(rejection.type(), errorMessage));
   }
 
   private void createProcessInstance(
@@ -401,8 +438,6 @@ public final class ProcessInstanceCreationCreateProcessor
           elementActivationBehavior.activateElement(processInstance, element);
         });
   }
-
-  private record Rejection(RejectionType type, String reason) {}
 
   private record ElementIdAndType(String elementId, BpmnElementType elementType) {}
 }

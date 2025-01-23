@@ -9,22 +9,27 @@ package io.camunda.optimize.service.variable;
 
 import io.camunda.optimize.dto.optimize.DefinitionType;
 import io.camunda.optimize.dto.optimize.query.variable.DefinitionVariableLabelsDto;
+import io.camunda.optimize.rest.exceptions.BadRequestException;
+import io.camunda.optimize.rest.exceptions.NotFoundException;
 import io.camunda.optimize.service.DefinitionService;
 import io.camunda.optimize.service.db.writer.VariableLabelWriter;
-import jakarta.ws.rs.BadRequestException;
-import jakarta.ws.rs.NotFoundException;
 import java.util.stream.Collectors;
-import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
+import org.slf4j.Logger;
 import org.springframework.stereotype.Component;
 
-@RequiredArgsConstructor
 @Component
-@Slf4j
 public class ProcessVariableLabelService {
 
+  private static final Logger LOG =
+      org.slf4j.LoggerFactory.getLogger(ProcessVariableLabelService.class);
   private final VariableLabelWriter variableLabelWriter;
   private final DefinitionService definitionService;
+
+  public ProcessVariableLabelService(
+      final VariableLabelWriter variableLabelWriter, final DefinitionService definitionService) {
+    this.variableLabelWriter = variableLabelWriter;
+    this.definitionService = definitionService;
+  }
 
   public void storeVariableLabels(final DefinitionVariableLabelsDto definitionVariableLabelsDto) {
     definitionVariableLabelsDto.getLabels().stream()

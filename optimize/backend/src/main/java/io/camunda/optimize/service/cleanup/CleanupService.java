@@ -10,10 +10,11 @@ package io.camunda.optimize.service.cleanup;
 import java.time.OffsetDateTime;
 import java.util.Set;
 import java.util.stream.Collectors;
-import lombok.extern.slf4j.Slf4j;
+import org.slf4j.Logger;
 
-@Slf4j
 public abstract class CleanupService {
+
+  private static final Logger LOG = org.slf4j.LoggerFactory.getLogger(CleanupService.class);
 
   public abstract boolean isEnabled();
 
@@ -27,7 +28,7 @@ public abstract class CleanupService {
             .collect(Collectors.toSet());
     specificDefinitionConfigKeys.removeAll(knownConfiguredKeys);
     if (!specificDefinitionConfigKeys.isEmpty()) {
-      log.warn(
+      LOG.warn(
           "History Cleanup Configuration contains definition keys for which there is no "
               + "definition imported yet. The keys without a match in the database are: "
               + specificDefinitionConfigKeys);

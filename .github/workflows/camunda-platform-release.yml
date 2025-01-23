@@ -35,7 +35,7 @@ env:
   GH_TOKEN: ${{ github.token }} # needs to be available for the gh CLI tool
 jobs:
   release:
-    name: Maven & Go Release
+    name: Maven Release
     runs-on: gcp-core-16-release
     outputs:
       releaseTagRevision: ${{ steps.maven-perform-release.outputs.tagRevision }}
@@ -63,8 +63,6 @@ jobs:
             secret/data/github.com/organizations/camunda MAVEN_CENTRAL_GPG_SIGNING_KEY_PUB;
             secret/data/github.com/organizations/camunda MAVEN_CENTRAL_DEPLOYMENT_USR;
             secret/data/github.com/organizations/camunda MAVEN_CENTRAL_DEPLOYMENT_PSW;
-            secret/data/products/zeebe/ci/zeebe ARTIFACTS_USR;
-            secret/data/products/zeebe/ci/zeebe ARTIFACTS_PSW;
       - name: Git User Setup
         run: |
           git config --global user.email "github-actions[release]"
@@ -91,42 +89,17 @@ jobs:
           && sudo apt update \
           && sudo apt install gh -y
       - name: Setup Build Tooling
-        uses: ./.github/actions/setup-zeebe
+        uses: ./.github/actions/setup-build
         with:
-          secret_vault_secretId: ${{ secrets.VAULT_SECRET_ID }}
-          secret_vault_address: ${{ secrets.VAULT_ADDR }}
-          secret_vault_roleId: ${{ secrets.VAULT_ROLE_ID }}
-
-      - name: Set and commit Go Client version
-        run: |
-          pushd clients/go/internal/embedded
-          echo "${RELEASE_VERSION}" > data/VERSION
-
-          git commit -am "build(project): update go embedded version data"
-      - name: Build Go Client
-        uses: ./.github/actions/build-zeebe
-        with:
-          java: false
-      - uses: s4u/maven-settings-action@v3.0.0
-        with:
-          servers: |
+          maven-servers: |
             [{
-                "id": "camunda-nexus",
-                "username": "${{ steps.secrets.outputs.ARTIFACTS_USR }}",
-                "password": "${{ steps.secrets.outputs.ARTIFACTS_PSW }}"
-            },
-            {
                 "id": "central",
                 "username": "${{ steps.secrets.outputs.MAVEN_CENTRAL_DEPLOYMENT_USR }}",
                 "password": "${{ steps.secrets.outputs.MAVEN_CENTRAL_DEPLOYMENT_PSW }}"
             }]
-          mirrors: |
-            [{
-                "id": "camunda-nexus",
-                "name": "Camunda Nexus",
-                "mirrorOf": "camunda-nexus",
-                "url": "https://repository.nexus.camunda.cloud/content/groups/internal/"
-            }]
+          vault-address: ${{ secrets.VAULT_ADDR }}
+          vault-role-id: ${{ secrets.VAULT_ROLE_ID }}
+          vault-secret-id: ${{ secrets.VAULT_SECRET_ID }}
       - name: Maven Prepare Release
         id: maven-prepare-release
         run: |
@@ -155,7 +128,6 @@ jobs:
             -DpushChanges=${PUSH_CHANGES} \
             -DremoteTagging=${PUSH_CHANGES} \
             -DcompletionGoals="spotless:apply" \
-            -D skipOptimize \
             -P-autoFormat \
             -DpreparationGoals="" \
             -Darguments=''
@@ -169,11 +141,6 @@ jobs:
           # https://maven.apache.org/maven-release/maven-release-plugin/perform-mojo.html
           # https://maven.apache.org/maven-release/maven-release-plugin/usage/perform-release.html
 
-          # The following env var is used to include the previously built go artifacts into the final maven release build.
-          # As the maven build of the tag happens in a sub-directory to which maven checks out the release tag to build it.
-          # see https://maven.apache.org/maven-release/maven-release-plugin/perform-mojo.html#workingDirectory
-          export ZBCTL_ROOT_DIR=${PWD}
-
           # -DskipQaBuild=true -P-autoFormat
           #   In order to disable QA/IT and the auto formatting during the release.
           #   It is unnecessary to release integration tests, and we don't want to run the auto-formatting unnecessarily.
@@ -181,9 +148,8 @@ jobs:
             -Dgpg.passphrase="${{ steps.secrets.outputs.MAVEN_CENTRAL_GPG_SIGNING_KEY_PASSPHRASE }}" \
             -DlocalCheckout=${{ inputs.dryRun }} \
             -DskipQaBuild=true \
-            -DskipOptimize \
             -P-autoFormat \
-            -Darguments='-P-autoFormat -DskipQaBuild=true -DskipChecks=true -DskipTests=true -Dskip.fe.build=false -Dspotless.apply.skip=false -Dskip.central.release=${SKIP_REPO_DEPLOY} -Dskip.camunda.release=${SKIP_REPO_DEPLOY} -Dzbctl.force -Dzbctl.rootDir=${ZBCTL_ROOT_DIR} -Dgpg.passphrase="${{ steps.secrets.outputs.MAVEN_CENTRAL_GPG_SIGNING_KEY_PASSPHRASE }}"'
+            -Darguments='-P-autoFormat -DskipQaBuild=true -DskipChecks=true -DskipTests=true -Dskip.fe.build=false -Dspotless.apply.skip=false -Dskip.central.release=${SKIP_REPO_DEPLOY} -Dskip.camunda.release=${SKIP_REPO_DEPLOY} -Dgpg.passphrase="${{ steps.secrets.outputs.MAVEN_CENTRAL_GPG_SIGNING_KEY_PASSPHRASE }}"'
 
           # switch to the directory to which maven checks out the release tag
           # see https://maven.apache.org/maven-release/maven-release-plugin/perform-mojo.html#workingDirectory
@@ -197,9 +163,8 @@ jobs:
           ARTIFACT_DIR=$(mktemp -d)
           cp target/checkout/dist/target/camunda-zeebe-${RELEASE_VERSION}.tar.gz "${ARTIFACT_DIR}/"
           cp target/checkout/dist/target/camunda-zeebe-${RELEASE_VERSION}.zip "${ARTIFACT_DIR}/"
-          cp clients/go/cmd/zbctl/dist/zbctl "${ARTIFACT_DIR}/"
-          cp clients/go/cmd/zbctl/dist/zbctl.exe "${ARTIFACT_DIR}/"
-          cp clients/go/cmd/zbctl/dist/zbctl.darwin "${ARTIFACT_DIR}/"
+          cp target/checkout/optimize-distro/target/camunda-optimize-${RELEASE_VERSION}-production.tar.gz "${ARTIFACT_DIR}/"
+          cp target/checkout/optimize-distro/target/camunda-optimize-${RELEASE_VERSION}-production.zip "${ARTIFACT_DIR}/"
           echo "dir=${ARTIFACT_DIR}" >> $GITHUB_OUTPUT
       - name: Upload Release Artifacts
         uses: actions/upload-artifact@v4
@@ -218,20 +183,6 @@ jobs:
           FILE=$(./mvnw -B help:evaluate -Dexpression=ignored.changes.file -q -DforceStdout)
           rm -f "clients/java/${FILE}" "test/${FILE}" "exporter-api/${FILE}" "protocol/${FILE}" "bpmn-model/${FILE}"
           git commit -am "build(project): update java compat versions"
-      - name: Go Post-Release
-        run: |
-          # Publish Go tag for the release
-          git tag "clients/go/v${RELEASE_VERSION}"
-          if [ "$PUSH_CHANGES" = "true" ]; then
-            git push origin "clients/go/v${RELEASE_VERSION}"
-          fi
-
-          # Prepare Go version for the next release
-          pushd "clients/go/internal/embedded" || exit $?
-
-          echo "${DEVELOPMENT_VERSION}" > data/VERSION
-
-          git commit -am "build(project): prepare next development version (Go client)"
       - name: Push Changes to Release branch
         if: ${{ inputs.dryRun == false }}
         run: git push origin "${RELEASE_BRANCH}"
@@ -261,7 +212,7 @@ jobs:
           fetch-depth: 0 # To fetch tags as well - necessary for the changelog generation
       - name: Install Zeebe changelog tool
         run: |
-          gh release download --repo zeebe-io/zeebe-changelog --pattern '*_Linux_i386.tar.gz'
+          gh release download --repo camunda/zeebe-changelog --pattern '*_Linux_i386.tar.gz'
           tar -xzvf zeebe-changelog_*
           chmod +x zcl
       - name: Generate Changelog for patch release
@@ -521,6 +472,97 @@ jobs:
             --tag ${{ env.DOCKER_IMAGE }}:${{ env.RELEASE_VERSION }} \
             ${{ inputs.isLatest && format('--tag {0}:latest', env.DOCKER_IMAGE) || '' }} \
             ${{ steps.build-operate-docker.outputs.image }}
+      - name: Observe build status
+        if: always()
+        continue-on-error: true
+        uses: ./.github/actions/observe-build-status
+        with:
+          build_status: ${{ job.status }}
+          secret_vault_secretId: ${{ secrets.VAULT_SECRET_ID }}
+          secret_vault_address: ${{ secrets.VAULT_ADDR }}
+          secret_vault_roleId: ${{ secrets.VAULT_ROLE_ID }}
+
+  optimize-docker:
+    needs: release
+    name: Optimize Docker Image Release
+    permissions:
+      contents: read           # Required for checking out the repository.
+      packages: write          # Required for pushing Docker images to DockerHub.
+      id-token: write          # Required for authentication with HashiCorp Vault using OIDC.
+      actions: read            # Required to download artifacts.
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    services:
+      # Local registry is used as multi arch images cannot be loaded locally but only pushed to a
+      # registry. As we want to verify the images first before pushing them to dockerhub though,
+      # a local registry is used and if verification passes images are pushed to the remote registry.
+      registry:
+        image: registry:2
+        ports:
+          - 5000:5000
+    env:
+      PLATFORMS: "linux/amd64,linux/arm64"
+      LOCAL_DOCKER_IMAGE: localhost:5000/camunda/optimize
+      DOCKER_IMAGE: camunda/optimize
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.RELEASE_BRANCH }}
+      - name: Import Secrets
+        id: secrets
+        uses: hashicorp/vault-action@d1720f055e0635fd932a1d2a48f87a666a57906c # v3.0.0
+        with:
+          url: ${{ secrets.VAULT_ADDR }}
+          method: approle
+          roleId: ${{ secrets.VAULT_ROLE_ID }}
+          secretId: ${{ secrets.VAULT_SECRET_ID }}
+          secrets: |
+            secret/data/products/optimize/ci/camunda-optimize REGISTRY_HUB_DOCKER_COM_USR;
+            secret/data/products/optimize/ci/camunda-optimize REGISTRY_HUB_DOCKER_COM_PSW;
+      - name: Login to DockerHub
+        uses: docker/login-action@327cd5a69de6c009b9ce71bce8395f28e651bf99
+        with:
+          username: ${{ steps.secrets.outputs.REGISTRY_HUB_DOCKER_COM_USR }}
+          password: ${{ steps.secrets.outputs.REGISTRY_HUB_DOCKER_COM_PSW }}
+      - name: Download Release Artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: release-artifacts-${{ inputs.releaseVersion }}
+      - name: Move optimize artifacts into expected dir
+        run: |
+          mkdir -p "optimize-distro/target"
+          mv camunda-optimize-${RELEASE_VERSION}-production.tar.gz ./optimize-distro/target/
+      - name: Build Optimize Docker Image
+        uses: ./.github/actions/build-platform-docker
+        id: build-optimize-docker
+        with:
+          repository: ${{ env.LOCAL_DOCKER_IMAGE }}
+          version: ${{ inputs.releaseVersion }}
+          revision: ${{ needs.release.outputs.releaseTagRevision }}
+          # pushes to local registry for verification prior pushing to remote
+          push: true
+          distball: camunda-zeebe-${{ inputs.releaseVersion }}.tar.gz
+          platforms: ${{ env.PLATFORMS }}
+          dockerfile: optimize.Dockerfile
+      - name: Verify Optimize Docker image
+        uses: ./.github/actions/verify-platform-docker
+        with:
+          imageName: ${{ env.LOCAL_DOCKER_IMAGE }}
+          date: ${{ steps.build-optimize-docker.outputs.date }}
+          revision: ${{ needs.release.outputs.releaseTagRevision }}
+          version: ${{ inputs.releaseVersion }}
+          platforms: ${{ env.PLATFORMS }}
+          dockerfile: optimize.Dockerfile
+          goldenfile: optimize-docker-labels.golden.json
+      - name: Sync Optimize Docker Image to DockerHub
+        id: push-docker
+        if: ${{ inputs.dryRun == false }}
+        # see https://docs.docker.com/build/ci/github-actions/examples/#copy-images-between-registries
+        run: |
+          docker buildx imagetools create \
+            --tag ${{ env.DOCKER_IMAGE }}:${{ env.RELEASE_VERSION }} \
+            ${{ inputs.isLatest && format('--tag {0}:latest', env.DOCKER_IMAGE) || '' }} \
+            ${{ steps.build-optimize-docker.outputs.image }}
       - name: Observe build status
         if: always()
         continue-on-error: true

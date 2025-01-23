@@ -43,9 +43,13 @@ import io.camunda.optimize.dto.optimize.rest.AuthorizedReportDefinitionResponseD
 import io.camunda.optimize.dto.optimize.rest.ConflictResponseDto;
 import io.camunda.optimize.dto.optimize.rest.ConflictedItemDto;
 import io.camunda.optimize.dto.optimize.rest.ConflictedItemType;
+import io.camunda.optimize.rest.exceptions.BadRequestException;
+import io.camunda.optimize.rest.exceptions.ForbiddenException;
+import io.camunda.optimize.rest.exceptions.NotFoundException;
 import io.camunda.optimize.service.DefinitionService;
 import io.camunda.optimize.service.db.reader.ReportReader;
 import io.camunda.optimize.service.db.writer.ReportWriter;
+import io.camunda.optimize.service.exceptions.OptimizeRuntimeException;
 import io.camunda.optimize.service.exceptions.OptimizeValidationException;
 import io.camunda.optimize.service.exceptions.UncombinableReportsException;
 import io.camunda.optimize.service.exceptions.conflict.OptimizeNonDefinitionScopeCompliantException;
@@ -59,9 +63,6 @@ import io.camunda.optimize.service.security.ReportAuthorizationService;
 import io.camunda.optimize.service.util.DefinitionVersionHandlingUtil;
 import io.camunda.optimize.service.util.ValidationHelper;
 import io.camunda.optimize.util.SuppressionConstants;
-import jakarta.ws.rs.BadRequestException;
-import jakarta.ws.rs.ForbiddenException;
-import jakarta.ws.rs.NotFoundException;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
@@ -72,22 +73,19 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.function.Supplier;
-import lombok.NonNull;
-import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
 import org.apache.commons.lang3.tuple.Pair;
+import org.slf4j.Logger;
 import org.springframework.stereotype.Component;
 
-@RequiredArgsConstructor
 @Component
-@Slf4j
 public class ReportService implements CollectionReferencingService {
 
   private static final String DEFAULT_REPORT_NAME = "New Report";
   private static final String REPORT_NOT_IN_SAME_COLLECTION_ERROR_MESSAGE =
       "Either the report %s does not reside in "
           + "the same collection as the combined report or both are not private entities";
+  private static final Logger LOG = org.slf4j.LoggerFactory.getLogger(ReportService.class);
 
   private final ReportWriter reportWriter;
   private final ReportReader reportReader;
@@ -96,6 +94,23 @@ public class ReportService implements CollectionReferencingService {
   private final AuthorizedCollectionService collectionService;
   private final AbstractIdentityService identityService;
   private final DefinitionService defintionService;
+
+  public ReportService(
+      final ReportWriter reportWriter,
+      final ReportReader reportReader,
+      final ReportAuthorizationService reportAuthorizationService,
+      final ReportRelationService reportRelationService,
+      final AuthorizedCollectionService collectionService,
+      final AbstractIdentityService identityService,
+      final DefinitionService defintionService) {
+    this.reportWriter = reportWriter;
+    this.reportReader = reportReader;
+    this.reportAuthorizationService = reportAuthorizationService;
+    this.reportRelationService = reportRelationService;
+    this.collectionService = collectionService;
+    this.identityService = identityService;
+    this.defintionService = defintionService;
+  }
 
   private static void copyDefinitionMetaDataToUpdate(
       final ReportDefinitionDto from, final ReportDefinitionUpdateDto to, final String userId) {
@@ -234,12 +249,22 @@ public class ReportService implements CollectionReferencingService {
    * instance.
    */
   public IdResponseDto copyAndMoveReport(
-      @NonNull final String reportId,
-      @NonNull final String userId,
+      final String reportId,
+      final String userId,
       final String collectionId,
       final String newReportName,
-      @NonNull final Map<String, String> existingReportCopies,
+      final Map<String, String> existingReportCopies,
       final boolean keepSubReportNames) {
+    if (reportId == null) {
+      throw new OptimizeRuntimeException("reportId is null");
+    }
+    if (userId == null) {
+      throw new OptimizeRuntimeException("userId is null");
+    }
+    if (existingReportCopies == null) {
+      throw new OptimizeRuntimeException("existingReportCopies is null");
+    }
+
     final AuthorizedReportDefinitionResponseDto authorizedReportDefinition =
         getReportDefinition(reportId, userId);
     final ReportDefinitionDto originalReportDefinition =
@@ -275,7 +300,7 @@ public class ReportService implements CollectionReferencingService {
                     "Was not able to retrieve report with id ["
                         + reportId
                         + "]"
-                        + "from Elasticsearch. Report does not exist."));
+                        + "from the database. Report does not exist."));
   }
 
   public AuthorizedReportDefinitionResponseDto getReportDefinition(
@@ -289,7 +314,7 @@ public class ReportService implements CollectionReferencingService {
                         "Was not able to retrieve report with id ["
                             + reportId
                             + "]"
-                            + "from Elasticsearch. Report does not exist."));
+                            + "from the database. Report does not exist."));
 
     final RoleType currentUserRole =
         reportAuthorizationService
@@ -521,7 +546,7 @@ public class ReportService implements CollectionReferencingService {
                 "Can't create or update combined report. "
                     + "The following report ids are not combinable: [%s]",
                 data.getReportIds());
-        log.error(errorMessage);
+        LOG.error(errorMessage);
         throw new UncombinableReportsException(errorMessage);
       }
     }
@@ -536,7 +561,7 @@ public class ReportService implements CollectionReferencingService {
                 new NotFoundException(
                     "Was not able to retrieve report with id ["
                         + reportId
-                        + "] from database. Report does not exist."));
+                        + "] from the database. Report does not exist."));
   }
 
   private void removeReportAndAssociatedResources(
@@ -730,7 +755,7 @@ public class ReportService implements CollectionReferencingService {
                                     "Was not able to retrieve report with id ["
                                         + originalSubReportId
                                         + "]"
-                                        + "from Elasticsearch. Report does not exist."));
+                                        + "from the database. Report does not exist."));
 
                 final String reportName = keepSubReportNames ? report.getName() : null;
                 String subReportCopyId = existingReportCopies.get(originalSubReportId);
@@ -786,7 +811,7 @@ public class ReportService implements CollectionReferencingService {
                         "Was not able to retrieve report with id ["
                             + reportId
                             + "]"
-                            + "from Elasticsearch. Report does not exist."));
+                            + "from the database. Report does not exist."));
 
     if (!reportDefinition.isCombined()) {
       final SingleReportDefinitionDto<?> singleProcessReportDefinitionDto =
@@ -1066,6 +1091,7 @@ public class ReportService implements CollectionReferencingService {
 
   @FunctionalInterface
   private interface CreateReportMethod<RD extends ReportDataDto> {
+
     IdResponseDto create(
         String userId, RD reportData, String reportName, String description, String collectionId);
   }

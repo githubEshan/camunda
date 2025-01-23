@@ -19,6 +19,7 @@ import io.camunda.zeebe.scheduler.clock.ActorClock;
 import io.camunda.zeebe.scheduler.future.ActorFuture;
 import io.camunda.zeebe.util.health.HealthIssue;
 import java.time.Duration;
+import java.time.Instant;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Deque;
@@ -88,7 +89,7 @@ final class PartitionTransitionProcess {
           final var nextStep = pendingSteps.remove(0);
           currentStep = nextStep;
           stepStartedAtMs = ActorClock.currentTimeMillis();
-          LOG.info(
+          LOG.debug(
               "Transition to {} on term {} - transitioning {}", role, term, nextStep.getName());
           nextStep
               .transitionTo(context, term, role)
@@ -138,7 +139,7 @@ final class PartitionTransitionProcess {
         () -> {
           final var nextPrepareStep = stepsToPrepare.pop();
 
-          LOG.info(
+          LOG.debug(
               MSG_PREPARE_TRANSITION_STEP,
               context.getCurrentRole(),
               context.getCurrentTerm(),
@@ -214,13 +215,15 @@ final class PartitionTransitionProcess {
 
   public HealthIssue getHealthIssue() {
     if (currentStep != null && ActorClock.currentTimeMillis() > stepStartedAtMs + STEP_TIMEOUT_MS) {
-      return HealthIssue.of(
+      final var nowMillis = ActorClock.currentTimeMillis();
+      final var message =
           "Transition from %s on term %s appears blocked, step %s has been running for %s"
               .formatted(
                   context.getCurrentRole(),
                   context.getCurrentTerm(),
                   currentStep.getName(),
-                  Duration.ofMillis(ActorClock.currentTimeMillis() - stepStartedAtMs)));
+                  Duration.ofMillis(nowMillis - stepStartedAtMs));
+      return HealthIssue.of(message, Instant.ofEpochMilli(nowMillis));
     }
     return null;
   }

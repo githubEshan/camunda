@@ -10,15 +10,14 @@ package io.camunda.zeebe.it.client.command;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-import io.camunda.zeebe.client.ZeebeClient;
-import io.camunda.zeebe.client.api.command.ProblemException;
-import io.camunda.zeebe.client.protocol.rest.AuthorizationPatchRequest.ResourceTypeEnum;
-import io.camunda.zeebe.client.protocol.rest.AuthorizationPatchRequestPermissionsInner.PermissionTypeEnum;
+import io.camunda.client.CamundaClient;
+import io.camunda.client.api.command.ProblemException;
+import io.camunda.client.protocol.rest.PermissionTypeEnum;
+import io.camunda.client.protocol.rest.ResourceTypeEnum;
 import io.camunda.zeebe.it.util.ZeebeResourcesHelper;
 import io.camunda.zeebe.protocol.record.intent.AuthorizationIntent;
 import io.camunda.zeebe.protocol.record.value.AuthorizationOwnerType;
 import io.camunda.zeebe.protocol.record.value.AuthorizationResourceType;
-import io.camunda.zeebe.protocol.record.value.PermissionAction;
 import io.camunda.zeebe.protocol.record.value.PermissionType;
 import io.camunda.zeebe.qa.util.cluster.TestStandaloneBroker;
 import io.camunda.zeebe.qa.util.junit.ZeebeIntegration;
@@ -31,7 +30,7 @@ import org.junit.jupiter.api.Test;
 @ZeebeIntegration
 public class AddPermissionsTest {
 
-  ZeebeClient client;
+  CamundaClient client;
 
   @TestZeebe
   final TestStandaloneBroker zeebe = new TestStandaloneBroker().withRecordingExporter(true);
@@ -52,7 +51,7 @@ public class AddPermissionsTest {
     // when
     client
         .newAddPermissionsCommand(ownerKey)
-        .resourceType(ResourceTypeEnum.DEPLOYMENT)
+        .resourceType(ResourceTypeEnum.RESOURCE)
         .permission(PermissionTypeEnum.CREATE)
         .resourceId("resourceId")
         .send()
@@ -62,11 +61,10 @@ public class AddPermissionsTest {
     final var recordValue =
         RecordingExporter.authorizationRecords(AuthorizationIntent.PERMISSION_ADDED)
             .withOwnerKey(ownerKey)
-            .limit(1)
-            .getFirst()
+            .limit(2)
+            .getLast()
             .getValue();
-    assertThat(recordValue.getAction()).isEqualTo(PermissionAction.ADD);
-    assertThat(recordValue.getResourceType()).isEqualTo(AuthorizationResourceType.DEPLOYMENT);
+    assertThat(recordValue.getResourceType()).isEqualTo(AuthorizationResourceType.RESOURCE);
     assertThat(recordValue.getOwnerType()).isEqualTo(AuthorizationOwnerType.USER);
     final var permission = recordValue.getPermissions().getFirst();
     assertThat(permission.getPermissionType()).isEqualTo(PermissionType.CREATE);
@@ -82,14 +80,14 @@ public class AddPermissionsTest {
     final var future =
         client
             .newAddPermissionsCommand(nonExistingOwnerKey)
-            .resourceType(ResourceTypeEnum.DEPLOYMENT)
+            .resourceType(ResourceTypeEnum.RESOURCE)
             .permission(PermissionTypeEnum.CREATE)
             .resourceId("resourceId")
             .send();
 
     // then
     assertThatThrownBy(future::join)
-        .hasCauseInstanceOf(ProblemException.class)
+        .isInstanceOf(ProblemException.class)
         .hasMessageContaining("title: NOT_FOUND")
         .hasMessageContaining("status: 404")
         .hasMessageContaining(

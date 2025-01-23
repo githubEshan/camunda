@@ -8,6 +8,8 @@
 package io.camunda.zeebe.engine.processing.clock;
 
 import io.camunda.zeebe.engine.processing.distribution.CommandDistributionBehavior;
+import io.camunda.zeebe.engine.processing.identity.AuthorizationCheckBehavior;
+import io.camunda.zeebe.engine.processing.identity.AuthorizationCheckBehavior.AuthorizationRequest;
 import io.camunda.zeebe.engine.processing.streamprocessor.DistributedTypedRecordProcessor;
 import io.camunda.zeebe.engine.processing.streamprocessor.writers.SideEffectWriter;
 import io.camunda.zeebe.engine.processing.streamprocessor.writers.StateWriter;
@@ -17,6 +19,8 @@ import io.camunda.zeebe.engine.processing.streamprocessor.writers.Writers;
 import io.camunda.zeebe.protocol.impl.record.value.clock.ClockRecord;
 import io.camunda.zeebe.protocol.record.RejectionType;
 import io.camunda.zeebe.protocol.record.intent.ClockIntent;
+import io.camunda.zeebe.protocol.record.value.AuthorizationResourceType;
+import io.camunda.zeebe.protocol.record.value.PermissionType;
 import io.camunda.zeebe.stream.api.SideEffectProducer;
 import io.camunda.zeebe.stream.api.StreamClock.ControllableStreamClock;
 import io.camunda.zeebe.stream.api.records.TypedRecord;
@@ -29,6 +33,7 @@ public final class ClockProcessor implements DistributedTypedRecordProcessor<Clo
   private final KeyGenerator keyGenerator;
   private final ControllableStreamClock clock;
   private final CommandDistributionBehavior commandDistributionBehavior;
+  private final AuthorizationCheckBehavior authCheckBehavior;
   private final TypedResponseWriter responseWriter;
   private final TypedRejectionWriter rejectionWriter;
 
@@ -36,7 +41,8 @@ public final class ClockProcessor implements DistributedTypedRecordProcessor<Clo
       final Writers writers,
       final KeyGenerator keyGenerator,
       final ControllableStreamClock clock,
-      final CommandDistributionBehavior commandDistributionBehavior) {
+      final CommandDistributionBehavior commandDistributionBehavior,
+      final AuthorizationCheckBehavior authCheckBehavior) {
     sideEffectWriter = writers.sideEffect();
     stateWriter = writers.state();
     this.keyGenerator = keyGenerator;
@@ -45,10 +51,21 @@ public final class ClockProcessor implements DistributedTypedRecordProcessor<Clo
     this.clock = clock;
 
     this.commandDistributionBehavior = commandDistributionBehavior;
+    this.authCheckBehavior = authCheckBehavior;
   }
 
   @Override
   public void processNewCommand(final TypedRecord<ClockRecord> command) {
+    final var authRequest =
+        new AuthorizationRequest(command, AuthorizationResourceType.SYSTEM, PermissionType.UPDATE);
+    final var isAuthorized = authCheckBehavior.isAuthorized(authRequest);
+    if (isAuthorized.isLeft()) {
+      final var rejection = isAuthorized.getLeft();
+      rejectionWriter.appendRejection(command, rejection.type(), rejection.reason());
+      responseWriter.writeRejectionOnCommand(command, rejection.type(), rejection.reason());
+      return;
+    }
+
     final var intent = (ClockIntent) command.getIntent();
     final var clockRecord = command.getValue();
 
@@ -70,7 +87,7 @@ public final class ClockProcessor implements DistributedTypedRecordProcessor<Clo
       responseWriter.writeEventOnCommand(eventKey, resultIntent, clockRecord, command);
     }
 
-    commandDistributionBehavior.withKey(eventKey).distribute(command);
+    commandDistributionBehavior.withKey(eventKey).unordered().distribute(command);
   }
 
   @Override

@@ -13,15 +13,13 @@ import static io.camunda.optimize.service.db.schema.index.DashboardIndex.COLLECT
 
 import io.camunda.optimize.dto.optimize.query.dashboard.DashboardDefinitionRestDto;
 import io.camunda.optimize.service.db.os.OptimizeOpenSearchClient;
-import io.camunda.optimize.service.db.os.externalcode.client.dsl.QueryDSL;
+import io.camunda.optimize.service.db.os.client.dsl.QueryDSL;
 import io.camunda.optimize.service.db.reader.DashboardReader;
 import io.camunda.optimize.service.db.schema.index.DashboardIndex;
 import io.camunda.optimize.service.util.configuration.condition.OpenSearchCondition;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
-import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
 import org.opensearch.client.opensearch._types.query_dsl.BoolQuery;
 import org.opensearch.client.opensearch._types.query_dsl.ChildScoreMode;
 import org.opensearch.client.opensearch._types.query_dsl.NestedQuery;
@@ -30,16 +28,20 @@ import org.opensearch.client.opensearch.core.GetRequest;
 import org.opensearch.client.opensearch.core.GetResponse;
 import org.opensearch.client.opensearch.core.SearchRequest;
 import org.opensearch.client.opensearch.core.SearchResponse;
+import org.slf4j.Logger;
 import org.springframework.context.annotation.Conditional;
 import org.springframework.stereotype.Component;
 
-@RequiredArgsConstructor
 @Component
-@Slf4j
 @Conditional(OpenSearchCondition.class)
 public class DashboardReaderOS implements DashboardReader {
 
+  private static final Logger LOG = org.slf4j.LoggerFactory.getLogger(DashboardReaderOS.class);
   private final OptimizeOpenSearchClient osClient;
+
+  public DashboardReaderOS(final OptimizeOpenSearchClient osClient) {
+    this.osClient = osClient;
+  }
 
   @Override
   public long getDashboardCount() {
@@ -52,7 +54,7 @@ public class DashboardReaderOS implements DashboardReader {
 
   @Override
   public Optional<DashboardDefinitionRestDto> getDashboard(final String dashboardId) {
-    log.debug("Fetching dashboard with id [{}]", dashboardId);
+    LOG.debug("Fetching dashboard with id [{}]", dashboardId);
     final GetRequest.Builder getRequest =
         new GetRequest.Builder().index(DASHBOARD_INDEX_NAME).id(dashboardId);
 
@@ -70,7 +72,7 @@ public class DashboardReaderOS implements DashboardReader {
 
   @Override
   public List<DashboardDefinitionRestDto> getDashboards(final Set<String> dashboardIds) {
-    log.debug("Fetching dashboards with IDs {}", dashboardIds);
+    LOG.debug("Fetching dashboards with IDs {}", dashboardIds);
     final String[] dashboardIdsAsArray = dashboardIds.toArray(new String[0]);
 
     final SearchRequest.Builder requestBuilder =
@@ -90,7 +92,7 @@ public class DashboardReaderOS implements DashboardReader {
 
   @Override
   public List<DashboardDefinitionRestDto> getDashboardsForCollection(final String collectionId) {
-    log.debug("Fetching dashboards using collection with id {}", collectionId);
+    LOG.debug("Fetching dashboards using collection with id {}", collectionId);
 
     final SearchRequest.Builder requestBuilder =
         new SearchRequest.Builder()
@@ -108,7 +110,7 @@ public class DashboardReaderOS implements DashboardReader {
 
   @Override
   public List<DashboardDefinitionRestDto> getDashboardsForReport(final String reportId) {
-    log.debug("Fetching dashboards using report with id {}", reportId);
+    LOG.debug("Fetching dashboards using report with id {}", reportId);
 
     final Query getCombinedReportsBySimpleReportIdQuery =
         new BoolQuery.Builder()

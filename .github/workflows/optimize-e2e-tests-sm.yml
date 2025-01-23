@@ -38,61 +38,34 @@ permissions:
 jobs:
   e2e-tests-sm:
     name: E2E tests sm
-    runs-on: gcp-core-4-default
+    runs-on: ubuntu-latest
     timeout-minutes: 120
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 # v4
-
-      - name: Login to Harbor registry
-        uses: ./.github/actions/login-registry
-        with:
-          secrets: ${{ toJSON(secrets) }}
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
 
       - name: "Parse pom.xml for versions"
         id: "pom_info"
         uses: YunaBraska/java-info-action@main
+        with:
+          work-dir: ./optimize
 
       - name: Setup Maven
-        uses: ./.github/actions/setup-maven
+        uses: ./.github/actions/setup-build
         with:
-          secrets: ${{ toJSON(secrets) }}
-
-      - name: Install firefox deps
-        run: |
-          sudo apt-get update && sudo apt-get install
-          sudo apt-get install -y xvfb bzip2 packagekit-gtk3-module libasound2
-
-      - name: Install firefox
-        uses: browser-actions/setup-firefox@v1
-
-      - name: Setup Node
-        uses: actions/setup-node@v4
-        with:
-          node-version: ${{ steps.pom_info.outputs.x_version_node }}
-
-      - name: Setup yarn
-        run: npm install -g yarn
-
-      - name: Setup NodeJS
-        uses: actions/setup-node@1e60f620b9541d16bece96c5465dc8ee9832be0b # v4
-        with:
-          node-version: ${{ steps.pom_info.outputs.x_version_node }}
-
-      - uses: camunda/infra-global-github-actions/setup-yarn-cache@main
-        with:
-          directory: optimize/client
-
-      - name: Install node dependencies
-        working-directory: ./optimize/client
-        shell: bash
-        run: yarn
+          harbor: true
+          maven-cache-key-modifier: optimize-tests
+          maven-version: 3.8.6
+          time-zone: Europe/Berlin
+          vault-address: ${{ secrets.VAULT_ADDR }}
+          vault-role-id: ${{ secrets.VAULT_ROLE_ID }}
+          vault-secret-id: ${{ secrets.VAULT_SECRET_ID }}
 
       - name: Build frontend
-        working-directory: ./optimize/client
-        run: yarn build
-        shell: bash
+        uses: ./.github/actions/build-frontend
+        with:
+          directory: ./optimize/client
 
       - name: Start frontend
         working-directory: ./optimize/client
@@ -106,7 +79,7 @@ jobs:
           additional_flags: "--profile self-managed"
 
       - name: Build backend
-        run: mvn clean install -T1C -DskipTests -Dskip.docker -pl optimize/backend -am -P skipFrontendBuild
+        run: ./mvnw clean install -T1C -DskipTests -Dskip.docker -pl optimize/backend -am -P skipFrontendBuild
 
       - name: Create backend logs file
         run: mkdir -p ./optimize/client/build && touch ./optimize/client/build/backendLogs.log
@@ -136,7 +109,7 @@ jobs:
         run: yarn run e2e:ci:sm:headless
 
       - name: Upload logs
-        uses: actions/upload-artifact@50769540e7f4bd5e21e526ee35c689e35e0d6874 # v4
+        uses: actions/upload-artifact@65c4c4a1ddee5b72f698fdd19549f0f0fb45cf08 # v4
         if: always()
         with:
           name: logs

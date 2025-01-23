@@ -22,21 +22,35 @@ import io.camunda.optimize.service.util.configuration.cleanup.ProcessDefinitionC
 import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Set;
-import lombok.AllArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
+import org.slf4j.Logger;
 import org.springframework.stereotype.Component;
 
-@AllArgsConstructor
 @Component
-@Slf4j
 public class EngineDataProcessCleanupService extends CleanupService {
 
+  private static final Logger LOG =
+      org.slf4j.LoggerFactory.getLogger(EngineDataProcessCleanupService.class);
   private final ConfigurationService configurationService;
   private final ProcessDefinitionReader processDefinitionReader;
   private final ProcessInstanceReader processInstanceReader;
   private final ProcessInstanceWriter processInstanceWriter;
   private final ProcessVariableUpdateWriter processVariableUpdateWriter;
   private final VariableUpdateInstanceWriter variableUpdateInstanceWriter;
+
+  public EngineDataProcessCleanupService(
+      final ConfigurationService configurationService,
+      final ProcessDefinitionReader processDefinitionReader,
+      final ProcessInstanceReader processInstanceReader,
+      final ProcessInstanceWriter processInstanceWriter,
+      final ProcessVariableUpdateWriter processVariableUpdateWriter,
+      final VariableUpdateInstanceWriter variableUpdateInstanceWriter) {
+    this.configurationService = configurationService;
+    this.processDefinitionReader = processDefinitionReader;
+    this.processInstanceReader = processInstanceReader;
+    this.processInstanceWriter = processInstanceWriter;
+    this.processVariableUpdateWriter = processVariableUpdateWriter;
+    this.variableUpdateInstanceWriter = variableUpdateInstanceWriter;
+  }
 
   @Override
   public boolean isEnabled() {
@@ -54,7 +68,7 @@ public class EngineDataProcessCleanupService extends CleanupService {
             .getAllProcessSpecificConfigurationKeys());
     int i = 1;
     for (final String currentProcessDefinitionKey : allOptimizeProcessDefinitionKeys) {
-      log.info("Process History Cleanup step {}/{}", i, allOptimizeProcessDefinitionKeys.size());
+      LOG.info("Process History Cleanup step {}/{}", i, allOptimizeProcessDefinitionKeys.size());
       performCleanupForProcessKey(startTime, currentProcessDefinitionKey);
       i++;
     }
@@ -66,7 +80,7 @@ public class EngineDataProcessCleanupService extends CleanupService {
         getCleanupConfiguration()
             .getProcessDefinitionCleanupConfigurationForKey(currentProcessDefinitionKey);
 
-    log.info(
+    LOG.info(
         "Performing cleanup on process instances for processDefinitionKey: {}, with ttl: {} and mode:{}",
         currentProcessDefinitionKey,
         cleanupConfigurationForKey.getTtl(),
@@ -85,7 +99,7 @@ public class EngineDataProcessCleanupService extends CleanupService {
             "Unsupported cleanup mode " + cleanupConfigurationForKey.getCleanupMode());
     }
 
-    log.info(
+    LOG.info(
         "Finished cleanup on process instances for processDefinitionKey: {}, with ttl: {} and mode:{}",
         currentProcessDefinitionKey,
         cleanupConfigurationForKey.getTtl(),

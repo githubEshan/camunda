@@ -6,7 +6,15 @@
  * except in compliance with the Camunda License 1.0.
  */
 
-import {BaseSyntheticEvent, Children, cloneElement, ComponentProps, ReactNode} from 'react';
+import {
+  BaseSyntheticEvent,
+  Children,
+  cloneElement,
+  ComponentProps,
+  ReactNode,
+  useLayoutEffect,
+  useRef,
+} from 'react';
 import {MenuItemSelectable} from '@carbon/react';
 import {MenuDropdown} from '@camunda/camunda-optimize-composite-components';
 
@@ -28,7 +36,7 @@ export default function Select<T extends object | string | number>(props: Select
   const {labelText, helperText, ...rest} = props;
   const renderChildrenWithProps = (children: ReactNode) => {
     return Children.toArray(children)
-      .filter(isReactElement)
+      .filter(isReactElement<SubmenuProps | OptionProps>)
       .map((child) => {
         const newProps: SubmenuProps | OptionProps = {
           ...child.props,
@@ -92,7 +100,7 @@ export default function Select<T extends object | string | number>(props: Select
       )}
       <MenuDropdown
         {...rest}
-        onChange={(e: any) => onChange(e)}
+        onChange={(e: BaseSyntheticEvent) => onChange(e)}
         label={props.placeholder || getLabel() || t('common.select').toString()}
         menuTarget={document.querySelector<HTMLElement>('.fullscreen')}
       >
@@ -110,10 +118,27 @@ type SubmenuProps = Omit<ComponentProps<typeof MenuItemSelectable>, 'label'> & {
 };
 
 Select.Submenu = function Submenu(props: SubmenuProps) {
+  const submenuRef = useRef<HTMLLIElement>(null);
+
+  useLayoutEffect(() => {
+    if (submenuRef.current) {
+      const submenu = submenuRef.current.querySelector('.cds--menu') as HTMLLIElement;
+
+      if (submenu) {
+        const rect = submenu.getBoundingClientRect();
+        submenu.style.marginLeft = `-${rect.width}px`;
+      }
+    }
+  }, []);
+
   return (
-    // @ts-ignore
     // To make disabled state work, we can't pass children to it
-    <MenuItemSelectable className="Submenu" {...props} label={props.label?.toString() || ''}>
+    <MenuItemSelectable
+      ref={submenuRef}
+      className="Submenu"
+      {...props}
+      label={props.label?.toString() || ''}
+    >
       {!props.disabled && props.children}
     </MenuItemSelectable>
   );
@@ -127,7 +152,6 @@ Select.Option = function Option<T extends object | string | number = string>(
   props: OptionProps<T>
 ) {
   return (
-    // @ts-ignore
     // To make disabled state work, we can't pass children to it
     <MenuItemSelectable className="Option" {...props} label={props.label?.toString() || ''}>
       {!props.disabled && props.children}

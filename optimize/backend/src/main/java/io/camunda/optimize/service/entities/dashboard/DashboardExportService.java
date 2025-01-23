@@ -15,30 +15,37 @@ import io.camunda.optimize.dto.optimize.query.report.ReportDefinitionDto;
 import io.camunda.optimize.dto.optimize.rest.export.OptimizeEntityExportDto;
 import io.camunda.optimize.dto.optimize.rest.export.dashboard.DashboardDefinitionExportDto;
 import io.camunda.optimize.dto.optimize.rest.export.report.ReportDefinitionExportDto;
+import io.camunda.optimize.rest.exceptions.ForbiddenException;
+import io.camunda.optimize.rest.exceptions.NotFoundException;
 import io.camunda.optimize.service.dashboard.DashboardService;
 import io.camunda.optimize.service.entities.report.ReportExportService;
 import io.camunda.optimize.service.exceptions.OptimizeRuntimeException;
 import io.camunda.optimize.service.security.AuthorizedCollectionService;
-import jakarta.ws.rs.ForbiddenException;
-import jakarta.ws.rs.NotFoundException;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
-import lombok.AllArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
+import org.slf4j.Logger;
 import org.springframework.stereotype.Component;
 
-@AllArgsConstructor
 @Component
-@Slf4j
 public class DashboardExportService {
 
+  private static final Logger LOG = org.slf4j.LoggerFactory.getLogger(DashboardExportService.class);
   private final DashboardService dashboardService;
   private final ReportExportService reportExportService;
   private final AuthorizedCollectionService collectionService;
 
+  public DashboardExportService(
+      final DashboardService dashboardService,
+      final ReportExportService reportExportService,
+      final AuthorizedCollectionService collectionService) {
+    this.dashboardService = dashboardService;
+    this.reportExportService = reportExportService;
+    this.collectionService = collectionService;
+  }
+
   public List<OptimizeEntityExportDto> getCompleteDashboardExport(final Set<String> dashboardIds) {
-    log.debug("Exporting dashboards with IDs {} via API.", dashboardIds);
+    LOG.debug("Exporting dashboards with IDs {} via API.", dashboardIds);
     final List<DashboardDefinitionRestDto> dashboards =
         retrieveDashboardDefinitionsOrFailIfMissing(dashboardIds);
     final List<ReportDefinitionDto<?>> reports =
@@ -55,7 +62,7 @@ public class DashboardExportService {
 
   public List<OptimizeEntityExportDto> getCompleteDashboardExport(
       final String userId, final String dashboardId) {
-    log.debug("Exporting dashboard with ID {} as user {}.", dashboardId, userId);
+    LOG.debug("Exporting dashboard with ID {} as user {}.", dashboardId, userId);
     final List<DashboardDefinitionRestDto> dashboards =
         retrieveDashboardDefinitionsOrFailIfMissing(Set.of(dashboardId));
     validateUserAuthorizedToAccessDashboardsOrFail(userId, dashboards);
@@ -95,7 +102,7 @@ public class DashboardExportService {
         dashboards.stream().flatMap(d -> d.getTileIds().stream()).collect(toSet());
     try {
       return reportExportService.retrieveReportDefinitionsOrFailIfMissing(reportIds);
-    } catch (NotFoundException e) {
+    } catch (final NotFoundException e) {
       throw new OptimizeRuntimeException(
           "Could not retrieve some reports required by this dashboard.");
     }
@@ -112,7 +119,7 @@ public class DashboardExportService {
               try {
                 collectionService.verifyUserAuthorizedToEditCollectionResources(
                     userId, collectionId);
-              } catch (ForbiddenException e) {
+              } catch (final ForbiddenException e) {
                 unauthorizedCollectionIds.add(collectionId);
               }
             });

@@ -67,7 +67,7 @@ it('should contain the report name', async () => {
   runAllEffects();
   await flushPromises();
 
-  expect(node.find('EntityName').children()).toIncludeText('Report Name');
+  expect(node.find('EntityName').prop('name')).toBe('Report Name');
 });
 
 it('should provide a link to the report', async () => {
@@ -77,7 +77,7 @@ it('should provide a link to the report', async () => {
   runAllEffects();
   await flushPromises();
 
-  expect(node.find('EntityName').children()).toIncludeText('Report Name');
+  expect(node.find('EntityName').prop('name')).toBe('Report Name');
   expect(node.find('EntityName')).toHaveProp('linkTo', 'report/a/');
 });
 
@@ -99,7 +99,7 @@ it('should not provide a link to the report when link is disabled', async () => 
   await flushPromises();
 
   expect(node.find('EntityName')).toHaveProp('linkTo', false);
-  expect(node.find('EntityName').children()).toIncludeText('Report Name');
+  expect(node.find('EntityName').prop('name')).toBe('Report Name');
 });
 
 it('should display the name of a failing report', async () => {
@@ -108,7 +108,7 @@ it('should display the name of a failing report', async () => {
   });
 
   useErrorHandling.mockReturnValueOnce({
-    mightFail: (data, success, fail) => fail(data),
+    mightFail: (data, _success, fail) => fail(data),
   });
 
   const node = shallow(<OptimizeReportTile {...props} disableNameLink />);
@@ -116,7 +116,7 @@ it('should display the name of a failing report', async () => {
   runAllEffects();
   await flushPromises();
 
-  expect(node.find('EntityName').children()).toIncludeText('Failing Name');
+  expect(node.find('EntityName').prop('name')).toBe('Failing Name');
 });
 
 it('should pass an error message if there is an error and no report is returned', async () => {
@@ -127,7 +127,7 @@ it('should pass an error message if there is an error and no report is returned'
   };
   loadTile.mockReturnValueOnce(error);
 
-  const mightFail = jest.fn((data, success, fail) => fail(data));
+  const mightFail = jest.fn((data, _success, fail) => fail(data));
   useErrorHandling.mockReturnValueOnce({
     mightFail,
   });

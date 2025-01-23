@@ -17,7 +17,7 @@ import io.camunda.optimize.dto.optimize.query.IdResponseDto;
 import io.camunda.optimize.dto.optimize.query.dashboard.DashboardDefinitionRestDto;
 import io.camunda.optimize.dto.optimize.query.dashboard.DashboardDefinitionUpdateDto;
 import io.camunda.optimize.service.db.os.OptimizeOpenSearchClient;
-import io.camunda.optimize.service.db.os.externalcode.client.dsl.QueryDSL;
+import io.camunda.optimize.service.db.os.client.dsl.QueryDSL;
 import io.camunda.optimize.service.db.schema.index.DashboardIndex;
 import io.camunda.optimize.service.db.writer.DashboardWriter;
 import io.camunda.optimize.service.exceptions.OptimizeRuntimeException;
@@ -26,9 +26,6 @@ import io.camunda.optimize.service.util.IdGenerator;
 import io.camunda.optimize.service.util.configuration.condition.OpenSearchCondition;
 import java.util.Collections;
 import java.util.Optional;
-import lombok.AllArgsConstructor;
-import lombok.NonNull;
-import lombok.extern.slf4j.Slf4j;
 import org.opensearch.client.json.JsonData;
 import org.opensearch.client.opensearch._types.Refresh;
 import org.opensearch.client.opensearch._types.Result;
@@ -42,30 +39,49 @@ import org.opensearch.client.opensearch.core.IndexRequest;
 import org.opensearch.client.opensearch.core.IndexResponse;
 import org.opensearch.client.opensearch.core.UpdateRequest;
 import org.opensearch.client.opensearch.core.UpdateResponse;
+import org.slf4j.Logger;
 import org.springframework.context.annotation.Conditional;
 import org.springframework.stereotype.Component;
 
-@AllArgsConstructor
 @Component
-@Slf4j
 @Conditional(OpenSearchCondition.class)
 public class DashboardWriterOS implements DashboardWriter {
 
+  private static final Logger LOG = org.slf4j.LoggerFactory.getLogger(DashboardWriterOS.class);
   private final OptimizeOpenSearchClient osClient;
+
+  public DashboardWriterOS(final OptimizeOpenSearchClient osClient) {
+    this.osClient = osClient;
+  }
 
   @Override
   public IdResponseDto createNewDashboard(
-      @NonNull final String userId,
-      @NonNull final DashboardDefinitionRestDto dashboardDefinitionDto) {
+      final String userId, final DashboardDefinitionRestDto dashboardDefinitionDto) {
+    if (userId == null) {
+      throw new OptimizeRuntimeException("userId cannot be null");
+    }
+    if (dashboardDefinitionDto == null) {
+      throw new OptimizeRuntimeException("dashboardDefinitionDto cannot be null");
+    }
     return createNewDashboard(userId, dashboardDefinitionDto, IdGenerator.getNextId());
   }
 
   @Override
   public IdResponseDto createNewDashboard(
-      @NonNull final String userId,
-      @NonNull final DashboardDefinitionRestDto dashboardDefinitionDto,
-      @NonNull final String id) {
-    log.debug("Writing new dashboard to OpenSearch");
+      final String userId,
+      final DashboardDefinitionRestDto dashboardDefinitionDto,
+      final String id) {
+    if (userId == null) {
+      throw new OptimizeRuntimeException("userId cannot be null");
+    }
+    if (dashboardDefinitionDto == null) {
+      throw new OptimizeRuntimeException("dashboardDefinitionDto cannot be null");
+    }
+    if (id == null) {
+      throw new OptimizeRuntimeException("id cannot be null");
+    }
+
+    LOG.debug("Writing new dashboard to OpenSearch");
     dashboardDefinitionDto.setOwner(userId);
     dashboardDefinitionDto.setName(
         Optional.ofNullable(dashboardDefinitionDto.getName()).orElse(DEFAULT_DASHBOARD_NAME));
@@ -75,8 +91,11 @@ public class DashboardWriterOS implements DashboardWriter {
   }
 
   @Override
-  public IdResponseDto saveDashboard(
-      @NonNull final DashboardDefinitionRestDto dashboardDefinitionDto) {
+  public IdResponseDto saveDashboard(final DashboardDefinitionRestDto dashboardDefinitionDto) {
+    if (dashboardDefinitionDto == null) {
+      throw new OptimizeRuntimeException("dashboardDefinitionDto cannot be null");
+    }
+
     dashboardDefinitionDto.setCreated(LocalDateUtil.getCurrentDateTime());
     dashboardDefinitionDto.setLastModified(LocalDateUtil.getCurrentDateTime());
     final String dashboardId = dashboardDefinitionDto.getId();
@@ -94,17 +113,17 @@ public class DashboardWriterOS implements DashboardWriter {
       final String message =
           "Could not write dashboard to OpenSearch. "
               + "Maybe the connection to OpenSearch was lost?";
-      log.error(message);
+      LOG.error(message);
       throw new OptimizeRuntimeException(message);
     }
 
-    log.debug("Dashboard with id [{}] has successfully been created.", dashboardId);
+    LOG.debug("Dashboard with id [{}] has successfully been created.", dashboardId);
     return new IdResponseDto(dashboardId);
   }
 
   @Override
   public void updateDashboard(final DashboardDefinitionUpdateDto dashboard, final String id) {
-    log.debug("Updating dashboard with id [{}] in OpenSearch", id);
+    LOG.debug("Updating dashboard with id [{}] in OpenSearch", id);
 
     final UpdateRequest.Builder<Void, DashboardDefinitionUpdateDto> request =
         new UpdateRequest.Builder<Void, DashboardDefinitionUpdateDto>()
@@ -122,7 +141,7 @@ public class DashboardWriterOS implements DashboardWriter {
     final UpdateResponse<Void> updateResponse = osClient.update(request, errorMessage);
 
     if (updateResponse.shards().failed().intValue() > 0) {
-      log.error(
+      LOG.error(
           "Was not able to update dashboard with id [{}] and name [{}].", id, dashboard.getName());
       throw new OptimizeRuntimeException("Was not able to update dashboard!");
     }
@@ -131,7 +150,7 @@ public class DashboardWriterOS implements DashboardWriter {
   @Override
   public void removeReportFromDashboards(final String reportId) {
     final String updateItem = String.format("report from dashboard with report ID [%s]", reportId);
-    log.info("Removing {}}.", updateItem);
+    LOG.info("Removing {}}.", updateItem);
 
     final Script removeReportFromDashboardScript =
         OpenSearchWriterUtil.createDefaultScriptWithPrimitiveParams(
@@ -157,7 +176,7 @@ public class DashboardWriterOS implements DashboardWriter {
 
   @Override
   public void deleteDashboard(final String dashboardId) {
-    log.debug("Deleting dashboard with id [{}]", dashboardId);
+    LOG.debug("Deleting dashboard with id [{}]", dashboardId);
 
     final DeleteRequest.Builder request =
         new DeleteRequest.Builder()
@@ -173,7 +192,7 @@ public class DashboardWriterOS implements DashboardWriter {
       final String message =
           String.format(
               "Could not delete dashboard with id [%s]. Dashboard does not exist.", dashboardId);
-      log.error(message);
+      LOG.error(message);
       throw new OptimizeRuntimeException(message);
     }
   }

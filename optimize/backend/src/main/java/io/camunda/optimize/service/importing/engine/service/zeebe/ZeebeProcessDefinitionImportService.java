@@ -25,13 +25,14 @@ import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
-import lombok.extern.slf4j.Slf4j;
+import org.slf4j.Logger;
 
-@Slf4j
 public class ZeebeProcessDefinitionImportService
     implements ImportService<ZeebeProcessDefinitionRecordDto> {
 
   private static final Set<ProcessIntent> INTENTS_TO_IMPORT = Set.of(ProcessIntent.CREATED);
+  private static final Logger LOG =
+      org.slf4j.LoggerFactory.getLogger(ZeebeProcessDefinitionImportService.class);
 
   private final DatabaseImportJobExecutor databaseImportJobExecutor;
   private final ProcessDefinitionWriter processDefinitionWriter;
@@ -56,7 +57,7 @@ public class ZeebeProcessDefinitionImportService
   public void executeImport(
       final List<ZeebeProcessDefinitionRecordDto> pageOfProcessDefinitions,
       final Runnable importCompleteCallback) {
-    log.trace("Importing process definitions from zeebe records...");
+    LOG.trace("Importing process definitions from zeebe records...");
 
     final boolean newDataIsAvailable = !pageOfProcessDefinitions.isEmpty();
     if (newDataIsAvailable) {
@@ -85,7 +86,7 @@ public class ZeebeProcessDefinitionImportService
             .filter(zeebeRecord -> INTENTS_TO_IMPORT.contains(zeebeRecord.getIntent()))
             .map(this::mapZeebeRecordsToOptimizeEntities)
             .collect(Collectors.toList());
-    log.debug(
+    LOG.debug(
         "Processing {} fetched zeebe process definition records, of which {} are relevant to Optimize and will be imported.",
         zeebeRecords.size(),
         optimizeDtos.size());

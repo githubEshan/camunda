@@ -39,6 +39,10 @@ public final class RecordStream extends ExporterRecordStream<RecordValue, Record
     return supply(dropWhile(Predicate.not(lowerBound))).limit(upperBound::test);
   }
 
+  public RecordStream after(final long lowerBoundPosition) {
+    return supply(dropWhile(r -> r.getPosition() <= lowerBoundPosition));
+  }
+
   public RecordStream limitToProcessInstance(final long processInstanceKey) {
     return limit(
         r ->
@@ -92,6 +96,11 @@ public final class RecordStream extends ExporterRecordStream<RecordValue, Record
         filter(r -> r.getValueType() == ValueType.JOB).map(Record.class::cast));
   }
 
+  public FormRecordStream formRecords() {
+    return new FormRecordStream(
+        filter(r -> r.getValueType() == ValueType.FORM).map(Record.class::cast));
+  }
+
   public IncidentRecordStream incidentRecords() {
     return new IncidentRecordStream(
         filter(r -> r.getValueType() == ValueType.INCIDENT).map(Record.class::cast));
@@ -122,5 +131,25 @@ public final class RecordStream extends ExporterRecordStream<RecordValue, Record
   public UserTaskRecordStream userTaskRecords() {
     return new UserTaskRecordStream(
         filter(r -> r.getValueType() == ValueType.USER_TASK).map(Record.class::cast));
+  }
+
+  public UserRecordStream userRecords() {
+    return new UserRecordStream(
+        filter(r -> r.getValueType() == ValueType.USER).map(Record.class::cast));
+  }
+
+  public IdentitySetupRecordStream identitySetupRecords() {
+    return new IdentitySetupRecordStream(
+        filter(r -> r.getValueType() == ValueType.IDENTITY_SETUP).map(Record.class::cast));
+  }
+
+  public RoleRecordStream roleRecords() {
+    return new RoleRecordStream(
+        filter(r -> r.getValueType() == ValueType.ROLE).map(Record.class::cast));
+  }
+
+  public AuthorizationRecordStream authorizationRecords() {
+    return new AuthorizationRecordStream(
+        filter(r -> r.getValueType() == ValueType.AUTHORIZATION).map(Record.class::cast));
   }
 }

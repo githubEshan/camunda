@@ -17,6 +17,7 @@ jobs:
   smoke-tests:
     name: "[Smoke] ${{ matrix.os }} with ${{ matrix.arch }}"
     timeout-minutes: 20
+    permissions: {}  # GITHUB_TOKEN unused in this job
     runs-on: ${{ matrix.runner }}
     strategy:
       fail-fast: false
@@ -29,23 +30,21 @@ jobs:
           - os: windows
             runner: windows-latest
           - os: linux
-            runner: [ self-hosted, linux, amd64 ]
+            runner: gcp-perf-core-8-default
           - os: linux
-            runner: "aws-arm-core-4-default"
+            runner: "aws-arm-core-4-longrunning"
             arch: arm64
     steps:
       - uses: actions/checkout@v4
-      - uses: ./.github/actions/setup-zeebe
+      - uses: ./.github/actions/setup-build
         with:
-          go: false
-          secret_vault_secretId: ${{ secrets.VAULT_SECRET_ID }}
-          secret_vault_address: ${{ secrets.VAULT_ADDR }}
-          secret_vault_roleId: ${{ secrets.VAULT_ROLE_ID }}
-          docker: ${{ matrix.os != 'macos' && matrix.os != 'windows' }}
+          dockerhub-readonly:  ${{ matrix.os != 'macos' && matrix.os != 'windows' }}
+          vault-address: ${{ secrets.VAULT_ADDR }}
+          vault-role-id: ${{ secrets.VAULT_ROLE_ID }}
+          vault-secret-id: ${{ secrets.VAULT_SECRET_ID }}
       - uses: ./.github/actions/build-zeebe
         id: build-zeebe
         with:
-          go: false
           maven-extra-args: -T1C -PskipFrontendBuild
       - uses: ./.github/actions/build-platform-docker
         id: build-zeebe-docker
@@ -56,6 +55,8 @@ jobs:
           distball: ${{ steps.build-zeebe.outputs.distball }}
           platforms: linux/${{ matrix.arch }}
           push: false
+      - name: Create build output log file
+        run: echo "BUILD_OUTPUT_FILE_PATH=$(mktemp)" >> $GITHUB_ENV
       - name: Run smoke test on ${{ matrix.arch }}
         env:
           # For non Linux runners there is no container available for testing, see build-zeebe-docker job
@@ -68,9 +69,16 @@ jobs:
           -D excludedGroups=$EXCLUDED_TEST_GROUPS
           -f zeebe
           verify
+          | tee "${BUILD_OUTPUT_FILE_PATH}"
+      - name: Analyze Test Runs
+        id: analyze-test-run
+        if: always()
+        uses: ./.github/actions/analyze-test-runs
+        with:
+          buildOutputFilePath: ${{ env.BUILD_OUTPUT_FILE_PATH }}
       - name: Upload test artifacts
         uses: ./.github/actions/collect-test-artifacts
-        if: ${{ failure() || cancelled() }}
+        if: ${{ failure() || cancelled() || steps.analyze-test-run.outputs.flakyTests != '' }}
         with:
           name: "[Smoke] ${{ matrix.os }} with ${{ matrix.arch }}"
       - name: Observe build status
@@ -85,19 +93,18 @@ jobs:
           secret_vault_roleId: ${{ secrets.VAULT_ROLE_ID }}
   property-tests:
     name: Property Tests
-    runs-on: [ self-hosted, linux, amd64, "16" ]
+    runs-on: gcp-perf-core-8-default
     timeout-minutes: 30
+    permissions: {}  # GITHUB_TOKEN unused in this job
     steps:
       - uses: actions/checkout@v4
-      - uses: ./.github/actions/setup-zeebe
+      - uses: ./.github/actions/setup-build
         with:
-          go: false
-          secret_vault_secretId: ${{ secrets.VAULT_SECRET_ID }}
-          secret_vault_address: ${{ secrets.VAULT_ADDR }}
-          secret_vault_roleId: ${{ secrets.VAULT_ROLE_ID }}
+          vault-address: ${{ secrets.VAULT_ADDR }}
+          vault-role-id: ${{ secrets.VAULT_ROLE_ID }}
+          vault-secret-id: ${{ secrets.VAULT_SECRET_ID }}
       - uses: ./.github/actions/build-zeebe
         with:
-          go: false
           maven-extra-args: -T1C -PskipFrontendBuild
       - name: Create build output log file
         run: echo "BUILD_OUTPUT_FILE_PATH=$(mktemp)" >> $GITHUB_ENV
@@ -111,6 +118,7 @@ jobs:
           test
           | tee "${BUILD_OUTPUT_FILE_PATH}"
       - name: Analyze Test Runs
+        id: analyze-test-run
         if: always()
         uses: ./.github/actions/analyze-test-runs
         with:
@@ -119,7 +127,7 @@ jobs:
           skipSummary: true
       - name: Upload test artifacts
         uses: ./.github/actions/collect-test-artifacts
-        if: ${{ failure() || cancelled() }}
+        if: ${{ failure() || cancelled() || steps.analyze-test-run.outputs.flakyTests != '' }}
         with:
           name: Property Tests
       - name: Observe build status
@@ -133,21 +141,20 @@ jobs:
           secret_vault_roleId: ${{ secrets.VAULT_ROLE_ID }}
   performance-tests:
     name: Performance Tests
-    runs-on: [ self-hosted, linux, amd64, "16" ]
+    runs-on: gcp-perf-core-16-default
     timeout-minutes: 30
+    permissions: {}  # GITHUB_TOKEN unused in this job
     env:
       ZEEBE_PERFORMANCE_TEST_RESULTS_DIR: "/tmp/jmh"
     steps:
       - uses: actions/checkout@v4
-      - uses: ./.github/actions/setup-zeebe
+      - uses: ./.github/actions/setup-build
         with:
-          go: false
-          secret_vault_secretId: ${{ secrets.VAULT_SECRET_ID }}
-          secret_vault_address: ${{ secrets.VAULT_ADDR }}
-          secret_vault_roleId: ${{ secrets.VAULT_ROLE_ID }}
+          vault-address: ${{ secrets.VAULT_ADDR }}
+          vault-role-id: ${{ secrets.VAULT_ROLE_ID }}
+          vault-secret-id: ${{ secrets.VAULT_SECRET_ID }}
       - uses: ./.github/actions/build-zeebe
         with:
-          go: false
           maven-extra-args: -T1C -PskipFrontendBuild
       - name: Create build output log file
         run: echo "BUILD_OUTPUT_FILE_PATH=$(mktemp)" >> $GITHUB_ENV
@@ -163,6 +170,7 @@ jobs:
         env:
           LARGE_STATE_CONTROLLER_PERFORMANCE_TEST_SIZE_GB: "4"
       - name: Analyze Test Runs
+        id: analyze-test-run
         if: always()
         uses: ./.github/actions/analyze-test-runs
         with:
@@ -180,7 +188,7 @@ jobs:
           echo '```' >> $GITHUB_STEP_SUMMARY
       - name: Upload test artifacts
         uses: ./.github/actions/collect-test-artifacts
-        if: ${{ failure() || cancelled() }}
+        if: ${{ failure() || cancelled() || steps.analyze-test-run.outputs.flakyTests != '' }}
         with:
           name: Performance Tests
       - name: Observe build status
@@ -189,102 +197,74 @@ jobs:
         uses: ./.github/actions/observe-build-status
         with:
           build_status: ${{ job.status }}
+          user_reason: ${{ (steps.analyze-test-run.outputs.flakyTests != '') && 'flaky-tests' || '' }}
+          user_description: ${{ steps.analyze-test-run.outputs.flakyTests }}
+          detailed_junit_flaky_tests: true
           secret_vault_secretId: ${{ secrets.VAULT_SECRET_ID }}
           secret_vault_address: ${{ secrets.VAULT_ADDR }}
           secret_vault_roleId: ${{ secrets.VAULT_ROLE_ID }}
-  go-client:
-    name: Go client tests
+  strace-tests:
+    # Zeebe tests requiring strace
+    name: Strace Tests
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    permissions: {}  # GITHUB_TOKEN unused in this job
     steps:
       - uses: actions/checkout@v4
-      - uses: ./.github/actions/setup-zeebe
+      - name: Install and allow strace tests
+        run: |
+          sudo apt-get -qq update && sudo apt-get install -y strace
+          sudo sysctl -w kernel.yama.ptrace_scope=0
+      - uses: ./.github/actions/setup-build
         with:
-          secret_vault_secretId: ${{ secrets.VAULT_SECRET_ID }}
-          secret_vault_address: ${{ secrets.VAULT_ADDR }}
-          secret_vault_roleId: ${{ secrets.VAULT_ROLE_ID }}
+          vault-address: ${{ secrets.VAULT_ADDR }}
+          vault-role-id: ${{ secrets.VAULT_ROLE_ID }}
+          vault-secret-id: ${{ secrets.VAULT_SECRET_ID }}
       - uses: ./.github/actions/build-zeebe
-        id: build-zeebe
         with:
           maven-extra-args: -T1C -PskipFrontendBuild
-      - uses: ./.github/actions/build-platform-docker
-        id: build-zeebe-docker
+      - name: Create build output log file
+        run: echo "BUILD_OUTPUT_FILE_PATH=$(mktemp)" >> $GITHUB_ENV
+      - name: Maven Test Build
+        run: >
+          ./mvnw -T1C -B --no-snapshot-updates
+          -P include-strace-tests
+          -D junitThreadCount=2
+          -D skipChecks
+          -f zeebe
+          test
+          | tee "${BUILD_OUTPUT_FILE_PATH}"
+      - name: Analyze Test Runs
+        id: analyze-test-run
+        if: always()
+        uses: ./.github/actions/analyze-test-runs
         with:
-          repository: camunda/zeebe
-          version: current-test
-          distball: ${{ steps.build-zeebe.outputs.distball }}
-      - name: Run Go tests
-        working-directory: clients/go
-        run: go test -mod=vendor -v ./...
+          buildOutputFilePath: ${{ env.BUILD_OUTPUT_FILE_PATH }}
+          # workaround to avoid https://github.com/camunda/camunda/issues/16604
+          skipSummary: true
+      - name: Upload test artifacts
+        uses: ./.github/actions/collect-test-artifacts
+        if: ${{ failure() || cancelled() || steps.analyze-test-run.outputs.flakyTests != '' }}
+        with:
+          name: Strace Tests
       - name: Observe build status
         if: always()
         continue-on-error: true
         uses: ./.github/actions/observe-build-status
         with:
           build_status: ${{ job.status }}
-          secret_vault_secretId: ${{ secrets.VAULT_SECRET_ID }}
-          secret_vault_address: ${{ secrets.VAULT_ADDR }}
-          secret_vault_roleId: ${{ secrets.VAULT_ROLE_ID }}
-  go-lint:
-    name: Go linting
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: ./.github/actions/setup-zeebe
-        with:
-          java: false
-          secret_vault_secretId: ${{ secrets.VAULT_SECRET_ID }}
-          secret_vault_address: ${{ secrets.VAULT_ADDR }}
-          secret_vault_roleId: ${{ secrets.VAULT_ROLE_ID }}
-      - name: golangci-lint
-        uses: golangci/golangci-lint-action@v6
-        with:
-          # fixed to avoid triggering false positive; see https://github.com/golangci/golangci-lint-action/issues/535
-          version: v1.55.2
-          working-directory: clients/go
-      - name: Observe build status
-        if: always()
-        continue-on-error: true
-        uses: ./.github/actions/observe-build-status
-        with:
-          build_status: ${{ job.status }}
-          secret_vault_secretId: ${{ secrets.VAULT_SECRET_ID }}
-          secret_vault_address: ${{ secrets.VAULT_ADDR }}
-          secret_vault_roleId: ${{ secrets.VAULT_ROLE_ID }}
-  go-apidiff:
-    name: Go Backward Compatibility
-    runs-on: ubuntu-latest
-    env:
-      # bors-ng fails to set ${GITHUB_BASE_REF} to the target PR branch which breaks go-apidiff
-      # so we use this fixed value as a workaround
-      GO_CLIENT_BASE_REF: stable/8.5
-    steps:
-      - uses: actions/checkout@v4
-      - uses: ./.github/actions/setup-zeebe
-        with:
-          java: false
-          secret_vault_secretId: ${{ secrets.VAULT_SECRET_ID }}
-          secret_vault_address: ${{ secrets.VAULT_ADDR }}
-          secret_vault_roleId: ${{ secrets.VAULT_ROLE_ID }}
-      # Fetching a shallow copy of the ${GITHUB_BASE_REF} branch to check the compatibility against
-      - name: Fetching Base Branch
-        run: |
-          git fetch --depth=1 origin ${{ env.GO_CLIENT_BASE_REF }}
-      - uses: joelanford/go-apidiff@main
-        with:
-          base-ref:  origin/${{ env.GO_CLIENT_BASE_REF }}
-      - name: Observe build status
-        if: always()
-        continue-on-error: true
-        uses: ./.github/actions/observe-build-status
-        with:
-          build_status: ${{ job.status }}
+          user_reason: ${{ (steps.analyze-test-run.outputs.flakyTests != '') && 'flaky-tests' || '' }}
+          user_description: ${{ steps.analyze-test-run.outputs.flakyTests }}
+          detailed_junit_flaky_tests: true
           secret_vault_secretId: ${{ secrets.VAULT_SECRET_ID }}
           secret_vault_address: ${{ secrets.VAULT_ADDR }}
           secret_vault_roleId: ${{ secrets.VAULT_ROLE_ID }}
   docker-checks:
     name: Docker checks
     runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      security-events: write
     services:
       # local registry is used as this job needs to push as it builds multi-platform images
       registry:
@@ -308,11 +288,12 @@ jobs:
         uses: github/codeql-action/upload-sarif@v3
         with:
           sarif_file: ./hadolint.sarif
-      - uses: ./.github/actions/setup-zeebe
+      - uses: ./.github/actions/setup-build
         with:
-          secret_vault_secretId: ${{ secrets.VAULT_SECRET_ID }}
-          secret_vault_address: ${{ secrets.VAULT_ADDR }}
-          secret_vault_roleId: ${{ secrets.VAULT_ROLE_ID }}
+          dockerhub-readonly: true
+          vault-address: ${{ secrets.VAULT_ADDR }}
+          vault-role-id: ${{ secrets.VAULT_ROLE_ID }}
+          vault-secret-id: ${{ secrets.VAULT_SECRET_ID }}
       - uses: ./.github/actions/build-zeebe
         id: build-zeebe
         with:
@@ -351,20 +332,22 @@ jobs:
     name: Test summary
     if: always()
     runs-on: ubuntu-latest
+    timeout-minutes: 3
+    permissions: {}  # GITHUB_TOKEN unused in this job
     needs:
       - smoke-tests
       - property-tests
       - performance-tests
-      - go-client
-      - go-lint
-      - go-apidiff
       - docker-checks
+      - strace-tests
     steps:
       - uses: actions/checkout@v4
       - run: exit ${{ ((contains(needs.*.result, 'cancelled') || contains(needs.*.result, 'failure')) && 1) || 0 }}
 
   deploy-docker-snapshot:
     name: Deploy snapshot Docker image
+    timeout-minutes: 15
+    permissions: {}  # GITHUB_TOKEN unused in this job
     needs: [ test-summary ]
     runs-on: ubuntu-latest
     if: github.repository == 'camunda/camunda' && github.ref == 'refs/heads/main'
@@ -373,12 +356,12 @@ jobs:
       cancel-in-progress: false
     steps:
       - uses: actions/checkout@v4
-      - uses: ./.github/actions/setup-zeebe
+      - uses: ./.github/actions/setup-build
         with:
-          secret_vault_secretId: ${{ secrets.VAULT_SECRET_ID }}
-          secret_vault_address: ${{ secrets.VAULT_ADDR }}
-          secret_vault_roleId: ${{ secrets.VAULT_ROLE_ID }}
-          docker-token: REGISTRY_HUB_DOCKER_COM_PSW
+          dockerhub: true
+          vault-address: ${{ secrets.VAULT_ADDR }}
+          vault-role-id: ${{ secrets.VAULT_ROLE_ID }}
+          vault-secret-id: ${{ secrets.VAULT_SECRET_ID }}
       - uses: ./.github/actions/build-zeebe
         id: build-zeebe
         with:
@@ -402,6 +385,7 @@ jobs:
           secret_vault_secretId: ${{ secrets.VAULT_SECRET_ID }}
   deploy-benchmark-images:
     name: Deploy benchmark images
+    timeout-minutes: 5
     needs: [ test-summary ]
     runs-on: ubuntu-latest
     if: github.repository == 'camunda/camunda' && github.ref == 'refs/heads/main'
@@ -425,12 +409,13 @@ jobs:
           registry: gcr.io
           username: oauth2accesstoken
           password: ${{ steps.auth.outputs.access_token }}
-      - uses: ./.github/actions/setup-zeebe
+      - uses: ./.github/actions/setup-build
         with:
-          secret_vault_secretId: ${{ secrets.VAULT_SECRET_ID }}
-          secret_vault_address: ${{ secrets.VAULT_ADDR }}
-          secret_vault_roleId: ${{ secrets.VAULT_ROLE_ID }}
-      - run: ./mvnw -B -D skipTests -D skipChecks -pl zeebe/benchmarks/project -am package
+          dockerhub-readonly: true
+          vault-address: ${{ secrets.VAULT_ADDR }}
+          vault-role-id: ${{ secrets.VAULT_ROLE_ID }}
+          vault-secret-id: ${{ secrets.VAULT_SECRET_ID }}
+      - run: ./mvnw -B -D skipTests -D skipChecks -pl zeebe/benchmarks/project -am install
       - name: Build Starter Image
         run: ./mvnw -pl zeebe/benchmarks/project jib:build -P starter
       - name: Build Worker Image
@@ -470,11 +455,12 @@ jobs:
     # the GitHub token passed around.
     name: Auto-merge backport and release PRs
     runs-on: ubuntu-latest
+    timeout-minutes: 3
     needs: [ test-summary ]
     if: |
       github.repository == 'camunda/camunda' &&
       github.event_name == 'pull_request' &&
-      (github.actor == 'backport-action' || github.actor == 'camundait')
+      (github.actor == 'backport-action')
     permissions:
       checks: read
       pull-requests: write

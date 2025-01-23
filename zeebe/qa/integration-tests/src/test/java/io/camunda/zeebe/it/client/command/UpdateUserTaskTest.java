@@ -10,33 +10,31 @@ package io.camunda.zeebe.it.client.command;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-import io.camunda.zeebe.client.ZeebeClient;
-import io.camunda.zeebe.client.api.command.ProblemException;
+import io.camunda.client.CamundaClient;
+import io.camunda.client.api.command.ProblemException;
 import io.camunda.zeebe.it.util.ZeebeAssertHelper;
 import io.camunda.zeebe.it.util.ZeebeResourcesHelper;
 import io.camunda.zeebe.qa.util.cluster.TestStandaloneBroker;
 import io.camunda.zeebe.qa.util.junit.ZeebeIntegration;
 import io.camunda.zeebe.qa.util.junit.ZeebeIntegration.TestZeebe;
-import io.camunda.zeebe.test.util.junit.AutoCloseResources;
-import io.camunda.zeebe.test.util.junit.AutoCloseResources.AutoCloseResource;
 import java.time.Duration;
-import java.time.ZoneId;
-import java.time.ZonedDateTime;
+import java.time.OffsetDateTime;
+import java.time.ZoneOffset;
 import java.util.List;
+import org.junit.jupiter.api.AutoClose;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 @ZeebeIntegration
-@AutoCloseResources
 class UpdateUserTaskTest {
 
   private static final String TEST_TIME =
-      ZonedDateTime.of(2023, 11, 11, 11, 11, 11, 11, ZoneId.of("UTC")).toString();
+      OffsetDateTime.of(2023, 11, 11, 11, 11, 11, 11, ZoneOffset.of("Z")).toString();
 
   @TestZeebe
   private final TestStandaloneBroker zeebe = new TestStandaloneBroker().withRecordingExporter(true);
 
-  @AutoCloseResource private ZeebeClient client;
+  @AutoClose private CamundaClient client;
 
   private long userTaskKey;
 
@@ -226,7 +224,7 @@ class UpdateUserTaskTest {
   void shouldRejectIfMissingUpdateData() {
     // when / then
     assertThatThrownBy(() -> client.newUserTaskUpdateCommand(userTaskKey).send().join())
-        .hasCauseInstanceOf(ProblemException.class)
+        .isInstanceOf(ProblemException.class)
         .hasMessageContaining("Failed with code 400: 'Bad Request'");
   }
 
@@ -235,7 +233,7 @@ class UpdateUserTaskTest {
     // when / then
     assertThatThrownBy(
             () -> client.newUserTaskUpdateCommand(userTaskKey).dueDate("foo").send().join())
-        .hasCauseInstanceOf(ProblemException.class)
+        .isInstanceOf(ProblemException.class)
         .hasMessageContaining("Failed with code 400: 'Bad Request'")
         .hasMessageContaining("The provided due date 'foo' cannot be parsed as a date");
   }
@@ -245,7 +243,7 @@ class UpdateUserTaskTest {
     // when / then
     assertThatThrownBy(
             () -> client.newUserTaskUpdateCommand(userTaskKey).followUpDate("foo").send().join())
-        .hasCauseInstanceOf(ProblemException.class)
+        .isInstanceOf(ProblemException.class)
         .hasMessageContaining("Failed with code 400: 'Bad Request'")
         .hasMessageContaining("The provided follow-up date 'foo' cannot be parsed as a date");
   }
@@ -261,7 +259,7 @@ class UpdateUserTaskTest {
                     .followUpDate("foo")
                     .send()
                     .join())
-        .hasCauseInstanceOf(ProblemException.class)
+        .isInstanceOf(ProblemException.class)
         .hasMessageContaining("Failed with code 400: 'Bad Request'")
         .hasMessageContaining("The provided due date 'bar' cannot be parsed as a date")
         .hasMessageContaining("The provided follow-up date 'foo' cannot be parsed as a date");

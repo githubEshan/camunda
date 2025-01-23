@@ -12,14 +12,14 @@ import com.auth0.jwt.JWTVerifier;
 import com.auth0.jwt.algorithms.Algorithm;
 import com.auth0.jwt.exceptions.JWTVerificationException;
 import com.auth0.jwt.interfaces.DecodedJWT;
+import io.camunda.optimize.rest.exceptions.NotAuthorizedException;
 import io.camunda.optimize.service.exceptions.OptimizeRuntimeException;
 import io.camunda.optimize.service.metadata.Version;
 import io.camunda.optimize.service.security.util.LocalDateUtil;
 import io.camunda.optimize.service.util.configuration.ConfigurationReloadable;
 import io.camunda.optimize.service.util.configuration.ConfigurationService;
 import io.camunda.optimize.service.util.configuration.security.AuthConfiguration;
-import jakarta.ws.rs.NotAuthorizedException;
-import jakarta.ws.rs.container.ContainerRequestContext;
+import jakarta.servlet.http.HttpServletRequest;
 import java.nio.charset.StandardCharsets;
 import java.security.SecureRandom;
 import java.time.Instant;
@@ -29,16 +29,16 @@ import java.time.temporal.ChronoUnit;
 import java.util.Date;
 import java.util.Optional;
 import java.util.UUID;
-import lombok.extern.slf4j.Slf4j;
+import org.slf4j.Logger;
 import org.springframework.context.ApplicationContext;
 import org.springframework.stereotype.Component;
 
 @Component
-@Slf4j
 public class SessionService implements ConfigurationReloadable {
 
   private static final String ISSUER = "Optimize-" + Version.RAW_VERSION;
   private static final byte[] DEFAULT_SECRET_BYTES = new byte[64];
+  private static final Logger LOG = org.slf4j.LoggerFactory.getLogger(SessionService.class);
 
   static {
     new SecureRandom().nextBytes(DEFAULT_SECRET_BYTES);
@@ -73,15 +73,15 @@ public class SessionService implements ConfigurationReloadable {
       final DecodedJWT decodedJWT = jwtVerifier.verify(token);
       isValid = isStillValid(decodedJWT);
     } catch (final JWTVerificationException exception) {
-      log.error(
+      LOG.error(
           "Error while validating authentication token. Invalid signature or claims!", exception);
     }
 
     return isValid;
   }
 
-  public String getRequestUserOrFailNotAuthorized(final ContainerRequestContext requestContext) {
-    return AuthCookieService.getAuthCookieToken(requestContext)
+  public String getRequestUserOrFailNotAuthorized(final HttpServletRequest request) {
+    return AuthCookieService.getAuthCookieToken(request)
         .flatMap(AuthCookieService::getTokenSubject)
         .orElseThrow(() -> new NotAuthorizedException("Could not extract request user!"));
   }
@@ -103,7 +103,7 @@ public class SessionService implements ConfigurationReloadable {
     if (dynamicExpiresAtDate
         .map(date -> LocalDateUtil.getCurrentLocalDateTime().isAfter(date))
         .orElse(false)) {
-      log.debug(
+      LOG.debug(
           "Authentication token [{}] has expired at {}!",
           decodedJWT.getToken(),
           dynamicExpiresAtDate);
@@ -112,14 +112,14 @@ public class SessionService implements ConfigurationReloadable {
 
     try {
       if (terminatedSessionService.isSessionTerminated(decodedJWT.getId())) {
-        log.warn(
+        LOG.warn(
             "Authentication token [{}] of already terminated session {} was used!",
             decodedJWT.getToken(),
             decodedJWT.getId());
         isValid = false;
       }
     } catch (final OptimizeRuntimeException e) {
-      log.warn(
+      LOG.warn(
           "Failed checking if session {} is a terminated session, defaulting to handle it as not terminated",
           decodedJWT.getId(),
           e);

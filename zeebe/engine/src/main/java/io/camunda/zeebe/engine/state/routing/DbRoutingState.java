@@ -19,27 +19,35 @@ import java.util.stream.IntStream;
 
 public final class DbRoutingState implements MutableRoutingState {
 
-  /**
-   * This state will later be extended to hold current and <i>desired</i> routing information. This
-   * is the key for the current routing information.
-   */
   private static final String CURRENT_KEY = "CURRENT";
+  private static final String DESIRED_KEY = "DESIRED";
 
   private final ColumnFamily<DbString, PersistedRoutingInfo> columnFamily;
   private final DbString key = new DbString();
   private final PersistedRoutingInfo currentRoutingInfo = new PersistedRoutingInfo();
+  private final PersistedRoutingInfo desiredRoutingInfo = new PersistedRoutingInfo();
 
   public DbRoutingState(
       final ZeebeDb<ZbColumnFamilies> zeebeDb, final TransactionContext transactionContext) {
     columnFamily =
         zeebeDb.createColumnFamily(
-            ZbColumnFamilies.ROUTING, transactionContext, key, currentRoutingInfo);
+            ZbColumnFamilies.ROUTING, transactionContext, key, new PersistedRoutingInfo());
   }
 
   @Override
-  public Set<Integer> partitions() {
+  public Set<Integer> currentPartitions() {
     key.wrapString(CURRENT_KEY);
     return columnFamily.get(key).getPartitions();
+  }
+
+  @Override
+  public Set<Integer> desiredPartitions() {
+    key.wrapString(DESIRED_KEY);
+    final var desiredRoutingInfo = columnFamily.get(key);
+    if (desiredRoutingInfo == null) {
+      return Set.of();
+    }
+    return desiredRoutingInfo.getPartitions();
   }
 
   @Override
@@ -64,5 +72,24 @@ public final class DbRoutingState implements MutableRoutingState {
     currentRoutingInfo.setPartitions(partitions);
     currentRoutingInfo.setMessageCorrelation(new MessageCorrelation.HashMod(partitionCount));
     columnFamily.insert(key, currentRoutingInfo);
+  }
+
+  @Override
+  public void setDesiredPartitions(final Set<Integer> partitions) {
+    final var currentMessageCorrelation = messageCorrelation();
+    desiredRoutingInfo.reset();
+    desiredRoutingInfo.setPartitions(partitions);
+    desiredRoutingInfo.setMessageCorrelation(currentMessageCorrelation);
+
+    key.wrapString(DESIRED_KEY);
+    columnFamily.upsert(key, desiredRoutingInfo);
+  }
+
+  @Override
+  public void arriveAtDesiredState() {
+    key.wrapString(DESIRED_KEY);
+    final var desiredPartitions = columnFamily.get(key);
+    key.wrapString(CURRENT_KEY);
+    columnFamily.update(key, desiredPartitions);
   }
 }

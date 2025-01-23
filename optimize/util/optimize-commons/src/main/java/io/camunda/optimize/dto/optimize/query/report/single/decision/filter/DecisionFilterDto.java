@@ -13,9 +13,6 @@ import io.camunda.optimize.dto.optimize.ReportConstants;
 import io.camunda.optimize.dto.optimize.query.report.single.filter.data.FilterDataDto;
 import jakarta.validation.constraints.NotEmpty;
 import java.util.List;
-import lombok.AllArgsConstructor;
-import lombok.Data;
-import lombok.NoArgsConstructor;
 
 @JsonTypeInfo(use = JsonTypeInfo.Id.NAME, include = JsonTypeInfo.As.PROPERTY, property = "type")
 @JsonSubTypes({
@@ -23,16 +20,51 @@ import lombok.NoArgsConstructor;
   @JsonSubTypes.Type(value = InputVariableFilterDto.class, name = "inputVariable"),
   @JsonSubTypes.Type(value = OutputVariableFilterDto.class, name = "outputVariable"),
 })
-@Data
-@NoArgsConstructor
-@AllArgsConstructor
 public abstract class DecisionFilterDto<DATA extends FilterDataDto> {
+
   protected DATA data;
 
   @NotEmpty protected List<String> appliedTo = List.of(ReportConstants.APPLIED_TO_ALL_DEFINITIONS);
 
   protected DecisionFilterDto(final DATA data) {
     this.data = data;
+  }
+
+  public DecisionFilterDto(final DATA data, @NotEmpty final List<String> appliedTo) {
+    this.data = data;
+    this.appliedTo = appliedTo;
+  }
+
+  public DecisionFilterDto() {}
+
+  public DATA getData() {
+    return data;
+  }
+
+  public void setData(final DATA data) {
+    this.data = data;
+  }
+
+  public @NotEmpty List<String> getAppliedTo() {
+    return appliedTo;
+  }
+
+  public void setAppliedTo(@NotEmpty final List<String> appliedTo) {
+    this.appliedTo = appliedTo;
+  }
+
+  protected boolean canEqual(final Object other) {
+    return other instanceof DecisionFilterDto;
+  }
+
+  @Override
+  public int hashCode() {
+    return org.apache.commons.lang3.builder.HashCodeBuilder.reflectionHashCode(this);
+  }
+
+  @Override
+  public boolean equals(final Object o) {
+    return org.apache.commons.lang3.builder.EqualsBuilder.reflectionEquals(this, o);
   }
 
   @Override

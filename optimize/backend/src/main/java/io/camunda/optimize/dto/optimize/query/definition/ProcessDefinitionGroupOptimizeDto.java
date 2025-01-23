@@ -12,13 +12,13 @@ import io.camunda.optimize.service.exceptions.OptimizeRuntimeException;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
-import lombok.Data;
 
-@Data
 public class ProcessDefinitionGroupOptimizeDto {
 
   private String key;
   private List<ProcessDefinitionOptimizeDto> versions = new ArrayList<>();
+
+  public ProcessDefinitionGroupOptimizeDto() {}
 
   public void sort() {
     try {
@@ -31,5 +31,44 @@ public class ProcessDefinitionGroupOptimizeDto {
           "Error while trying to parse version numbers for sorting process definition groups: "
               + versions);
     }
+  }
+
+  public String getKey() {
+    return key;
+  }
+
+  public void setKey(final String key) {
+    this.key = key;
+  }
+
+  public List<ProcessDefinitionOptimizeDto> getVersions() {
+    return versions;
+  }
+
+  public void setVersions(final List<ProcessDefinitionOptimizeDto> versions) {
+    this.versions = versions;
+  }
+
+  protected boolean canEqual(final Object other) {
+    return other instanceof ProcessDefinitionGroupOptimizeDto;
+  }
+
+  @Override
+  public int hashCode() {
+    return org.apache.commons.lang3.builder.HashCodeBuilder.reflectionHashCode(this);
+  }
+
+  @Override
+  public boolean equals(final Object o) {
+    return org.apache.commons.lang3.builder.EqualsBuilder.reflectionEquals(this, o);
+  }
+
+  @Override
+  public String toString() {
+    return "ProcessDefinitionGroupOptimizeDto(key="
+        + getKey()
+        + ", versions="
+        + getVersions()
+        + ")";
   }
 }

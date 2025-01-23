@@ -13,6 +13,7 @@ import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
+import io.camunda.security.configuration.SecurityConfiguration;
 import io.camunda.zeebe.db.TransactionContext;
 import io.camunda.zeebe.db.ZeebeDb;
 import io.camunda.zeebe.db.ZeebeDbFactory;
@@ -29,9 +30,9 @@ import io.camunda.zeebe.logstreams.log.LoggedEvent;
 import io.camunda.zeebe.logstreams.log.WriteContext;
 import io.camunda.zeebe.logstreams.storage.LogStorage;
 import io.camunda.zeebe.logstreams.util.ListLogStorage;
-import io.camunda.zeebe.logstreams.util.SyncLogStream;
-import io.camunda.zeebe.logstreams.util.SynchronousLogStream;
+import io.camunda.zeebe.logstreams.util.TestLogStream;
 import io.camunda.zeebe.protocol.Protocol;
+import io.camunda.zeebe.protocol.impl.encoding.AuthInfo;
 import io.camunda.zeebe.protocol.impl.record.CopiedRecord;
 import io.camunda.zeebe.protocol.impl.record.RecordMetadata;
 import io.camunda.zeebe.protocol.impl.record.UnifiedRecordValue;
@@ -129,11 +130,11 @@ public final class TestStreams {
     return mockCommandResponseWriter;
   }
 
-  public SynchronousLogStream createLogStream(final String name) {
+  public TestLogStream createLogStream(final String name) {
     return createLogStream(name, 0);
   }
 
-  public SynchronousLogStream createLogStream(final String name, final int partitionId) {
+  public TestLogStream createLogStream(final String name, final int partitionId) {
     listLogStorage = new ListLogStorage();
     return createLogStream(
         name,
@@ -142,7 +143,7 @@ public final class TestStreams {
         logStream -> listLogStorage.setPositionListener(logStream::setLastWrittenPosition));
   }
 
-  public SynchronousLogStream createLogStream(
+  public TestLogStream createLogStream(
       final String name, final int partitionId, final ListLogStorage sharedStorage) {
     return createLogStream(
         name,
@@ -151,18 +152,17 @@ public final class TestStreams {
         logStream -> sharedStorage.setPositionListener(logStream::setLastWrittenPosition));
   }
 
-  private SynchronousLogStream createLogStream(
+  private TestLogStream createLogStream(
       final String name,
       final int partitionId,
       final LogStorage logStorage,
-      final Consumer<SyncLogStream> logStreamConsumer) {
+      final Consumer<TestLogStream> logStreamConsumer) {
     final var logStream =
-        SyncLogStream.builder()
+        TestLogStream.builder()
             .withLogName(name)
             .withLogStorage(logStorage)
             .withPartitionId(partitionId)
             .withClock(clock)
-            .withActorSchedulingService(actorScheduler)
             .build();
 
     logStreamConsumer.accept(logStream);
@@ -174,7 +174,7 @@ public final class TestStreams {
     return logStream;
   }
 
-  public SynchronousLogStream getLogStream(final String name) {
+  public TestLogStream getLogStream(final String name) {
     return logContextMap.get(name).getLogStream();
   }
 
@@ -183,7 +183,7 @@ public final class TestStreams {
   }
 
   public Stream<LoggedEvent> events(final String logName) {
-    final SynchronousLogStream logStream = getLogStream(logName);
+    final TestLogStream logStream = getLogStream(logName);
 
     final LogStreamReader reader = logStream.newLogStreamReader();
     closeables.manage(reader);
@@ -199,7 +199,7 @@ public final class TestStreams {
     return new FluentLogWriter(newLogStreamWriter(logName));
   }
 
-  public Path createRuntimeFolder(final SynchronousLogStream stream) {
+  public Path createRuntimeFolder(final TestLogStream stream) {
     final Path rootDirectory =
         dataDirectory.getRoot().toPath().resolve(stream.getLogName()).resolve("state");
 
@@ -229,7 +229,7 @@ public final class TestStreams {
       final Optional<StreamProcessorListener> streamProcessorListenerOpt,
       final Consumer<StreamProcessorBuilder> processorConfiguration,
       final boolean awaitOpening) {
-    final SynchronousLogStream stream = getLogStream(log);
+    final TestLogStream stream = getLogStream(log);
     return buildStreamProcessor(
         stream,
         zeebeDbFactory,
@@ -240,7 +240,7 @@ public final class TestStreams {
   }
 
   public StreamProcessor buildStreamProcessor(
-      final SynchronousLogStream stream,
+      final TestLogStream stream,
       final ZeebeDbFactory zeebeDbFactory,
       final Consumer<StreamProcessorBuilder> processorConfiguration,
       final TypedRecordProcessorFactory factory,
@@ -279,12 +279,15 @@ public final class TestStreams {
 
     final var builder =
         StreamProcessor.builder()
-            .logStream(stream.getAsyncLogStream())
+            .logStream(stream)
             .zeebeDb(zeebeDb)
             .actorSchedulingService(actorScheduler)
             .commandResponseWriter(mockCommandResponseWriter)
             .listener(new StreamProcessorListenerRelay(streamProcessorListeners))
-            .recordProcessors(List.of(new Engine(wrappedFactory, new EngineConfiguration())))
+            .recordProcessors(
+                List.of(
+                    new Engine(
+                        wrappedFactory, new EngineConfiguration(), new SecurityConfiguration())))
             .streamProcessorMode(streamProcessorMode)
             .maxCommandsInBatch(maxCommandsInBatch)
             .partitionCommandSender(mock(InterPartitionCommandSender.class))
@@ -411,7 +414,20 @@ public final class TestStreams {
     }
 
     public FluentLogWriter authorizations(final String... tenantIds) {
-      metadata.authorization(AuthorizationUtil.getAuthInfo(tenantIds));
+      return authorizations(AuthorizationUtil.getAuthInfo(tenantIds));
+    }
+
+    public FluentLogWriter usernameAuthorizations(final String username) {
+      return authorizations(AuthorizationUtil.getAuthInfo(username));
+    }
+
+    public FluentLogWriter authorizationsWithUsername(
+        final String username, final String... tenantIds) {
+      return authorizations(AuthorizationUtil.getUsernameAuthInfo(username, tenantIds));
+    }
+
+    public FluentLogWriter authorizations(final AuthInfo authorizations) {
+      metadata.authorization(authorizations);
       return this;
     }
 
@@ -466,13 +482,13 @@ public final class TestStreams {
   }
 
   private static final class LogContext implements AutoCloseable {
-    private final SynchronousLogStream logStream;
+    private final TestLogStream logStream;
 
-    private LogContext(final SynchronousLogStream logStream) {
+    private LogContext(final TestLogStream logStream) {
       this.logStream = logStream;
     }
 
-    public static LogContext createLogContext(final SyncLogStream logStream) {
+    public static LogContext createLogContext(final TestLogStream logStream) {
       return new LogContext(logStream);
     }
 
@@ -481,7 +497,7 @@ public final class TestStreams {
       logStream.close();
     }
 
-    public SynchronousLogStream getLogStream() {
+    public TestLogStream getLogStream() {
       return logStream;
     }
 

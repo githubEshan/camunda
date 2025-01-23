@@ -16,15 +16,18 @@ import io.camunda.optimize.service.db.repository.ProcessOverviewRepository;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
-import lombok.AllArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
+import org.slf4j.Logger;
 import org.springframework.stereotype.Component;
 
-@AllArgsConstructor
 @Component
-@Slf4j
 public class ProcessOverviewWriter {
+
+  private static final Logger LOG = org.slf4j.LoggerFactory.getLogger(ProcessOverviewWriter.class);
   private final ProcessOverviewRepository processOverviewRepository;
+
+  public ProcessOverviewWriter(final ProcessOverviewRepository processOverviewRepository) {
+    this.processOverviewRepository = processOverviewRepository;
+  }
 
   public void updateProcessConfiguration(
       final String processDefinitionKey, final ProcessUpdateDto processUpdateDto) {
@@ -51,15 +54,15 @@ public class ProcessOverviewWriter {
 
   public void updateKpisForProcessDefinitions(
       final Map<String, LastKpiEvaluationResultsDto> definitionKeyToKpis) {
-    log.debug(
+    LOG.debug(
         "Updating KPI values for process definitions with keys: [{}]",
         definitionKeyToKpis.keySet());
     final List<ProcessOverviewDto> processOverviewDtos =
         definitionKeyToKpis.entrySet().stream()
             .map(
                 entry -> {
-                  Map<String, String> reportIdToValue = entry.getValue().getReportIdToValue();
-                  ProcessOverviewDto processOverviewDto = new ProcessOverviewDto();
+                  final Map<String, String> reportIdToValue = entry.getValue().getReportIdToValue();
+                  final ProcessOverviewDto processOverviewDto = new ProcessOverviewDto();
                   processOverviewDto.setProcessDefinitionKey(entry.getKey());
                   processOverviewDto.setDigest(new ProcessDigestDto(false, Collections.emptyMap()));
                   processOverviewDto.setLastKpiEvaluationResults(reportIdToValue);
@@ -70,7 +73,7 @@ public class ProcessOverviewWriter {
   }
 
   public void deleteProcessOwnerEntry(final String processDefinitionKey) {
-    log.info("Removing pending entry " + processDefinitionKey);
+    LOG.info("Removing pending entry " + processDefinitionKey);
     processOverviewRepository.deleteProcessOwnerEntry(processDefinitionKey);
   }
 

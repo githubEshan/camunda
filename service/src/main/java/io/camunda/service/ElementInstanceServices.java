@@ -7,9 +7,8 @@
  */
 package io.camunda.service;
 
-import io.camunda.search.clients.CamundaSearchClient;
-import io.camunda.service.security.auth.Authentication;
-import io.camunda.service.transformers.ServiceTransformers;
+import io.camunda.security.auth.Authentication;
+import io.camunda.service.security.SecurityContextProvider;
 import io.camunda.zeebe.broker.client.api.BrokerClient;
 import io.camunda.zeebe.gateway.impl.broker.request.BrokerSetVariablesRequest;
 import io.camunda.zeebe.protocol.impl.record.value.variable.VariableDocumentRecord;
@@ -20,15 +19,14 @@ public class ElementInstanceServices extends ApiServices<ElementInstanceServices
 
   public ElementInstanceServices(
       final BrokerClient brokerClient,
-      final CamundaSearchClient searchClient,
-      final ServiceTransformers transformers,
+      final SecurityContextProvider securityContextProvider,
       final Authentication authentication) {
-    super(brokerClient, searchClient, transformers, authentication);
+    super(brokerClient, securityContextProvider, authentication);
   }
 
   @Override
   public ElementInstanceServices withAuthentication(final Authentication authentication) {
-    return new ElementInstanceServices(brokerClient, searchClient, transformers, authentication);
+    return new ElementInstanceServices(brokerClient, securityContextProvider, authentication);
   }
 
   public CompletableFuture<VariableDocumentRecord> setVariables(final SetVariablesRequest request) {

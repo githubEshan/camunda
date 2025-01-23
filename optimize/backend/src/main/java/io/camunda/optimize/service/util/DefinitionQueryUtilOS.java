@@ -12,7 +12,7 @@ import static io.camunda.optimize.service.util.DefinitionVersionHandlingUtil.isD
 
 import com.google.common.collect.ImmutableList;
 import io.camunda.optimize.dto.optimize.ReportConstants;
-import io.camunda.optimize.service.db.os.externalcode.client.dsl.QueryDSL;
+import io.camunda.optimize.service.db.os.client.dsl.QueryDSL;
 import io.camunda.optimize.service.db.schema.index.AbstractInstanceIndex;
 import java.util.ArrayList;
 import java.util.List;
@@ -22,13 +22,12 @@ import java.util.Set;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.UnaryOperator;
 import java.util.stream.Collectors;
-import lombok.AccessLevel;
-import lombok.NoArgsConstructor;
 import org.opensearch.client.opensearch._types.query_dsl.BoolQuery;
 import org.opensearch.client.opensearch._types.query_dsl.Query;
 
-@NoArgsConstructor(access = AccessLevel.PRIVATE)
-public class DefinitionQueryUtilOS {
+public final class DefinitionQueryUtilOS {
+
+  private DefinitionQueryUtilOS() {}
 
   public static Query createDefinitionQuery(
       final String definitionKey, final List<String> tenantIds, final AbstractInstanceIndex type) {

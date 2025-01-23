@@ -106,7 +106,7 @@ export default function Checklist<
     return onChange(itemsToRemove);
   };
 
-  let head: TableHead[] = [
+  const head: TableHead[] = [
     {
       label:
         formattedData.length > 1 && !customHeader && !headerHidden ? (
@@ -114,12 +114,16 @@ export default function Checklist<
             id="checked"
             key="checked"
             name="checked"
-            ariaLabel="checked"
+            aria-label="checked"
             indeterminate={isSomeSelected}
             checked={isAllSelected}
             onSelect={({target}) => {
               const {checked} = target as HTMLInputElement;
-              !checked ? deselectAllItems() : selectAllItems();
+              if (checked) {
+                selectAllItems();
+              } else {
+                deselectAllItems();
+              }
             }}
           />
         ) : (
@@ -132,7 +136,7 @@ export default function Checklist<
     {label: customHeader || columnLabel || '', id: 'name', sortable: false},
   ];
 
-  let body: TableBody[] = searchFilteredData.map(({id, label, checked, disabled}) => {
+  const body: TableBody[] = searchFilteredData.map(({id, label, checked, disabled}) => {
     const rowId = `${checklistId}-${id}`;
     const onSelect = () => updateItems(id, !checked);
     const rowLabel = (label || id || '').toString();
@@ -142,7 +146,7 @@ export default function Checklist<
           checked={!!checked}
           id={rowId}
           name={rowId}
-          ariaLabel={rowLabel}
+          aria-label={rowLabel}
           disabled={disabled}
           onSelect={onSelect}
         />,
@@ -167,7 +171,7 @@ export default function Checklist<
           checked={isAllSelectedInSearch}
           id="selectAllInView"
           name="selectAllInView"
-          ariaLabel={t('common.multiSelect.selectAll').toString()}
+          aria-label={t('common.multiSelect.selectAll').toString()}
           onSelect={onSelect}
         />,
         t('common.multiSelect.selectAll'),

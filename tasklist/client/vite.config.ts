@@ -9,34 +9,60 @@
 /// <reference types="vitest" />
 /// <reference types="vite/client" />
 
-import {defineConfig} from 'vite';
+import {defineConfig, type PluginOption} from 'vite';
 import react from '@vitejs/plugin-react';
 import tsconfigPaths from 'vite-tsconfig-paths';
 import svgr from 'vite-plugin-svgr';
 import browserslistToEsbuild from 'browserslist-to-esbuild';
+import license from 'rollup-plugin-license';
+import path from 'node:path';
+import sbom from '@vzeta/rollup-plugin-sbom';
+
+const plugins: PluginOption[] = [react(), tsconfigPaths(), svgr()];
+const outDir = 'build';
 
 export default defineConfig(({mode}) => ({
   base: mode === 'production' ? './' : undefined,
-  plugins: [react(), tsconfigPaths(), svgr()],
+  plugins: mode === 'sbom' ? [...plugins, sbom()] : plugins,
   server: {
     port: 3000,
     open: true,
     proxy: {
       '/api': 'http://localhost:8080',
       '/v1': 'http://localhost:8080',
+      '/v2': 'http://localhost:8080',
       '/client-config.js': 'http://localhost:8080/tasklist',
     },
   },
   build: {
-    outDir: 'build',
+    outDir,
     rollupOptions: {
       input: {
         index:
           mode === 'visual-regression' ? './index.html' : './index.prod.html',
       },
+      plugins: license({
+        thirdParty: {
+          output: path.resolve(
+            __dirname,
+            `./${outDir}/assets/vendor.LICENSE.txt`,
+          ),
+        },
+      }),
     },
     target: browserslistToEsbuild(),
     sourcemap: true,
+  },
+  esbuild: {
+    banner: '/*! licenses: /assets/vendor.LICENSE.txt */',
+    legalComments: 'none',
+  },
+  css: {
+    preprocessorOptions: {
+      scss: {
+        api: 'modern-compiler',
+      },
+    },
   },
   test: {
     globals: true,
@@ -51,7 +77,7 @@ export default defineConfig(({mode}) => ({
         'renameProdIndex.mjs',
         'public/**',
         'e2e/**',
-        'build/**',
+        `${outDir}/**`,
         'src/modules/mockServer/startBrowserMocking.tsx',
       ],
       reporters: ['html', 'default', 'hanging-process'],

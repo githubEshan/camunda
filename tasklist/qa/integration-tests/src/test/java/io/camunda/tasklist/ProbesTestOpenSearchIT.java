@@ -13,6 +13,7 @@ import static org.junit.jupiter.api.Assumptions.assumeTrue;
 import io.camunda.tasklist.management.SearchEngineHealthIndicator;
 import io.camunda.tasklist.os.RetryOpenSearchClient;
 import io.camunda.tasklist.property.TasklistProperties;
+import io.camunda.tasklist.qa.util.TasklistIndexPrefixHolder;
 import io.camunda.tasklist.qa.util.TestOpenSearchSchemaManager;
 import io.camunda.tasklist.qa.util.TestSchemaManager;
 import io.camunda.tasklist.qa.util.TestUtil;
@@ -27,7 +28,6 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.mock.mockito.MockBean;
-import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.junit.jupiter.SpringExtension;
 
 @ExtendWith(SpringExtension.class)
@@ -42,14 +42,15 @@ import org.springframework.test.context.junit.jupiter.SpringExtension;
     },
     properties = {
       TasklistProperties.PREFIX + ".opensearch.createSchema = false",
+      TasklistProperties.PREFIX + ".zeebe.compatibility.enabled = true"
     },
     webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
-@ActiveProfiles({"tasklist", "test"})
 public class ProbesTestOpenSearchIT extends TasklistIntegrationTest {
 
   @Autowired private TasklistProperties tasklistProperties;
 
   @Autowired private TestSchemaManager schemaManager;
+  @Autowired private TasklistIndexPrefixHolder indexPrefixHolder;
 
   @Autowired private IndexSchemaValidator indexSchemaValidator;
 
@@ -64,9 +65,8 @@ public class ProbesTestOpenSearchIT extends TasklistIntegrationTest {
   @BeforeEach
   public void before() {
     mockPartitionHolder(partitionHolder);
-    tasklistProperties
-        .getOpenSearch()
-        .setIndexPrefix("test-probes-" + TestUtil.createRandomString(5));
+    indexPrefixHolder.createNewIndexPrefix();
+    tasklistProperties.getOpenSearch().setIndexPrefix(indexPrefixHolder.getIndexPrefix());
   }
 
   @AfterEach

@@ -14,6 +14,7 @@ import io.camunda.zeebe.engine.metrics.JobMetrics;
 import io.camunda.zeebe.engine.processing.bpmn.behavior.BpmnEventPublicationBehavior;
 import io.camunda.zeebe.engine.processing.common.ElementTreePathBuilder;
 import io.camunda.zeebe.engine.processing.common.Failure;
+import io.camunda.zeebe.engine.processing.identity.AuthorizationCheckBehavior;
 import io.camunda.zeebe.engine.processing.streamprocessor.CommandProcessor;
 import io.camunda.zeebe.engine.processing.streamprocessor.writers.StateWriter;
 import io.camunda.zeebe.engine.processing.streamprocessor.writers.TypedCommandWriter;
@@ -37,6 +38,7 @@ import io.camunda.zeebe.stream.api.records.TypedRecord;
 import io.camunda.zeebe.stream.api.state.KeyGenerator;
 import io.camunda.zeebe.util.Either;
 import java.util.Optional;
+import org.agrona.DirectBuffer;
 
 public class JobThrowErrorProcessor implements CommandProcessor<JobRecord> {
 
@@ -46,9 +48,6 @@ public class JobThrowErrorProcessor implements CommandProcessor<JobRecord> {
    * (particularly when no catch event can be found)
    */
   public static final String NO_CATCH_EVENT_FOUND = "NO_CATCH_EVENT_FOUND";
-
-  public static final String NO_JOB_FOUND_MESSAGE =
-      "Expected to cancel job with key '%d', but no such job was found";
 
   public static final String ERROR_REJECTION_MESSAGE =
       "Cannot throw BPMN error from %s job with key '%d', type '%s' and processInstanceKey '%d'";
@@ -70,7 +69,8 @@ public class JobThrowErrorProcessor implements CommandProcessor<JobRecord> {
       final ProcessingState state,
       final BpmnEventPublicationBehavior eventPublicationBehavior,
       final KeyGenerator keyGenerator,
-      final JobMetrics jobMetrics) {
+      final JobMetrics jobMetrics,
+      final AuthorizationCheckBehavior authCheckBehavior) {
     this.keyGenerator = keyGenerator;
     jobState = state.getJobState();
     elementInstanceState = state.getElementInstanceState();
@@ -78,7 +78,8 @@ public class JobThrowErrorProcessor implements CommandProcessor<JobRecord> {
     eventScopeInstanceState = state.getEventScopeInstanceState();
 
     defaultProcessor =
-        new DefaultJobCommandPreconditionGuard("throw an error for", jobState, this::acceptCommand);
+        new DefaultJobCommandPreconditionGuard(
+            "throw an error for", jobState, this::acceptCommand, authCheckBehavior);
 
     stateAnalyzer = new CatchEventAnalyzer(state.getProcessState(), elementInstanceState);
     this.eventPublicationBehavior = eventPublicationBehavior;
@@ -100,9 +101,7 @@ public class JobThrowErrorProcessor implements CommandProcessor<JobRecord> {
       final JobRecord job) {
     jobMetrics.jobErrorThrown(job.getType(), job.getJobKind());
 
-    final var serviceTaskInstanceKey = job.getElementId();
-
-    if (NO_CATCH_EVENT_FOUND.equals(serviceTaskInstanceKey)) {
+    if (NO_CATCH_EVENT_FOUND.equals(job.getElementId())) {
       raiseIncident(jobKey, job, stateWriter, foundCatchEvent.getLeft());
       return;
     }
@@ -111,14 +110,10 @@ public class JobThrowErrorProcessor implements CommandProcessor<JobRecord> {
   }
 
   private void acceptCommand(
-      final TypedRecord<JobRecord> command, final CommandControl<JobRecord> commandControl) {
+      final TypedRecord<JobRecord> command,
+      final CommandControl<JobRecord> commandControl,
+      final JobRecord job) {
     final long jobKey = command.getKey();
-
-    final JobRecord job = jobState.getJob(jobKey, command.getAuthorizations());
-    if (job == null) {
-      commandControl.reject(RejectionType.NOT_FOUND, String.format(NO_JOB_FOUND_MESSAGE, jobKey));
-      return;
-    }
 
     // Check if the job is of kind EXECUTION_LISTENER. Execution Listener jobs should not throw
     // BPMN errors because the element is not in an ACTIVATED state.
@@ -175,8 +170,8 @@ public class JobThrowErrorProcessor implements CommandProcessor<JobRecord> {
 
     final var treePathProperties =
         new ElementTreePathBuilder()
-            .withElementInstanceState(elementInstanceState)
-            .withProcessState(processState)
+            .withElementInstanceProvider(elementInstanceState::getInstance)
+            .withCallActivityIndexProvider(processState::getFlowElement)
             .withElementInstanceKey(job.getElementInstanceKey())
             .build();
 
@@ -187,7 +182,7 @@ public class JobThrowErrorProcessor implements CommandProcessor<JobRecord> {
         .setBpmnProcessId(job.getBpmnProcessIdBuffer())
         .setProcessDefinitionKey(job.getProcessDefinitionKey())
         .setProcessInstanceKey(job.getProcessInstanceKey())
-        .setElementId(job.getElementIdBuffer())
+        .setElementId(getElementId(job))
         .setElementInstanceKey(job.getElementInstanceKey())
         .setTenantId(job.getTenantId())
         .setJobKey(key)
@@ -197,5 +192,15 @@ public class JobThrowErrorProcessor implements CommandProcessor<JobRecord> {
         .setCallingElementPath(treePathProperties.callingElementPath());
 
     stateWriter.appendFollowUpEvent(keyGenerator.nextKey(), IncidentIntent.CREATED, incidentEvent);
+  }
+
+  private DirectBuffer getElementId(final JobRecord job) {
+    if (NO_CATCH_EVENT_FOUND.equals(job.getElementId())) {
+      final var elementInstance = elementInstanceState.getInstance(job.getElementInstanceKey());
+      if (elementInstance != null) {
+        return elementInstance.getValue().getElementIdBuffer();
+      }
+    }
+    return job.getElementIdBuffer();
   }
 }

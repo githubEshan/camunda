@@ -16,25 +16,31 @@
 package io.camunda.zeebe.spring.client.properties.common;
 
 import java.net.URL;
+import org.springframework.boot.context.properties.DeprecatedConfigurationProperty;
 
 public class ApiProperties {
   private Boolean enabled;
-  private URL baseUrl;
+  @Deprecated private URL baseUrl;
+
   private String audience;
+  private String scope;
 
   public Boolean getEnabled() {
     return enabled;
   }
 
-  public void setEnabled(Boolean enabled) {
+  public void setEnabled(final Boolean enabled) {
     this.enabled = enabled;
   }
 
+  @Deprecated
+  @DeprecatedConfigurationProperty(replacement = "camunda.client.zeebe.restAddress")
   public URL getBaseUrl() {
     return baseUrl;
   }
 
-  public void setBaseUrl(URL baseUrl) {
+  @Deprecated
+  public void setBaseUrl(final URL baseUrl) {
     this.baseUrl = baseUrl;
   }
 
@@ -42,7 +48,15 @@ public class ApiProperties {
     return audience;
   }
 
-  public void setAudience(String audience) {
+  public void setAudience(final String audience) {
     this.audience = audience;
+  }
+
+  public String getScope() {
+    return scope;
+  }
+
+  public void setScope(final String scope) {
+    this.scope = scope;
   }
 }

@@ -27,19 +27,20 @@ import static io.camunda.optimize.util.ZeebeBpmnModels.createSimpleUserTaskProce
 import static io.camunda.optimize.util.ZeebeBpmnModels.createStartEndProcess;
 import static org.assertj.core.api.Assertions.assertThat;
 
+import io.camunda.client.api.response.Process;
 import io.camunda.optimize.AbstractCCSMIT;
 import io.camunda.optimize.dto.optimize.DataImportSourceType;
 import io.camunda.optimize.dto.optimize.DefinitionOptimizeResponseDto;
 import io.camunda.optimize.dto.optimize.DefinitionType;
 import io.camunda.optimize.dto.optimize.FlowNodeDataDto;
 import io.camunda.optimize.dto.optimize.ProcessDefinitionOptimizeDto;
+import io.camunda.optimize.service.exceptions.OptimizeRuntimeException;
 import io.camunda.optimize.util.ZeebeBpmnModels;
-import io.camunda.zeebe.client.api.response.Process;
 import io.camunda.zeebe.model.bpmn.Bpmn;
 import io.camunda.zeebe.model.bpmn.BpmnModelInstance;
+import java.io.IOException;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
-import lombok.SneakyThrows;
 import org.assertj.core.groups.Tuple;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.condition.DisabledIf;
@@ -68,7 +69,11 @@ public class ZeebeProcessDefinitionImportIT extends AbstractCCSMIT {
               assertThat(importedDef.getKey()).isEqualTo(deployedProcess.getBpmnProcessId());
               assertThat(importedDef.getVersion())
                   .isEqualTo(String.valueOf(deployedProcess.getVersion()));
-              assertThat(importedDef.getVersionTag()).isEqualTo(ZeebeBpmnModels.VERSION_TAG);
+              if (isZeebeVersionPre86()) {
+                assertThat(importedDef.getVersionTag()).isNull();
+              } else {
+                assertThat(importedDef.getVersionTag()).isEqualTo(ZeebeBpmnModels.VERSION_TAG);
+              }
               assertThat(importedDef.getType()).isEqualTo(DefinitionType.PROCESS);
 
               assertThat(importedDef.getBpmn20Xml()).isEqualTo(Bpmn.convertToString(simpleProcess));
@@ -147,13 +152,16 @@ public class ZeebeProcessDefinitionImportIT extends AbstractCCSMIT {
   }
 
   @Test
-  @SneakyThrows
   public void importZeebeProcess_multipleProcessesDeployedOnDifferentDays() {
     // given
     final String firstProcessName = "firstProcess";
     deployProcessAndStartInstance(createSimpleServiceTaskProcess(firstProcessName));
 
-    zeebeExtension.setClock(Instant.now().plus(1, ChronoUnit.DAYS));
+    try {
+      zeebeExtension.setClock(Instant.now().plus(1, ChronoUnit.DAYS));
+    } catch (final IOException | InterruptedException e) {
+      throw new OptimizeRuntimeException(e);
+    }
     final String secondProcessName = "secondProcess";
     deployProcessAndStartInstance(createSimpleServiceTaskProcess(secondProcessName));
     waitUntilDefinitionWithIdExported(firstProcessName);

@@ -19,8 +19,24 @@ message ClusterTopology {
 
 message RoutingState {
   int64  version = 1;
-  repeated sint32 activePartitions = 2;
+  RequestHandling requestHandling = 2;
   MessageCorrelation messageCorrelation = 3;
+}
+
+message RequestHandling {
+  oneof strategy {
+    AllPartitions allPartitions = 1;
+    ActivePartitions activePartitions = 2;
+  }
+
+  message AllPartitions {
+    sint32 partitionCount = 1;
+  }
+  message ActivePartitions {
+    sint32 basePartitionCount = 1;
+    repeated sint32 additionalActivePartitions = 2;
+    repeated sint32 inactivePartitions = 3;
+  }
 }
 
 message MessageCorrelation {
@@ -89,6 +105,8 @@ message TopologyChangeOperation {
     PartitionDisableExporterOperation partitionDisableExporter = 9;
     PartitionEnableExporterOperation partitionEnableExporter = 10;
     PartitionBootstrapOperation partitionBootstrap = 11;
+    StartPartitionScaleUpOperation initiateScaleUpPartitions = 12;
+    DeleteHistoryOperation deleteHistory = 13;
   }
 }
 
@@ -104,6 +122,7 @@ message PartitionJoinOperation {
 
 message PartitionLeaveOperation {
   int32 partitionId = 1;
+  int32 minimumAllowedReplicas = 2;
 }
 
 message PartitionReconfigurePriorityOperation {
@@ -130,6 +149,15 @@ message PartitionEnableExporterOperation {
 message PartitionBootstrapOperation {
   int32 partitionId = 1;
   int32 priority = 2;
+  optional PartitionConfig config = 3;
+}
+
+message StartPartitionScaleUpOperation {
+  int32 desiredPartitionCount = 2;
+}
+
+message DeleteHistoryOperation {
+  int32 memberId = 1;
 }
 
 message MemberJoinOperation {}

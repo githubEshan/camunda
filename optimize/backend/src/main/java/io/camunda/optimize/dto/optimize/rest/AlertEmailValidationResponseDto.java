@@ -8,11 +8,7 @@
 package io.camunda.optimize.dto.optimize.rest;
 
 import io.camunda.optimize.service.exceptions.OptimizeAlertEmailValidationException;
-import lombok.Data;
-import lombok.EqualsAndHashCode;
 
-@Data
-@EqualsAndHashCode(callSuper = true)
 public class AlertEmailValidationResponseDto extends ErrorResponseDto {
 
   private final String invalidAlertEmails;
@@ -26,6 +22,31 @@ public class AlertEmailValidationResponseDto extends ErrorResponseDto {
     invalidAlertEmails = String.join(", ", optimizeAlertEmailValidationException.getAlertEmails());
   }
 
+  public String getInvalidAlertEmails() {
+    return invalidAlertEmails;
+  }
+
+  @Override
+  public String toString() {
+    return "AlertEmailValidationResponseDto(invalidAlertEmails=" + getInvalidAlertEmails() + ")";
+  }
+
+  @Override
+  public boolean equals(final Object o) {
+    return org.apache.commons.lang3.builder.EqualsBuilder.reflectionEquals(this, o);
+  }
+
+  @Override
+  protected boolean canEqual(final Object other) {
+    return other instanceof AlertEmailValidationResponseDto;
+  }
+
+  @Override
+  public int hashCode() {
+    return org.apache.commons.lang3.builder.HashCodeBuilder.reflectionHashCode(this);
+  }
+
+  @SuppressWarnings("checkstyle:ConstantName")
   public static final class Fields {
 
     public static final String invalidAlertEmails = "invalidAlertEmails";

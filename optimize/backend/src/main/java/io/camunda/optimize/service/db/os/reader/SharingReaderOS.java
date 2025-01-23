@@ -14,9 +14,9 @@ import static io.camunda.optimize.service.db.DatabaseConstants.REPORT_SHARE_INDE
 import io.camunda.optimize.dto.optimize.query.sharing.DashboardShareRestDto;
 import io.camunda.optimize.dto.optimize.query.sharing.ReportShareRestDto;
 import io.camunda.optimize.service.db.os.OptimizeOpenSearchClient;
-import io.camunda.optimize.service.db.os.externalcode.client.dsl.QueryDSL;
-import io.camunda.optimize.service.db.os.externalcode.client.dsl.RequestDSL;
-import io.camunda.optimize.service.db.os.externalcode.client.sync.OpenSearchDocumentOperations;
+import io.camunda.optimize.service.db.os.client.dsl.QueryDSL;
+import io.camunda.optimize.service.db.os.client.dsl.RequestDSL;
+import io.camunda.optimize.service.db.os.client.sync.OpenSearchDocumentOperations;
 import io.camunda.optimize.service.db.reader.SharingReader;
 import io.camunda.optimize.service.db.schema.index.DashboardShareIndex;
 import io.camunda.optimize.service.db.schema.index.ReportShareIndex;
@@ -29,8 +29,6 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.function.Function;
 import java.util.stream.Collectors;
-import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
 import org.opensearch.client.opensearch._types.FieldValue;
 import org.opensearch.client.opensearch._types.query_dsl.BoolQuery;
 import org.opensearch.client.opensearch.core.GetRequest;
@@ -38,21 +36,27 @@ import org.opensearch.client.opensearch.core.GetResponse;
 import org.opensearch.client.opensearch.core.SearchRequest;
 import org.opensearch.client.opensearch.core.SearchResponse;
 import org.opensearch.client.opensearch.core.search.Hit;
+import org.slf4j.Logger;
 import org.springframework.context.annotation.Conditional;
 import org.springframework.stereotype.Component;
 
-@RequiredArgsConstructor
 @Component
-@Slf4j
 @Conditional(OpenSearchCondition.class)
 public class SharingReaderOS implements SharingReader {
 
+  private static final Logger LOG = org.slf4j.LoggerFactory.getLogger(SharingReaderOS.class);
   private final OptimizeOpenSearchClient osClient;
   private final ConfigurationService configurationService;
 
+  public SharingReaderOS(
+      final OptimizeOpenSearchClient osClient, final ConfigurationService configurationService) {
+    this.osClient = osClient;
+    this.configurationService = configurationService;
+  }
+
   @Override
   public Optional<ReportShareRestDto> getReportShare(final String shareId) {
-    log.debug("Fetching report share with id [{}]", shareId);
+    LOG.debug("Fetching report share with id [{}]", shareId);
     final GetRequest.Builder getReqBuilder =
         new GetRequest.Builder().index(REPORT_SHARE_INDEX_NAME).id(shareId);
 
@@ -69,7 +73,7 @@ public class SharingReaderOS implements SharingReader {
 
   @Override
   public Optional<DashboardShareRestDto> findDashboardShare(final String shareId) {
-    log.debug("Fetching dashboard share with id [{}]", shareId);
+    LOG.debug("Fetching dashboard share with id [{}]", shareId);
     final GetRequest.Builder getReqBuilder =
         new GetRequest.Builder().index(DASHBOARD_SHARE_INDEX_NAME).id(shareId);
 
@@ -86,7 +90,7 @@ public class SharingReaderOS implements SharingReader {
 
   @Override
   public Optional<ReportShareRestDto> findShareForReport(final String reportId) {
-    log.debug("Fetching share for resource [{}]", reportId);
+    LOG.debug("Fetching share for resource [{}]", reportId);
     final BoolQuery.Builder boolQueryBuilder =
         new BoolQuery.Builder().must(QueryDSL.term(ReportShareIndex.REPORT_ID, reportId));
     return findReportShareByQuery(boolQueryBuilder.build());
@@ -94,7 +98,7 @@ public class SharingReaderOS implements SharingReader {
 
   @Override
   public Optional<DashboardShareRestDto> findShareForDashboard(final String dashboardId) {
-    log.debug("Fetching share for resource [{}]", dashboardId);
+    LOG.debug("Fetching share for resource [{}]", dashboardId);
     final SearchResponse<DashboardShareRestDto> searchResponse =
         performSearchShareForDashboardIdRequest(dashboardId);
     final List<DashboardShareRestDto> results =
@@ -197,7 +201,7 @@ public class SharingReaderOS implements SharingReader {
     try {
       scrollResp = osClient.retrieveAllScrollResults(searchReqBuilder, responseType);
     } catch (final IOException e) {
-      log.error(errorMessage, e);
+      LOG.error(errorMessage, e);
       throw new OptimizeRuntimeException(errorMessage, e);
     }
     return OpensearchReaderUtil.extractAggregatedResponseValues(scrollResp);

@@ -14,13 +14,14 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
-import io.camunda.tasklist.entities.FormEntity;
 import io.camunda.tasklist.exceptions.NotFoundException;
 import io.camunda.tasklist.exceptions.TasklistRuntimeException;
-import io.camunda.tasklist.schema.indices.FormIndex;
-import io.camunda.tasklist.schema.indices.ProcessIndex;
-import io.camunda.tasklist.schema.templates.TaskTemplate;
+import io.camunda.tasklist.store.FormStore.FormIdView;
 import io.camunda.tasklist.tenant.TenantAwareOpenSearchClient;
+import io.camunda.webapps.schema.descriptors.operate.index.ProcessIndex;
+import io.camunda.webapps.schema.descriptors.tasklist.index.FormIndex;
+import io.camunda.webapps.schema.descriptors.tasklist.template.TaskTemplate;
+import io.camunda.webapps.schema.entities.tasklist.FormEntity;
 import java.io.IOException;
 import java.util.List;
 import org.junit.jupiter.api.Test;
@@ -30,6 +31,10 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
+import org.opensearch.client.opensearch.OpenSearchClient;
+import org.opensearch.client.opensearch._types.ErrorResponse;
+import org.opensearch.client.opensearch._types.OpenSearchException;
+import org.opensearch.client.opensearch.core.GetRequest;
 import org.opensearch.client.opensearch.core.SearchRequest;
 import org.opensearch.client.opensearch.core.SearchResponse;
 import org.opensearch.client.opensearch.core.search.Hit;
@@ -39,13 +44,15 @@ import org.opensearch.client.opensearch.core.search.TotalHits;
 @ExtendWith(MockitoExtension.class)
 @MockitoSettings(strictness = Strictness.LENIENT)
 class FormStoreOpenSearchTest {
-  @Mock private FormIndex formIndex = new FormIndex();
+  @Mock private FormIndex formIndex = new FormIndex("test", false);
 
-  @Mock private TaskTemplate taskTemplate = new TaskTemplate();
+  @Mock private TaskTemplate taskTemplate = new TaskTemplate("test", false);
 
-  @Mock private ProcessIndex processIndex = new ProcessIndex();
+  @Mock private ProcessIndex processIndex = new ProcessIndex("test", false);
 
   @Mock private TenantAwareOpenSearchClient tenantAwareClient;
+
+  @Mock private OpenSearchClient osClient;
 
   @InjectMocks private FormStoreOpenSearch instance;
 
@@ -84,12 +91,27 @@ class FormStoreOpenSearchTest {
   }
 
   @Test
+  void getFormByKeyNotExistShouldReturnEmpty() throws IOException {
+    when(formIndex.getFullQualifiedName()).thenReturn(FormIndex.INDEX_NAME);
+
+    when(osClient.get(any(GetRequest.class), eq(FormIdView.class)))
+        .thenThrow(
+            new OpenSearchException(
+                new ErrorResponse.Builder()
+                    .status(404)
+                    .error(e -> e.reason("not found").type("not found"))
+                    .build()));
+
+    assertThat(instance.getFormByKey("id1")).isEmpty();
+  }
+
+  @Test
   void getForm() throws IOException {
     final var providedFormEntity =
         new FormEntity()
             .setId("id1")
             .setProcessDefinitionId("processDefId1")
-            .setBpmnId("bpmnId1")
+            .setFormId("bpmnId1")
             .setSchema("");
     final var formSearchResponse = mock(SearchResponse.class);
     when(tenantAwareClient.search(any(SearchRequest.Builder.class), eq(FormEntity.class)))

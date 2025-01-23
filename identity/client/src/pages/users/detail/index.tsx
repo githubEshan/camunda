@@ -21,24 +21,23 @@ import Flex from "src/components/layout/Flex";
 import { useEntityModal } from "src/components/modal";
 import EditModal from "src/pages/users/modals/EditModal";
 import DeleteModal from "src/pages/users/modals/DeleteModal";
-import List from "src/pages/users/detail/role/List";
 
 const Details: FC = () => {
   const { t } = useTranslate();
   const { id = "", tab = "details" } = useParams<{ id: string; tab: string }>();
   const navigate = useNavigate();
   const {
-    data: user,
+    data: userSearchResults,
     loading,
     reload,
   } = useApi(getUserDetails, {
-    id,
+    username: id,
   });
   const [editUser, editUserModal] = useEntityModal(EditModal, reload);
   const [deleteUser, deleteUserModal] = useEntityModal(DeleteModal, () =>
     navigate("..", { replace: true }),
   );
-
+  const user = userSearchResults !== null ? userSearchResults.items[0] : null;
   if (!loading && !user) return <NotFound />;
 
   return (
@@ -76,11 +75,6 @@ const Details: FC = () => {
                 key: "details",
                 label: t("User details"),
                 content: user && <UserDetails user={user} loading={loading} />,
-              },
-              {
-                key: "roles",
-                label: t("Assigned roles"),
-                content: user && <List user={user} loadingUser={loading} />,
               },
             ]}
             selectedTabKey={tab}

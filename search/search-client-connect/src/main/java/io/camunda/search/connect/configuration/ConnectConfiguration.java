@@ -7,44 +7,49 @@
  */
 package io.camunda.search.connect.configuration;
 
+import io.camunda.search.connect.plugin.PluginConfiguration;
+import java.util.ArrayList;
+import java.util.List;
+
 public class ConnectConfiguration {
 
-  private static final String DATABASE_TYPE_DEFAULT = "elasticsearch";
+  private static final DatabaseType DATABASE_TYPE_DEFAULT = DatabaseType.ELASTICSEARCH;
   private static final String CLUSTER_NAME_DEFAULT = "elasticsearch";
   private static final String DATE_FORMAT_FIELD = "yyyy-MM-dd'T'HH:mm:ss.SSSZZ";
   private static final String FIELD_DATE_FORMAT_DEFAULT = "date_time";
   private static final String URL_DEFAULT = "http://localhost:9200";
-
-  private String type = DATABASE_TYPE_DEFAULT;
+  private String type = DATABASE_TYPE_DEFAULT.toString();
   private String clusterName = CLUSTER_NAME_DEFAULT;
-
   private String dateFormat = DATE_FORMAT_FIELD;
   private String fieldDateFormat = FIELD_DATE_FORMAT_DEFAULT;
-
   private Integer socketTimeout;
   private Integer connectTimeout;
-
   private String url = URL_DEFAULT;
   private String username;
   private String password;
-
   private SecurityConfiguration security = new SecurityConfiguration();
-
   private String indexPrefix;
+  private List<PluginConfiguration> interceptorPlugins = new ArrayList<>();
 
+  /** Use {@link ConnectConfiguration#getTypeEnum()} */
+  @Deprecated
   public String getType() {
     return type;
   }
 
-  public void setType(String type) {
+  public void setType(final String type) {
     this.type = type;
+  }
+
+  public DatabaseType getTypeEnum() {
+    return DatabaseType.from(type);
   }
 
   public String getClusterName() {
     return clusterName;
   }
 
-  public void setClusterName(String clusterName) {
+  public void setClusterName(final String clusterName) {
     this.clusterName = clusterName;
   }
 
@@ -52,7 +57,7 @@ public class ConnectConfiguration {
     return dateFormat;
   }
 
-  public void setDateFormat(String dateFormat) {
+  public void setDateFormat(final String dateFormat) {
     this.dateFormat = dateFormat;
   }
 
@@ -60,7 +65,7 @@ public class ConnectConfiguration {
     return fieldDateFormat;
   }
 
-  public void setFieldDateFormat(String fieldDateFormat) {
+  public void setFieldDateFormat(final String fieldDateFormat) {
     this.fieldDateFormat = fieldDateFormat;
   }
 
@@ -68,7 +73,7 @@ public class ConnectConfiguration {
     return socketTimeout;
   }
 
-  public void setSocketTimeout(Integer socketTimeout) {
+  public void setSocketTimeout(final Integer socketTimeout) {
     this.socketTimeout = socketTimeout;
   }
 
@@ -76,7 +81,7 @@ public class ConnectConfiguration {
     return connectTimeout;
   }
 
-  public void setConnectTimeout(Integer connectTimeout) {
+  public void setConnectTimeout(final Integer connectTimeout) {
     this.connectTimeout = connectTimeout;
   }
 
@@ -84,7 +89,7 @@ public class ConnectConfiguration {
     return url;
   }
 
-  public void setUrl(String url) {
+  public void setUrl(final String url) {
     this.url = url;
   }
 
@@ -92,7 +97,7 @@ public class ConnectConfiguration {
     return username;
   }
 
-  public void setUsername(String username) {
+  public void setUsername(final String username) {
     this.username = username;
   }
 
@@ -100,7 +105,7 @@ public class ConnectConfiguration {
     return password;
   }
 
-  public void setPassword(String password) {
+  public void setPassword(final String password) {
     this.password = password;
   }
 
@@ -108,7 +113,7 @@ public class ConnectConfiguration {
     return security;
   }
 
-  public void setSecurity(SecurityConfiguration security) {
+  public void setSecurity(final SecurityConfiguration security) {
     this.security = security;
   }
 
@@ -116,7 +121,15 @@ public class ConnectConfiguration {
     return indexPrefix;
   }
 
-  public void setIndexPrefix(String indexPrefix) {
+  public void setIndexPrefix(final String indexPrefix) {
     this.indexPrefix = indexPrefix;
+  }
+
+  public List<PluginConfiguration> getInterceptorPlugins() {
+    return interceptorPlugins;
+  }
+
+  public void setInterceptorPlugins(final List<PluginConfiguration> interceptorPlugins) {
+    this.interceptorPlugins = interceptorPlugins;
   }
 }

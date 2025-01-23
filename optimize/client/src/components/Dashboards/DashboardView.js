@@ -166,9 +166,8 @@ export function DashboardView(props) {
             <div className="info">
               <EntityName
                 details={<LastModifiedInfo entity={{lastModified, lastModifier, owner}} />}
-              >
-                {name}
-              </EntityName>
+                name={name}
+              />
               {description && <EntityDescription description={description} />}
             </div>
             <div className="tools">
@@ -179,7 +178,7 @@ export function DashboardView(props) {
                       kind="primary"
                       className="create-copy"
                       hasIconOnly
-                      renderIcon={DashboardCopyIcon}
+                      renderIcon={() => <DashboardCopyIcon />}
                       iconDescription={t('dashboard.copyInstantDashboard')}
                       onClick={() => setIsTemplateModalOpen(true)}
                     />

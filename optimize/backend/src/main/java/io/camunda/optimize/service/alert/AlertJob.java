@@ -19,10 +19,10 @@ import io.camunda.optimize.dto.optimize.query.report.ReportDefinitionDto;
 import io.camunda.optimize.dto.optimize.query.report.SingleReportEvaluationResult;
 import io.camunda.optimize.dto.optimize.query.report.single.ViewProperty;
 import io.camunda.optimize.dto.optimize.query.report.single.process.ProcessReportDataDto;
-import io.camunda.optimize.service.db.es.report.PlainReportEvaluationHandler;
-import io.camunda.optimize.service.db.es.report.ReportEvaluationInfo;
 import io.camunda.optimize.service.db.reader.AlertReader;
 import io.camunda.optimize.service.db.reader.ReportReader;
+import io.camunda.optimize.service.db.report.PlainReportEvaluationHandler;
+import io.camunda.optimize.service.db.report.ReportEvaluationInfo;
 import io.camunda.optimize.service.db.writer.AlertWriter;
 import io.camunda.optimize.service.exceptions.OptimizeRuntimeException;
 import io.camunda.optimize.service.util.DurationFormatterUtil;
@@ -31,22 +31,20 @@ import io.camunda.optimize.util.SuppressionConstants;
 import java.util.List;
 import java.util.Locale;
 import java.util.Optional;
-import lombok.AllArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
 import org.quartz.Job;
 import org.quartz.JobDataMap;
 import org.quartz.JobExecutionContext;
 import org.quartz.JobKey;
+import org.slf4j.Logger;
 import org.springframework.beans.factory.config.ConfigurableBeanFactory;
 import org.springframework.context.annotation.Scope;
 
-@AllArgsConstructor
-@Slf4j
 @Scope(value = ConfigurableBeanFactory.SCOPE_PROTOTYPE)
 public class AlertJob implements Job {
 
   private static final String HTTP_PREFIX = "http://";
   private static final String HTTPS_PREFIX = "https://";
+  private static final Logger LOG = org.slf4j.LoggerFactory.getLogger(AlertJob.class);
 
   private final ConfigurationService configurationService;
   private final List<AlertNotificationService> notificationServices;
@@ -55,11 +53,26 @@ public class AlertJob implements Job {
   private final AlertWriter alertWriter;
   private final PlainReportEvaluationHandler reportEvaluator;
 
+  public AlertJob(
+      final ConfigurationService configurationService,
+      final List<AlertNotificationService> notificationServices,
+      final AlertReader alertReader,
+      final ReportReader reportReader,
+      final AlertWriter alertWriter,
+      final PlainReportEvaluationHandler reportEvaluator) {
+    this.configurationService = configurationService;
+    this.notificationServices = notificationServices;
+    this.alertReader = alertReader;
+    this.reportReader = reportReader;
+    this.alertWriter = alertWriter;
+    this.reportEvaluator = reportEvaluator;
+  }
+
   @Override
   public void execute(final JobExecutionContext jobExecutionContext) {
     final JobDataMap dataMap = jobExecutionContext.getJobDetail().getJobDataMap();
     final String alertId = dataMap.getString("alertId");
-    log.debug("Executing status check for alert [{}]", alertId);
+    LOG.debug("Executing status check for alert [{}]", alertId);
 
     final AlertDefinitionDto alert =
         alertReader
@@ -95,8 +108,8 @@ public class AlertJob implements Job {
         // got resolved
         jobExecutionContext.setResult(handleAlertResolved(alert, reportDefinition, reportResult));
       }
-    } catch (Exception e) {
-      log.error(
+    } catch (final Exception e) {
+      LOG.error(
           "Error while processing alert [{}] for report [{}]", alertId, alert.getReportId(), e);
     }
   }
@@ -127,7 +140,7 @@ public class AlertJob implements Job {
       final AlertDefinitionDto alert,
       final ReportDefinitionDto<?> reportDefinition,
       final Double reportResult) {
-    AlertJobResult alertJobResult;
+    final AlertJobResult alertJobResult;
     alert.setTriggered(false);
     alertJobResult = new AlertJobResult(alert);
     alertJobResult.setStatusChanged(true);
@@ -166,11 +179,11 @@ public class AlertJob implements Job {
   }
 
   private void fanoutNotification(final AlertNotificationDto notification) {
-    for (AlertNotificationService notificationService : notificationServices) {
+    for (final AlertNotificationService notificationService : notificationServices) {
       try {
         notificationService.notify(notification);
-      } catch (Exception e) {
-        log.error(
+      } catch (final Exception e) {
+        LOG.error(
             "Exception thrown while trying to send notification: {}",
             notificationService.getNotificationDescription(),
             e);
@@ -178,7 +191,7 @@ public class AlertJob implements Job {
     }
   }
 
-  private boolean isReminder(JobKey key) {
+  private boolean isReminder(final JobKey key) {
     return key.getName().toLowerCase(Locale.ENGLISH).contains("reminder");
   }
 
@@ -198,7 +211,7 @@ public class AlertJob implements Job {
       final AlertDefinitionDto alert,
       final ReportDefinitionDto<?> reportDefinition,
       final Double result) {
-    String statusText =
+    final String statusText =
         AlertThresholdOperator.LESS.equals(alert.getThresholdOperator())
             ? "has been reached"
             : "is not exceeded anymore";
@@ -229,7 +242,7 @@ public class AlertJob implements Job {
         + createReportViewLink(alert, notificationType);
   }
 
-  private boolean thresholdExceeded(AlertDefinitionDto alert, Double result) {
+  private boolean thresholdExceeded(final AlertDefinitionDto alert, final Double result) {
     boolean exceeded = false;
     if (result != null) {
       if (AlertThresholdOperator.GREATER.equals(alert.getThresholdOperator())) {
@@ -250,7 +263,7 @@ public class AlertJob implements Job {
 
   private boolean isDurationReport(final ReportDefinitionDto<?> reportDefinition) {
     if (reportDefinition.getData() instanceof ProcessReportDataDto) {
-      ProcessReportDataDto data = (ProcessReportDataDto) reportDefinition.getData();
+      final ProcessReportDataDto data = (ProcessReportDataDto) reportDefinition.getData();
       return data.getView().getFirstProperty().equals(ViewProperty.DURATION);
     }
     return false;
@@ -271,9 +284,9 @@ public class AlertJob implements Job {
     if (containerAccessUrl.isPresent()) {
       return containerAccessUrl.get() + createReportViewLinkPath(alert, notificationType);
     } else {
-      Optional<Integer> containerHttpPort = configurationService.getContainerHttpPort();
-      String httpPrefix = containerHttpPort.map(p -> HTTP_PREFIX).orElse(HTTPS_PREFIX);
-      Integer port = containerHttpPort.orElse(configurationService.getContainerHttpsPort());
+      final Optional<Integer> containerHttpPort = configurationService.getContainerHttpPort();
+      final String httpPrefix = containerHttpPort.map(p -> HTTP_PREFIX).orElse(HTTPS_PREFIX);
+      final Integer port = containerHttpPort.orElse(configurationService.getContainerHttpsPort());
       return httpPrefix
           + configurationService.getContainerHost()
           + ":"

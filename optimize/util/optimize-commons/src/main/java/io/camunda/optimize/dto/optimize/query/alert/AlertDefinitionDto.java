@@ -8,11 +8,7 @@
 package io.camunda.optimize.dto.optimize.query.alert;
 
 import java.time.OffsetDateTime;
-import lombok.Data;
-import lombok.EqualsAndHashCode;
 
-@Data
-@EqualsAndHashCode(callSuper = true)
 public class AlertDefinitionDto extends AlertCreationRequestDto {
 
   protected String id;
@@ -22,7 +18,90 @@ public class AlertDefinitionDto extends AlertCreationRequestDto {
   protected String lastModifier;
   protected boolean triggered;
 
+  public AlertDefinitionDto() {}
+
+  public String getId() {
+    return id;
+  }
+
+  public void setId(final String id) {
+    this.id = id;
+  }
+
+  public OffsetDateTime getLastModified() {
+    return lastModified;
+  }
+
+  public void setLastModified(final OffsetDateTime lastModified) {
+    this.lastModified = lastModified;
+  }
+
+  public OffsetDateTime getCreated() {
+    return created;
+  }
+
+  public void setCreated(final OffsetDateTime created) {
+    this.created = created;
+  }
+
+  public String getOwner() {
+    return owner;
+  }
+
+  public void setOwner(final String owner) {
+    this.owner = owner;
+  }
+
+  public String getLastModifier() {
+    return lastModifier;
+  }
+
+  public void setLastModifier(final String lastModifier) {
+    this.lastModifier = lastModifier;
+  }
+
+  public boolean isTriggered() {
+    return triggered;
+  }
+
+  public void setTriggered(final boolean triggered) {
+    this.triggered = triggered;
+  }
+
+  @Override
+  protected boolean canEqual(final Object other) {
+    return other instanceof AlertDefinitionDto;
+  }
+
+  @Override
+  public int hashCode() {
+    return org.apache.commons.lang3.builder.HashCodeBuilder.reflectionHashCode(this);
+  }
+
+  @Override
+  public boolean equals(final Object o) {
+    return org.apache.commons.lang3.builder.EqualsBuilder.reflectionEquals(this, o);
+  }
+
+  @Override
+  public String toString() {
+    return "AlertDefinitionDto(id="
+        + getId()
+        + ", lastModified="
+        + getLastModified()
+        + ", created="
+        + getCreated()
+        + ", owner="
+        + getOwner()
+        + ", lastModifier="
+        + getLastModifier()
+        + ", triggered="
+        + isTriggered()
+        + ")";
+  }
+
   /** Needed to inherit field name constants from {@link AlertCreationRequestDto} */
+  @SuppressWarnings("checkstyle:ConstantName")
   public static class Fields extends AlertCreationRequestDto.Fields {
 
     public static final String id = "id";

@@ -30,7 +30,7 @@ test('create a report from a template', async (t) => {
   await t.click(Common.templateModalProcessField);
   await t.click(Common.carbonOption('Order process'));
 
-  await t.click(e.templateOption('Analyze shares as pie chart'));
+  await t.click(Common.templateOption('Analyze shares as pie chart'));
 
   await t.takeScreenshot('img/reportTemplate.png', {fullPage: true});
   await t.maximizeWindow();
@@ -224,7 +224,7 @@ test('drag raw data table columns', async (t) => {
   await u.selectView(t, 'Raw data');
 
   const originalPositionText = await e.tableHeader(3).textContent;
-  await t.drag(e.tableHeader(3), 350, 0);
+  await t.drag(e.tableHeader(3), 350, 60);
   const newPositionText = await e.tableHeader(4).textContent;
   await t.expect(originalPositionText).eql(newPositionText);
 });

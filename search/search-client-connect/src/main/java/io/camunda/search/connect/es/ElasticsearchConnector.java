@@ -7,6 +7,7 @@
  */
 package io.camunda.search.connect.es;
 
+import co.elastic.clients.elasticsearch.ElasticsearchAsyncClient;
 import co.elastic.clients.elasticsearch.ElasticsearchClient;
 import co.elastic.clients.json.jackson.JacksonJsonpMapper;
 import co.elastic.clients.transport.rest_client.RestClientTransport;
@@ -15,10 +16,10 @@ import io.camunda.search.connect.SearchClientConnectException;
 import io.camunda.search.connect.configuration.ConnectConfiguration;
 import io.camunda.search.connect.configuration.SecurityConfiguration;
 import io.camunda.search.connect.jackson.JacksonConfiguration;
+import io.camunda.search.connect.plugin.PluginRepository;
 import io.camunda.search.connect.util.SecurityUtil;
-import java.net.URI;
-import java.net.URISyntaxException;
 import org.apache.http.HttpHost;
+import org.apache.http.HttpRequestInterceptor;
 import org.apache.http.auth.AuthScope;
 import org.apache.http.auth.UsernamePasswordCredentials;
 import org.apache.http.client.config.RequestConfig.Builder;
@@ -35,19 +36,29 @@ public final class ElasticsearchConnector {
 
   private final ConnectConfiguration configuration;
   private final ObjectMapper objectMapper;
+  private final PluginRepository pluginRepository;
 
   public ElasticsearchConnector(final ConnectConfiguration configuration) {
-    this(configuration, new JacksonConfiguration(configuration).createObjectMapper());
+    this(
+        configuration,
+        new JacksonConfiguration(configuration).createObjectMapper(),
+        new PluginRepository());
   }
 
   public ElasticsearchConnector(
-      final ConnectConfiguration configuration, final ObjectMapper objectMapper) {
+      final ConnectConfiguration configuration,
+      final ObjectMapper objectMapper,
+      final PluginRepository pluginRepository) {
     this.configuration = configuration;
     this.objectMapper = objectMapper;
+    this.pluginRepository = pluginRepository;
   }
 
   public ElasticsearchClient createClient() {
     LOGGER.debug("Creating Elasticsearch Client ...");
+
+    // Load plugins
+    pluginRepository.load(configuration.getInterceptorPlugins());
 
     // create rest client
     final var restClient = createRestClient(configuration);
@@ -57,6 +68,22 @@ public final class ElasticsearchConnector {
 
     // And create the API client
     return new ElasticsearchClient(transport);
+  }
+
+  public ElasticsearchAsyncClient createAsyncClient() {
+    LOGGER.debug("Creating async Elasticsearch Client ...");
+
+    // Load plugins
+    pluginRepository.load(configuration.getInterceptorPlugins());
+
+    // create rest client
+    final var restClient = createRestClient(configuration);
+
+    // Create the transport with a Jackson mapper
+    final var transport = new RestClientTransport(restClient, new JacksonJsonpMapper(objectMapper));
+
+    // And create the API client
+    return new ElasticsearchAsyncClient(transport);
   }
 
   private RestClient createRestClient(final ConnectConfiguration configuration) {
@@ -70,7 +97,9 @@ public final class ElasticsearchConnector {
     final var restClient =
         restClientBuilder
             .setHttpClientConfigCallback(
-                httpClientBuilder -> configureHttpClient(httpClientBuilder, configuration))
+                httpClientBuilder ->
+                    configureHttpClient(
+                        httpClientBuilder, configuration, pluginRepository.asRequestInterceptor()))
             .build();
 
     return restClient;
@@ -78,12 +107,18 @@ public final class ElasticsearchConnector {
 
   protected HttpAsyncClientBuilder configureHttpClient(
       final HttpAsyncClientBuilder httpAsyncClientBuilder,
-      final ConnectConfiguration configuration) {
+      final ConnectConfiguration configuration,
+      final HttpRequestInterceptor... interceptors) {
     setupAuthentication(httpAsyncClientBuilder, configuration);
     final var security = configuration.getSecurity();
     if (security != null && security.isEnabled()) {
       setupSSLContext(httpAsyncClientBuilder, security);
     }
+
+    for (final HttpRequestInterceptor interceptor : interceptors) {
+      httpAsyncClientBuilder.addInterceptorLast(interceptor);
+    }
+
     return httpAsyncClientBuilder;
   }
 
@@ -96,7 +131,7 @@ public final class ElasticsearchConnector {
       if (!configuration.isVerifyHostname()) {
         httpAsyncClientBuilder.setSSLHostnameVerifier(NoopHostnameVerifier.INSTANCE);
       }
-    } catch (Exception e) {
+    } catch (final Exception e) {
       LOGGER.error("Error in setting up SSLContext", e);
     }
   }
@@ -113,9 +148,8 @@ public final class ElasticsearchConnector {
 
   private HttpHost getHttpHost(final ConnectConfiguration elsConfig) {
     try {
-      final var uri = new URI(elsConfig.getUrl());
-      return new HttpHost(uri.getHost(), uri.getPort(), uri.getScheme());
-    } catch (URISyntaxException e) {
+      return HttpHost.create(elsConfig.getUrl());
+    } catch (final Exception e) {
       throw new SearchClientConnectException("Error in url: " + elsConfig.getUrl(), e);
     }
   }

@@ -13,11 +13,15 @@ public class OptimizeRuntimeException extends RuntimeException {
     super();
   }
 
-  public OptimizeRuntimeException(String detailedErrorMessage) {
+  public OptimizeRuntimeException(final Throwable e) {
+    super(e);
+  }
+
+  public OptimizeRuntimeException(final String detailedErrorMessage) {
     super(detailedErrorMessage);
   }
 
-  public OptimizeRuntimeException(String detailedErrorMessage, Throwable e) {
+  public OptimizeRuntimeException(final String detailedErrorMessage, final Throwable e) {
     super(detailedErrorMessage, e);
   }
 

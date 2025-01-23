@@ -21,15 +21,20 @@ import io.camunda.zeebe.engine.processing.deployment.model.element.ExecutableCat
 import io.camunda.zeebe.engine.processing.deployment.model.element.ExecutableStartEvent;
 import io.camunda.zeebe.engine.processing.deployment.transform.DeploymentTransformer;
 import io.camunda.zeebe.engine.processing.distribution.CommandDistributionBehavior;
+import io.camunda.zeebe.engine.processing.identity.AuthorizationCheckBehavior;
+import io.camunda.zeebe.engine.processing.identity.AuthorizationCheckBehavior.AuthorizationRequest;
 import io.camunda.zeebe.engine.processing.streamprocessor.DistributedTypedRecordProcessor;
 import io.camunda.zeebe.engine.processing.streamprocessor.writers.StateWriter;
 import io.camunda.zeebe.engine.processing.streamprocessor.writers.TypedRejectionWriter;
 import io.camunda.zeebe.engine.processing.streamprocessor.writers.TypedResponseWriter;
 import io.camunda.zeebe.engine.processing.streamprocessor.writers.Writers;
+import io.camunda.zeebe.engine.state.distribution.DistributionQueue;
 import io.camunda.zeebe.engine.state.immutable.DecisionState;
+import io.camunda.zeebe.engine.state.immutable.DeploymentState;
 import io.camunda.zeebe.engine.state.immutable.FormState;
 import io.camunda.zeebe.engine.state.immutable.ProcessState;
 import io.camunda.zeebe.engine.state.immutable.ProcessingState;
+import io.camunda.zeebe.engine.state.immutable.ResourceState;
 import io.camunda.zeebe.engine.state.immutable.TimerInstanceState;
 import io.camunda.zeebe.engine.state.instance.TimerInstance;
 import io.camunda.zeebe.model.bpmn.util.time.Timer;
@@ -41,12 +46,17 @@ import io.camunda.zeebe.protocol.impl.record.value.deployment.FormMetadataRecord
 import io.camunda.zeebe.protocol.impl.record.value.deployment.FormRecord;
 import io.camunda.zeebe.protocol.impl.record.value.deployment.ProcessMetadata;
 import io.camunda.zeebe.protocol.impl.record.value.deployment.ProcessRecord;
+import io.camunda.zeebe.protocol.impl.record.value.deployment.ResourceMetadataRecord;
+import io.camunda.zeebe.protocol.impl.record.value.deployment.ResourceRecord;
 import io.camunda.zeebe.protocol.record.RejectionType;
 import io.camunda.zeebe.protocol.record.intent.DecisionIntent;
 import io.camunda.zeebe.protocol.record.intent.DecisionRequirementsIntent;
 import io.camunda.zeebe.protocol.record.intent.DeploymentIntent;
 import io.camunda.zeebe.protocol.record.intent.FormIntent;
 import io.camunda.zeebe.protocol.record.intent.ProcessIntent;
+import io.camunda.zeebe.protocol.record.intent.ResourceIntent;
+import io.camunda.zeebe.protocol.record.value.AuthorizationResourceType;
+import io.camunda.zeebe.protocol.record.value.PermissionType;
 import io.camunda.zeebe.protocol.record.value.deployment.DeploymentResource;
 import io.camunda.zeebe.stream.api.records.TypedRecord;
 import io.camunda.zeebe.stream.api.state.KeyGenerator;
@@ -64,9 +74,11 @@ public final class DeploymentCreateProcessor
       "Expected to create timer for start event, but encountered the following error: %s";
 
   private final DeploymentTransformer deploymentTransformer;
+  private final DeploymentState deploymentState;
   private final ProcessState processState;
   private final DecisionState decisionState;
   private final FormState formState;
+  private final ResourceState resourceState;
   private final TimerInstanceState timerInstanceState;
   private final CatchEventBehavior catchEventBehavior;
   private final KeyGenerator keyGenerator;
@@ -76,6 +88,7 @@ public final class DeploymentCreateProcessor
   private final TypedRejectionWriter rejectionWriter;
   private final TypedResponseWriter responseWriter;
   private final CommandDistributionBehavior distributionBehavior;
+  private final AuthorizationCheckBehavior authCheckBehavior;
 
   public DeploymentCreateProcessor(
       final ProcessingState processingState,
@@ -85,10 +98,13 @@ public final class DeploymentCreateProcessor
       final FeatureFlags featureFlags,
       final CommandDistributionBehavior distributionBehavior,
       final EngineConfiguration config,
-      final InstantSource clock) {
+      final InstantSource clock,
+      final AuthorizationCheckBehavior authCheckBehavior) {
+    deploymentState = processingState.getDeploymentState();
     processState = processingState.getProcessState();
     decisionState = processingState.getDecisionState();
     formState = processingState.getFormState();
+    resourceState = processingState.getResourceState();
     timerInstanceState = processingState.getTimerState();
     this.keyGenerator = keyGenerator;
     stateWriter = writers.state();
@@ -97,6 +113,7 @@ public final class DeploymentCreateProcessor
     catchEventBehavior = bpmnBehaviors.catchEventBehavior();
     expressionProcessor = bpmnBehaviors.expressionBehavior();
     this.distributionBehavior = distributionBehavior;
+    this.authCheckBehavior = authCheckBehavior;
     deploymentTransformer =
         new DeploymentTransformer(
             stateWriter,
@@ -112,6 +129,25 @@ public final class DeploymentCreateProcessor
 
   @Override
   public void processNewCommand(final TypedRecord<DeploymentRecord> command) {
+    final var authorizationRequest =
+        new AuthorizationRequest(
+            command,
+            AuthorizationResourceType.RESOURCE,
+            PermissionType.CREATE,
+            command.getValue().getTenantId());
+    final var isAuthorized = authCheckBehavior.isAuthorized(authorizationRequest);
+    if (isAuthorized.isLeft()) {
+      final var rejection = isAuthorized.getLeft();
+      final String errorMessage =
+          RejectionType.NOT_FOUND.equals(rejection.type())
+              ? "Expected to create a deployment for tenant '%s', but no such tenant was found"
+                  .formatted(command.getValue().getTenantId())
+              : rejection.reason();
+      rejectionWriter.appendRejection(command, rejection.type(), errorMessage);
+      responseWriter.writeRejectionOnCommand(command, rejection.type(), errorMessage);
+      return;
+    }
+
     transformAndDistributeDeployment(command);
     // manage the top-level start event subscriptions except for timers
     startEventSubscriptionManager.tryReOpenStartEventSubscription(command.getValue());
@@ -119,6 +155,14 @@ public final class DeploymentCreateProcessor
 
   @Override
   public void processDistributedCommand(final TypedRecord<DeploymentRecord> command) {
+    if (deploymentState.hasStoredDeploymentRecord(command.getKey())) {
+      // we already processed this deployment, so we can ignore it
+      distributionBehavior.acknowledgeCommand(command);
+      rejectionWriter.appendRejection(
+          command, RejectionType.ALREADY_EXISTS, "Deployment already exists");
+      return;
+    }
+
     processDistributedRecord(command);
     // manage the top-level start event subscriptions except for timers
     startEventSubscriptionManager.tryReOpenStartEventSubscription(command.getValue());
@@ -136,6 +180,9 @@ public final class DeploymentCreateProcessor
     }
     if (command.getValue().hasForms()) {
       formState.clearCache();
+    }
+    if (command.getValue().hasResources()) {
+      resourceState.clearCache();
     }
 
     if (error instanceof final ResourceTransformationFailedException exception) {
@@ -179,7 +226,7 @@ public final class DeploymentCreateProcessor
         key, DeploymentIntent.CREATED, recordWithoutResource, command);
     stateWriter.appendFollowUpEvent(key, DeploymentIntent.CREATED, recordWithoutResource);
 
-    distributionBehavior.withKey(key).distribute(command);
+    distributionBehavior.withKey(key).inQueue(DistributionQueue.DEPLOYMENT).distribute(command);
   }
 
   private void processDistributedRecord(final TypedRecord<DeploymentRecord> command) {
@@ -187,6 +234,7 @@ public final class DeploymentCreateProcessor
     createBpmnResources(deploymentEvent);
     createDmnResources(deploymentEvent);
     createFormResources(deploymentEvent);
+    createResources(deploymentEvent);
     final var recordWithoutResource = createDeploymentWithoutResources(deploymentEvent);
     stateWriter.appendFollowUpEvent(
         command.getKey(), DeploymentIntent.CREATED, recordWithoutResource);
@@ -235,11 +283,31 @@ public final class DeploymentCreateProcessor
         .forEach(
             metadata -> {
               for (final DeploymentResource resource : deploymentEvent.getResources()) {
-                if (resource.getResourceName().equals(metadata.getResourceName())) {
+                final var resourceChecksum =
+                    deploymentTransformer.getChecksum(resource.getResource());
+                if (resourceChecksum.equals(metadata.getChecksumBuffer())) {
                   stateWriter.appendFollowUpEvent(
                       metadata.getFormKey(),
                       FormIntent.CREATED,
                       new FormRecord().wrap(metadata, resource.getResource()));
+                }
+              }
+            });
+  }
+
+  private void createResources(final DeploymentRecord deploymentEvent) {
+    deploymentEvent.resourceMetadata().stream()
+        .filter(not(ResourceMetadataRecord::isDuplicate))
+        .forEach(
+            metadata -> {
+              for (final DeploymentResource resource : deploymentEvent.getResources()) {
+                final var resourceChecksum =
+                    deploymentTransformer.getChecksum(resource.getResource());
+                if (resourceChecksum.equals(metadata.getChecksumBuffer())) {
+                  stateWriter.appendFollowUpEvent(
+                      metadata.getResourceKey(),
+                      ResourceIntent.CREATED,
+                      new ResourceRecord().wrap(metadata, resource.getResource()));
                 }
               }
             });

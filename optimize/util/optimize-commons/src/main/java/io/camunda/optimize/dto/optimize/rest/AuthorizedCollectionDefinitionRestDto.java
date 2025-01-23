@@ -12,14 +12,7 @@ import io.camunda.optimize.dto.optimize.AuthorizedEntityDto;
 import io.camunda.optimize.dto.optimize.RoleType;
 import io.camunda.optimize.dto.optimize.query.collection.CollectionDefinitionDto;
 import io.camunda.optimize.dto.optimize.query.collection.CollectionDefinitionRestDto;
-import lombok.AccessLevel;
-import lombok.Data;
-import lombok.EqualsAndHashCode;
-import lombok.NoArgsConstructor;
 
-@NoArgsConstructor(access = AccessLevel.PROTECTED)
-@Data
-@EqualsAndHashCode(callSuper = true)
 public class AuthorizedCollectionDefinitionRestDto extends AuthorizedEntityDto {
 
   @JsonUnwrapped private CollectionDefinitionRestDto definitionDto;
@@ -29,6 +22,8 @@ public class AuthorizedCollectionDefinitionRestDto extends AuthorizedEntityDto {
     super(currentUserRole);
     this.definitionDto = definitionDto;
   }
+
+  protected AuthorizedCollectionDefinitionRestDto() {}
 
   public static AuthorizedCollectionDefinitionRestDto from(
       final AuthorizedCollectionDefinitionDto authorizedCollectionDto) {
@@ -47,5 +42,34 @@ public class AuthorizedCollectionDefinitionRestDto extends AuthorizedEntityDto {
     resolvedCollection.setData(collectionDefinitionDto.getData());
     return new AuthorizedCollectionDefinitionRestDto(
         authorizedCollectionDto.getCurrentUserRole(), resolvedCollection);
+  }
+
+  public CollectionDefinitionRestDto getDefinitionDto() {
+    return definitionDto;
+  }
+
+  @JsonUnwrapped
+  public void setDefinitionDto(final CollectionDefinitionRestDto definitionDto) {
+    this.definitionDto = definitionDto;
+  }
+
+  @Override
+  protected boolean canEqual(final Object other) {
+    return other instanceof AuthorizedCollectionDefinitionRestDto;
+  }
+
+  @Override
+  public int hashCode() {
+    return org.apache.commons.lang3.builder.HashCodeBuilder.reflectionHashCode(this);
+  }
+
+  @Override
+  public boolean equals(final Object o) {
+    return org.apache.commons.lang3.builder.EqualsBuilder.reflectionEquals(this, o);
+  }
+
+  @Override
+  public String toString() {
+    return "AuthorizedCollectionDefinitionRestDto(definitionDto=" + getDefinitionDto() + ")";
   }
 }

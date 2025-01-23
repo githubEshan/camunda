@@ -18,67 +18,62 @@ import com.auth0.jwt.JWT;
 import com.auth0.jwt.interfaces.DecodedJWT;
 import io.camunda.optimize.service.util.configuration.ConfigurationService;
 import io.camunda.optimize.service.util.configuration.security.AuthConfiguration;
+import jakarta.servlet.http.Cookie;
 import jakarta.servlet.http.HttpServletRequest;
-import jakarta.ws.rs.container.ContainerRequestContext;
-import jakarta.ws.rs.core.Cookie;
-import jakarta.ws.rs.core.NewCookie;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
-import java.util.Map;
 import java.util.Optional;
 import java.util.function.Function;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
-import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
+import org.slf4j.Logger;
 import org.springframework.security.oauth2.core.OAuth2AccessToken;
 import org.springframework.stereotype.Component;
 
-@RequiredArgsConstructor
 @Component
-@Slf4j
 public class AuthCookieService {
 
+  private static final Logger LOG = org.slf4j.LoggerFactory.getLogger(AuthCookieService.class);
   private final ConfigurationService configurationService;
 
+  public AuthCookieService(final ConfigurationService configurationService) {
+    this.configurationService = configurationService;
+  }
+
   public jakarta.servlet.http.Cookie createDeleteOptimizeAuthCookie() {
-    log.trace("Deleting Optimize authentication cookie.");
+    LOG.trace("Deleting Optimize authentication cookie.");
     return createDeleteCookie(OPTIMIZE_AUTHORIZATION, "", "https");
   }
 
-  public NewCookie createDeleteOptimizeAuthNewCookie(final boolean secure) {
-    log.trace("Deleting Optimize authentication cookie.");
-    return new NewCookie.Builder(OPTIMIZE_AUTHORIZATION)
-        .value("")
-        .path(getCookiePath())
-        .domain(null)
-        .comment("delete cookie")
-        .maxAge(0)
-        .secure(secure)
-        .httpOnly(true)
-        .build();
+  public Cookie createDeleteOptimizeAuthNewCookie(final boolean secure) {
+    LOG.trace("Deleting Optimize authentication cookie.");
+    final Cookie cookie = new Cookie(OPTIMIZE_AUTHORIZATION, "");
+    cookie.setPath(getCookiePath());
+    cookie.setDomain(null);
+    cookie.setMaxAge(0);
+    cookie.setSecure(secure);
+    cookie.setHttpOnly(true);
+    return cookie;
   }
 
   public jakarta.servlet.http.Cookie createDeleteOptimizeRefreshCookie() {
-    log.trace("Deleting Optimize refresh cookie.");
+    LOG.trace("Deleting Optimize refresh cookie.");
     return createDeleteCookie(OPTIMIZE_REFRESH_TOKEN, "", "https");
   }
 
-  public NewCookie createDeleteOptimizeRefreshNewCookie(final boolean secure) {
-    log.trace("Deleting Optimize refresh cookie.");
-    return new NewCookie.Builder(OPTIMIZE_REFRESH_TOKEN)
-        .value("")
-        .path(getCookiePath())
-        .domain(null)
-        .comment("delete cookie")
-        .maxAge(0)
-        .secure(secure)
-        .httpOnly(true)
-        .build();
+  public Cookie createDeleteOptimizeRefreshNewCookie(final boolean secure) {
+    LOG.trace("Deleting Optimize refresh cookie.");
+    final Cookie cookie = new Cookie(OPTIMIZE_REFRESH_TOKEN, "");
+    cookie.setPath(getCookiePath());
+    cookie.setDomain(null);
+    cookie.setMaxAge(0);
+    cookie.setSecure(secure);
+    cookie.setHttpOnly(true);
+    return cookie;
   }
 
   public Optional<Instant> getOptimizeAuthCookieTokenExpiryDate(
@@ -111,7 +106,7 @@ public class AuthCookieService {
 
   public List<jakarta.servlet.http.Cookie> createOptimizeServiceTokenCookies(
       final OAuth2AccessToken accessToken, final Instant expiresAt, final String requestScheme) {
-    log.trace("Creating Optimize service token cookie(s).");
+    LOG.trace("Creating Optimize service token cookie(s).");
     final String tokenValue = accessToken.getTokenValue();
     final int maxCookieLength =
         configurationService.getAuthConfiguration().getCookieConfiguration().getMaxSize();
@@ -137,46 +132,29 @@ public class AuthCookieService {
     return cookies;
   }
 
-  public NewCookie createCookie(
+  public Cookie createCookie(
       final String cookieName,
       final String cookieValue,
       final Date expiresAt,
       final String requestScheme) {
-    String cookiePath = getCookiePath();
+    final String cookiePath = getCookiePath();
+    final int maxAge = (int) (expiresAt.toInstant().toEpochMilli() - System.currentTimeMillis());
+    final Cookie cookie = new Cookie(cookieName, cookieValue);
+    cookie.setPath(cookiePath);
+    cookie.setDomain(null);
+    cookie.setMaxAge(maxAge);
+    cookie.setSecure(isSecureScheme(requestScheme));
+    cookie.setHttpOnly(true);
     if (getAuthConfiguration().getCookieConfiguration().isSameSiteFlagEnabled()) {
-      cookiePath = addSameSiteCookieFlag(cookiePath);
+      cookie.setAttribute(SAME_SITE_COOKIE_FLAG, SAME_SITE_COOKIE_STRICT_VALUE);
     }
-    return new NewCookie.Builder(cookieName)
-        .value(cookieValue)
-        .path(cookiePath)
-        .domain(null)
-        .version(1)
-        .comment(null)
-        .maxAge(-1)
-        .expiry(expiresAt)
-        .secure(isSecureScheme(requestScheme))
-        .httpOnly(true)
-        .build();
+    return cookie;
   }
 
   public static Optional<String> getAuthCookieToken(final HttpServletRequest servletRequest) {
     return Optional.ofNullable((String) servletRequest.getAttribute(OPTIMIZE_AUTHORIZATION))
         .or(() -> extractAuthorizationValueFromCookies(servletRequest))
         .or(() -> extractAuthorizationValueFromCookieHeader(servletRequest))
-        .flatMap(AuthCookieService::extractTokenFromAuthorizationValue);
-  }
-
-  public static Optional<String> getAuthCookieToken(final ContainerRequestContext requestContext) {
-    // load just issued token if set by previous filter
-    String authorizationValue = (String) requestContext.getProperty(OPTIMIZE_AUTHORIZATION);
-    if (authorizationValue == null) {
-      for (final Map.Entry<String, Cookie> cookieEntry : requestContext.getCookies().entrySet()) {
-        if (OPTIMIZE_AUTHORIZATION.equals(cookieEntry.getKey())) {
-          authorizationValue = cookieEntry.getValue().getValue();
-        }
-      }
-    }
-    return Optional.ofNullable(authorizationValue)
         .flatMap(AuthCookieService::extractTokenFromAuthorizationValue);
   }
 
@@ -231,11 +209,6 @@ public class AuthCookieService {
     return configurationService.getAuthConfiguration();
   }
 
-  private String addSameSiteCookieFlag(final String newCookieAsString) {
-    return newCookieAsString
-        + String.format(";%s=%s", SAME_SITE_COOKIE_FLAG, SAME_SITE_COOKIE_STRICT_VALUE);
-  }
-
   private static Optional<Date> getTokenIssuedAt(final String token) {
     return getTokenAttribute(token, DecodedJWT::getIssuedAt);
   }
@@ -246,7 +219,7 @@ public class AuthCookieService {
       final DecodedJWT decoded = JWT.decode(token);
       return Optional.of(getTokenAttributeFunction.apply(decoded));
     } catch (final Exception e) {
-      log.debug("Could not decode security token to extract attribute!", e);
+      LOG.debug("Could not decode security token to extract attribute!", e);
     }
     return Optional.empty();
   }
@@ -268,15 +241,15 @@ public class AuthCookieService {
       final Instant expiresAt,
       final String requestScheme,
       final boolean isDelete) {
-    String cookiePath = getCookiePath();
-    if (getAuthConfiguration().getCookieConfiguration().isSameSiteFlagEnabled()) {
-      cookiePath = addSameSiteCookieFlag(cookiePath);
-    }
+    final String cookiePath = getCookiePath();
     final jakarta.servlet.http.Cookie cookie =
         new jakarta.servlet.http.Cookie(cookieName, cookieValue);
     cookie.setPath(cookiePath);
     cookie.setHttpOnly(true);
     cookie.setSecure(isSecureScheme(requestScheme));
+    if (getAuthConfiguration().getCookieConfiguration().isSameSiteFlagEnabled()) {
+      cookie.setAttribute(SAME_SITE_COOKIE_FLAG, SAME_SITE_COOKIE_STRICT_VALUE);
+    }
 
     if (expiresAt == null) {
       cookie.setMaxAge(-1);

@@ -14,8 +14,6 @@ import io.camunda.optimize.dto.optimize.query.report.single.filter.data.FilterDa
 import jakarta.validation.constraints.NotEmpty;
 import jakarta.validation.constraints.NotNull;
 import java.util.List;
-import lombok.Data;
-import lombok.NoArgsConstructor;
 
 /**
  * Abstract class that contains a hidden "type" field to distinguish, which filter type the jackson
@@ -63,8 +61,6 @@ import lombok.NoArgsConstructor;
       value = CompletedOrCanceledFlowNodesOnlyFilterDto.class,
       name = "completedOrCanceledFlowNodesOnly")
 })
-@Data
-@NoArgsConstructor
 public abstract class ProcessFilterDto<DATA extends FilterDataDto> {
 
   protected DATA data;
@@ -77,13 +73,54 @@ public abstract class ProcessFilterDto<DATA extends FilterDataDto> {
     setFilterLevel(filterLevel);
   }
 
+  public ProcessFilterDto() {}
+
   public abstract List<FilterApplicationLevel> validApplicationLevels();
+
+  public DATA getData() {
+    return data;
+  }
+
+  public void setData(final DATA data) {
+    this.data = data;
+  }
+
+  public @NotNull FilterApplicationLevel getFilterLevel() {
+    return filterLevel;
+  }
+
+  public void setFilterLevel(@NotNull final FilterApplicationLevel filterLevel) {
+    this.filterLevel = filterLevel;
+  }
+
+  public @NotEmpty List<String> getAppliedTo() {
+    return appliedTo;
+  }
+
+  public void setAppliedTo(@NotEmpty final List<String> appliedTo) {
+    this.appliedTo = appliedTo;
+  }
+
+  protected boolean canEqual(final Object other) {
+    return other instanceof ProcessFilterDto;
+  }
+
+  @Override
+  public int hashCode() {
+    return org.apache.commons.lang3.builder.HashCodeBuilder.reflectionHashCode(this);
+  }
+
+  @Override
+  public boolean equals(final Object o) {
+    return org.apache.commons.lang3.builder.EqualsBuilder.reflectionEquals(this, o);
+  }
 
   @Override
   public String toString() {
     return "ProcessFilter=" + getClass().getSimpleName();
   }
 
+  @SuppressWarnings("checkstyle:ConstantName")
   public static final class Fields {
 
     public static final String data = "data";

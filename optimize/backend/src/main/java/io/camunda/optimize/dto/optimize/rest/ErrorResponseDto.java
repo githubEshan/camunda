@@ -7,9 +7,6 @@
  */
 package io.camunda.optimize.dto.optimize.rest;
 
-import lombok.Data;
-
-@Data
 public class ErrorResponseDto {
 
   private String errorCode;
@@ -46,6 +43,66 @@ public class ErrorResponseDto {
     this.detailedMessage = detailedMessage;
   }
 
+  public String getErrorCode() {
+    return errorCode;
+  }
+
+  public void setErrorCode(final String errorCode) {
+    this.errorCode = errorCode;
+  }
+
+  public String getErrorMessage() {
+    return errorMessage;
+  }
+
+  public void setErrorMessage(final String errorMessage) {
+    this.errorMessage = errorMessage;
+  }
+
+  public String getDetailedMessage() {
+    return detailedMessage;
+  }
+
+  public void setDetailedMessage(final String detailedMessage) {
+    this.detailedMessage = detailedMessage;
+  }
+
+  public AuthorizedReportDefinitionResponseDto getReportDefinition() {
+    return reportDefinition;
+  }
+
+  public void setReportDefinition(final AuthorizedReportDefinitionResponseDto reportDefinition) {
+    this.reportDefinition = reportDefinition;
+  }
+
+  protected boolean canEqual(final Object other) {
+    return other instanceof ErrorResponseDto;
+  }
+
+  @Override
+  public int hashCode() {
+    return org.apache.commons.lang3.builder.HashCodeBuilder.reflectionHashCode(this);
+  }
+
+  @Override
+  public boolean equals(final Object o) {
+    return org.apache.commons.lang3.builder.EqualsBuilder.reflectionEquals(this, o);
+  }
+
+  @Override
+  public String toString() {
+    return "ErrorResponseDto(errorCode="
+        + getErrorCode()
+        + ", errorMessage="
+        + getErrorMessage()
+        + ", detailedMessage="
+        + getDetailedMessage()
+        + ", reportDefinition="
+        + getReportDefinition()
+        + ")";
+  }
+
+  @SuppressWarnings("checkstyle:ConstantName")
   public static final class Fields {
 
     public static final String errorCode = "errorCode";

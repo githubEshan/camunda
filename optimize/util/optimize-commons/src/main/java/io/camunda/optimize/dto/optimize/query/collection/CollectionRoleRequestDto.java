@@ -10,20 +10,11 @@ package io.camunda.optimize.dto.optimize.query.collection;
 import io.camunda.optimize.dto.optimize.IdentityDto;
 import io.camunda.optimize.dto.optimize.RoleType;
 import java.util.Optional;
-import lombok.AccessLevel;
-import lombok.Data;
-import lombok.NoArgsConstructor;
-import lombok.Setter;
 
-@Data
-@NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class CollectionRoleRequestDto {
 
   private static final String ID_SEGMENT_SEPARATOR = ":";
-
-  @Setter(value = AccessLevel.PROTECTED)
   private String id;
-
   private IdentityDto identity;
   private RoleType role;
 
@@ -32,8 +23,24 @@ public class CollectionRoleRequestDto {
     this.role = role;
   }
 
+  protected CollectionRoleRequestDto() {}
+
   public String getId() {
     return Optional.ofNullable(id).orElse(convertIdentityToRoleId(identity));
+  }
+
+  protected void setId(final String id) {
+    this.id = id;
+  }
+
+  private String convertIdentityToRoleId(final IdentityDto identity) {
+    return identity.getType() == null
+        ? "UNKNOWN" + ID_SEGMENT_SEPARATOR + identity.getId()
+        : identity.getType().name() + ID_SEGMENT_SEPARATOR + identity.getId();
+  }
+
+  public IdentityDto getIdentity() {
+    return identity;
   }
 
   public void setIdentity(final IdentityDto identity) {
@@ -41,10 +48,37 @@ public class CollectionRoleRequestDto {
     this.identity = identity;
   }
 
-  private String convertIdentityToRoleId(final IdentityDto identity) {
-    return identity.getType() == null
-        ? "UNKNOWN" + ID_SEGMENT_SEPARATOR + identity.getId()
-        : identity.getType().name() + ID_SEGMENT_SEPARATOR + identity.getId();
+  public RoleType getRole() {
+    return role;
+  }
+
+  public void setRole(final RoleType role) {
+    this.role = role;
+  }
+
+  protected boolean canEqual(final Object other) {
+    return other instanceof CollectionRoleRequestDto;
+  }
+
+  @Override
+  public int hashCode() {
+    return org.apache.commons.lang3.builder.HashCodeBuilder.reflectionHashCode(this);
+  }
+
+  @Override
+  public boolean equals(final Object o) {
+    return org.apache.commons.lang3.builder.EqualsBuilder.reflectionEquals(this, o);
+  }
+
+  @Override
+  public String toString() {
+    return "CollectionRoleRequestDto(id="
+        + getId()
+        + ", identity="
+        + getIdentity()
+        + ", role="
+        + getRole()
+        + ")";
   }
 
   public enum Fields {

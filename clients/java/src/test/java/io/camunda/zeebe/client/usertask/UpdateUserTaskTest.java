@@ -21,10 +21,10 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.assertj.core.api.Assertions.entry;
 
+import io.camunda.client.protocol.rest.ProblemDetail;
+import io.camunda.client.protocol.rest.UserTaskUpdateRequest;
 import io.camunda.zeebe.client.api.command.ProblemException;
 import io.camunda.zeebe.client.api.command.UpdateUserTaskCommandStep1;
-import io.camunda.zeebe.client.protocol.rest.ProblemDetail;
-import io.camunda.zeebe.client.protocol.rest.UserTaskUpdateRequest;
 import io.camunda.zeebe.client.util.ClientRestTest;
 import io.camunda.zeebe.client.util.RestGatewayPaths;
 import java.time.ZoneId;
@@ -264,7 +264,7 @@ public final class UpdateUserTaskTest extends ClientRestTest {
 
     // when / then
     assertThatThrownBy(() -> client.newUserTaskUpdateCommand(123L).send().join())
-        .hasCauseInstanceOf(ProblemException.class)
+        .isInstanceOf(ProblemException.class)
         .hasMessageContaining("Failed with code 404: 'Not Found'");
   }
 
@@ -293,7 +293,7 @@ public final class UpdateUserTaskTest extends ClientRestTest {
 
     // when / then
     assertThatThrownBy(() -> client.newUserTaskUpdateCommand(123L).priority(120).send().join())
-        .hasCauseInstanceOf(ProblemException.class)
+        .isInstanceOf(ProblemException.class)
         .hasMessageContaining("Priority field must be an integer between 0 and 100. Provided: 120");
   }
 }

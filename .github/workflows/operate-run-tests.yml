@@ -10,7 +10,7 @@ on:
         type: string
 jobs:
   run-test:
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
     steps:
       - name: Check out repository code
         uses: actions/checkout@v4
@@ -31,9 +31,17 @@ jobs:
         with:
           distribution: "adopt"
           java-version: "21"
-          cache: "maven"
+      - name: Setup Maven
+        uses: ./.github/actions/setup-maven-dist
+        with:
+          maven-version: 3.8.8
+          set-mvnw: true
+      - name: Configure Maven
+        uses: ./.github/actions/setup-maven-cache
+        with:
+          maven-cache-key-modifier: operate-tests
       - name: "Create settings.xml"
-        uses: s4u/maven-settings-action@v3.0.0
+        uses: s4u/maven-settings-action@v3.1.0
         with:
           githubServer: false
           servers: |
@@ -44,15 +52,15 @@ jobs:
              }]
           mirrors: '[{"url": "https://repository.nexus.camunda.cloud/content/groups/internal/", "id": "camunda-nexus", "mirrorOf": "*", "name": "camunda Nexus"}]'
       - name: Build Operate
-        run: mvn -B -T1C -DskipChecks -DskipTests -P skipFrontendBuild clean install
+        run: ./mvnw -B -T1C -DskipChecks -DskipTests -P skipFrontendBuild clean install
       - name: Run Tests
         run: ${{ inputs.command }}
       - name: Send Slack notification on failure
         if: failure()
-        uses: slackapi/slack-github-action@v1.27.0
-        env:
-          SLACK_WEBHOOK_URL: ${{ steps.secrets.outputs.OPERATE_CI_ALERT_WEBHOOK_URL }}
+        uses: slackapi/slack-github-action@v2.0.0
         with:
+          webhook: ${{ steps.secrets.outputs.OPERATE_CI_ALERT_WEBHOOK_URL }}
+          webhook-type: incoming-webhook
           payload: |
             {
               "workflow_name": "${{ github.workflow }}",

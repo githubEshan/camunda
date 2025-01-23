@@ -18,6 +18,8 @@ import io.camunda.optimize.dto.optimize.rest.AuthorizedCollectionDefinitionDto;
 import io.camunda.optimize.dto.optimize.rest.AuthorizedCollectionDefinitionRestDto;
 import io.camunda.optimize.dto.optimize.rest.ConflictResponseDto;
 import io.camunda.optimize.dto.optimize.rest.ConflictedItemDto;
+import io.camunda.optimize.rest.exceptions.ForbiddenException;
+import io.camunda.optimize.rest.exceptions.NotFoundException;
 import io.camunda.optimize.service.db.reader.CollectionReader;
 import io.camunda.optimize.service.db.writer.CollectionWriter;
 import io.camunda.optimize.service.exceptions.OptimizeRuntimeException;
@@ -27,27 +29,38 @@ import io.camunda.optimize.service.relations.CollectionRelationService;
 import io.camunda.optimize.service.security.AuthorizedCollectionService;
 import io.camunda.optimize.service.security.util.LocalDateUtil;
 import io.camunda.optimize.service.util.IdGenerator;
-import jakarta.ws.rs.ForbiddenException;
-import jakarta.ws.rs.NotFoundException;
 import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
-import lombok.AllArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
+import org.slf4j.Logger;
 import org.springframework.stereotype.Component;
 
-@AllArgsConstructor
 @Component
-@Slf4j
 public class CollectionService {
 
+  private static final Logger LOG = org.slf4j.LoggerFactory.getLogger(CollectionService.class);
   private final AuthorizedCollectionService authorizedCollectionService;
   private final CollectionRelationService collectionRelationService;
   private final CollectionEntityService collectionEntityService;
   private final CollectionWriter collectionWriter;
   private final CollectionReader collectionReader;
   private final AbstractIdentityService identityService;
+
+  public CollectionService(
+      final AuthorizedCollectionService authorizedCollectionService,
+      final CollectionRelationService collectionRelationService,
+      final CollectionEntityService collectionEntityService,
+      final CollectionWriter collectionWriter,
+      final CollectionReader collectionReader,
+      final AbstractIdentityService identityService) {
+    this.authorizedCollectionService = authorizedCollectionService;
+    this.collectionRelationService = collectionRelationService;
+    this.collectionEntityService = collectionEntityService;
+    this.collectionWriter = collectionWriter;
+    this.collectionReader = collectionReader;
+    this.identityService = identityService;
+  }
 
   public IdResponseDto createNewCollectionAndReturnId(
       final String userId,
@@ -74,7 +87,7 @@ public class CollectionService {
         // If it doesn't exist yet and it could not be created, then we have another problem, log it
         // and rethrow
         // exception
-        log.error("Unexpected error when trying to create collection with ID " + presetId, e);
+        LOG.error("Unexpected error when trying to create collection with ID " + presetId, e);
         throw e;
       } else {
         // If it exists already, there's nothing we need to do, return empty to avoid the
@@ -86,7 +99,7 @@ public class CollectionService {
 
   public AuthorizedCollectionDefinitionRestDto getCollectionDefinitionRestDto(
       final String userId, final String collectionId) {
-    log.debug("Fetching resolved collection with id [{}]", collectionId);
+    LOG.debug("Fetching resolved collection with id [{}]", collectionId);
 
     final AuthorizedCollectionDefinitionDto collectionDefinition =
         authorizedCollectionService.getAuthorizedCollectionDefinitionOrFail(userId, collectionId);

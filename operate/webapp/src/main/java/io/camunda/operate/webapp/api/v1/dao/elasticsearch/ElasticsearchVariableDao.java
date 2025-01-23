@@ -11,7 +11,6 @@ import static io.camunda.operate.util.ElasticsearchUtil.joinWithAnd;
 import static org.elasticsearch.index.query.QueryBuilders.termQuery;
 
 import io.camunda.operate.conditions.ElasticsearchCondition;
-import io.camunda.operate.schema.templates.VariableTemplate;
 import io.camunda.operate.util.ElasticsearchUtil;
 import io.camunda.operate.webapp.api.v1.dao.VariableDao;
 import io.camunda.operate.webapp.api.v1.entities.Query;
@@ -20,6 +19,7 @@ import io.camunda.operate.webapp.api.v1.entities.Variable;
 import io.camunda.operate.webapp.api.v1.exceptions.APIException;
 import io.camunda.operate.webapp.api.v1.exceptions.ResourceNotFoundException;
 import io.camunda.operate.webapp.api.v1.exceptions.ServerException;
+import io.camunda.webapps.schema.descriptors.operate.template.VariableTemplate;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -30,6 +30,7 @@ import org.elasticsearch.search.SearchHit;
 import org.elasticsearch.search.SearchHits;
 import org.elasticsearch.search.builder.SearchSourceBuilder;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.context.annotation.Conditional;
 import org.springframework.stereotype.Component;
 
@@ -37,7 +38,9 @@ import org.springframework.stereotype.Component;
 @Component("ElasticsearchVariableDaoV1")
 public class ElasticsearchVariableDao extends ElasticsearchDao<Variable> implements VariableDao {
 
-  @Autowired private VariableTemplate variableIndex;
+  @Autowired
+  @Qualifier("operateVariableTemplate")
+  private VariableTemplate variableIndex;
 
   @Override
   protected void buildFiltering(
@@ -63,7 +66,7 @@ public class ElasticsearchVariableDao extends ElasticsearchDao<Variable> impleme
     final List<Variable> variables;
     try {
       variables = searchFor(new SearchSourceBuilder().query(termQuery(Variable.KEY, key)));
-    } catch (Exception e) {
+    } catch (final Exception e) {
       throw new ServerException(String.format("Error in reading variable for key %s", key), e);
     }
     if (variables.isEmpty()) {
@@ -98,7 +101,7 @@ public class ElasticsearchVariableDao extends ElasticsearchDao<Variable> impleme
       } else {
         return new Results<Variable>().setTotal(searchHits.getTotalHits().value);
       }
-    } catch (Exception e) {
+    } catch (final Exception e) {
       throw new ServerException("Error in reading incidents", e);
     }
   }
@@ -145,7 +148,7 @@ public class ElasticsearchVariableDao extends ElasticsearchDao<Variable> impleme
       } else {
         return List.of();
       }
-    } catch (Exception e) {
+    } catch (final Exception e) {
       throw new ServerException("Error in reading variables", e);
     }
   }

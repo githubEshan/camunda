@@ -24,9 +24,13 @@ import io.camunda.zeebe.protocol.record.RejectionType;
 import io.camunda.zeebe.protocol.record.ValueType;
 import io.camunda.zeebe.protocol.record.intent.JobBatchIntent;
 import io.camunda.zeebe.protocol.record.intent.JobIntent;
+import io.camunda.zeebe.protocol.record.value.AuthorizationOwnerType;
+import io.camunda.zeebe.protocol.record.value.AuthorizationResourceType;
+import io.camunda.zeebe.protocol.record.value.EntityType;
 import io.camunda.zeebe.protocol.record.value.IncidentRecordValue;
 import io.camunda.zeebe.protocol.record.value.JobBatchRecordValue;
 import io.camunda.zeebe.protocol.record.value.JobRecordValue;
+import io.camunda.zeebe.protocol.record.value.PermissionType;
 import io.camunda.zeebe.protocol.record.value.VariableRecordValue;
 import io.camunda.zeebe.test.util.Strings;
 import io.camunda.zeebe.test.util.record.RecordingExporter;
@@ -34,22 +38,55 @@ import io.camunda.zeebe.test.util.record.RecordingExporterTestWatcher;
 import java.time.Duration;
 import java.util.Collections;
 import java.util.List;
+import java.util.UUID;
 import java.util.stream.Collectors;
 import org.junit.Before;
+import org.junit.BeforeClass;
 import org.junit.ClassRule;
 import org.junit.Rule;
 import org.junit.Test;
 
 public final class FailJobTest {
 
-  @ClassRule public static final EngineRule ENGINE = EngineRule.singlePartition();
+  @ClassRule
+  public static final EngineRule ENGINE =
+      EngineRule.singlePartition()
+          .withSecurityConfig(config -> config.getAuthorizations().setEnabled(true));
 
   private static final String PROCESS_ID = "process";
   private static String jobType;
+  private static String username;
+  private static String tenantId;
 
   @Rule
   public final RecordingExporterTestWatcher recordingExporterTestWatcher =
       new RecordingExporterTestWatcher();
+
+  @BeforeClass
+  public static void setUp() {
+    tenantId = UUID.randomUUID().toString();
+    username = UUID.randomUUID().toString();
+    final var user = ENGINE.user().newUser(username).create().getValue();
+    final var userKey = user.getUserKey();
+    final var username = user.getUsername();
+    ENGINE.tenant().newTenant().withTenantId(tenantId).create().getValue().getTenantKey();
+    ENGINE
+        .tenant()
+        .addEntity(tenantId)
+        .withEntityType(EntityType.USER)
+        .withEntityId(username)
+        .add();
+
+    ENGINE
+        .authorization()
+        .permission()
+        .withPermission(PermissionType.UPDATE_PROCESS_INSTANCE, PROCESS_ID)
+        .withResourceType(AuthorizationResourceType.PROCESS_DEFINITION)
+        .withOwnerKey(userKey)
+        .withOwnerId(username)
+        .withOwnerType(AuthorizationOwnerType.USER)
+        .add();
+  }
 
   @Before
   public void setup() {
@@ -60,7 +97,8 @@ public final class FailJobTest {
   public void shouldFail() {
     // given
     ENGINE.createJob(jobType, PROCESS_ID);
-    final Record<JobBatchRecordValue> batchRecord = ENGINE.jobs().withType(jobType).activate();
+    final Record<JobBatchRecordValue> batchRecord =
+        ENGINE.jobs().withType(jobType).activate(username);
     final JobRecordValue job = batchRecord.getValue().getJobs().get(0);
     final long jobKey = batchRecord.getValue().getJobKeys().get(0);
     final int retries = 23;
@@ -87,7 +125,8 @@ public final class FailJobTest {
   public void shouldFailWithMessage() {
     // given
     ENGINE.createJob(jobType, PROCESS_ID);
-    final Record<JobBatchRecordValue> batchRecord = ENGINE.jobs().withType(jobType).activate();
+    final Record<JobBatchRecordValue> batchRecord =
+        ENGINE.jobs().withType(jobType).activate(username);
 
     final long jobKey = batchRecord.getValue().getJobKeys().get(0);
     final JobRecordValue job = batchRecord.getValue().getJobs().get(0);
@@ -118,7 +157,8 @@ public final class FailJobTest {
     // given
     final Record<JobRecordValue> job = ENGINE.createJob(jobType, PROCESS_ID);
 
-    final Record<JobBatchRecordValue> batchRecord = ENGINE.jobs().withType(jobType).activate();
+    final Record<JobBatchRecordValue> batchRecord =
+        ENGINE.jobs().withType(jobType).activate(username);
     final long jobKey = batchRecord.getValue().getJobKeys().get(0);
 
     // when
@@ -129,7 +169,7 @@ public final class FailJobTest {
             .ofInstance(job.getValue().getProcessInstanceKey())
             .withRetries(3)
             .fail();
-    ENGINE.jobs().withType(jobType).activate();
+    ENGINE.jobs().withType(jobType).activate(username);
 
     // then
     Assertions.assertThat(failRecord).hasRecordType(RecordType.EVENT).hasIntent(FAILED);
@@ -173,7 +213,8 @@ public final class FailJobTest {
     // given
     final Record<JobRecordValue> job = ENGINE.createJob(jobType, PROCESS_ID);
 
-    final Record<JobBatchRecordValue> batchRecord = ENGINE.jobs().withType(jobType).activate();
+    final Record<JobBatchRecordValue> batchRecord =
+        ENGINE.jobs().withType(jobType).activate(username);
     final long jobKey = batchRecord.getValue().getJobKeys().get(0);
 
     // when
@@ -259,7 +300,8 @@ public final class FailJobTest {
   public void shouldRejectFailIfJobAlreadyFailed() {
     // given
     ENGINE.createJob(jobType, PROCESS_ID);
-    final Record<JobBatchRecordValue> batchRecord = ENGINE.jobs().withType(jobType).activate();
+    final Record<JobBatchRecordValue> batchRecord =
+        ENGINE.jobs().withType(jobType).activate(username);
     final long jobKey = batchRecord.getValue().getJobKeys().get(0);
     ENGINE.job().withKey(jobKey).withRetries(0).fail();
 
@@ -276,7 +318,8 @@ public final class FailJobTest {
   public void shouldRejectFailIfJobCompleted() {
     // given
     ENGINE.createJob(jobType, PROCESS_ID);
-    final Record<JobBatchRecordValue> batchRecord = ENGINE.jobs().withType(jobType).activate();
+    final Record<JobBatchRecordValue> batchRecord =
+        ENGINE.jobs().withType(jobType).activate(username);
     final long jobKey = batchRecord.getValue().getJobKeys().get(0);
 
     ENGINE.job().withKey(jobKey).complete();
@@ -309,7 +352,8 @@ public final class FailJobTest {
   public void shouldFailWithVariables() {
     // given
     ENGINE.createJob(jobType, PROCESS_ID);
-    final Record<JobBatchRecordValue> batchRecord = ENGINE.jobs().withType(jobType).activate();
+    final Record<JobBatchRecordValue> batchRecord =
+        ENGINE.jobs().withType(jobType).activate(username);
     final JobRecordValue job = batchRecord.getValue().getJobs().get(0);
     final long jobKey = batchRecord.getValue().getJobKeys().get(0);
     final int retries = 23;
@@ -390,10 +434,11 @@ public final class FailJobTest {
   @Test
   public void shouldFailForCustomTenant() {
     // given
-    final String tenantId = "acme";
     ENGINE.createJob(jobType, PROCESS_ID, Collections.emptyMap(), tenantId);
+
     final Record<JobBatchRecordValue> batchRecord =
-        ENGINE.jobs().withType(jobType).withTenantId(tenantId).activate();
+        ENGINE.jobs().withType(jobType).withTenantId(tenantId).activate(username);
+
     final JobRecordValue job = batchRecord.getValue().getJobs().get(0);
     final long jobKey = batchRecord.getValue().getJobKeys().get(0);
     final int retries = 23;
@@ -416,11 +461,11 @@ public final class FailJobTest {
   @Test
   public void shouldRejectFailIfTenantIsUnauthorized() {
     // given
-    final String tenantId = "acme";
-    final String falseTenantId = "foo";
+    final String falseTenantId = UUID.randomUUID().toString();
     ENGINE.createJob(jobType, PROCESS_ID, Collections.emptyMap(), tenantId);
+
     final Record<JobBatchRecordValue> batchRecord =
-        ENGINE.jobs().withType(jobType).withTenantId(tenantId).activate();
+        ENGINE.jobs().withType(jobType).withTenantId(tenantId).activate(username);
     final long jobKey = batchRecord.getValue().getJobKeys().get(0);
 
     // when

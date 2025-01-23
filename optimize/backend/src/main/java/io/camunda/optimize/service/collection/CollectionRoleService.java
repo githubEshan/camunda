@@ -14,6 +14,7 @@ import io.camunda.optimize.dto.optimize.query.collection.CollectionRoleRequestDt
 import io.camunda.optimize.dto.optimize.query.collection.CollectionRoleResponseDto;
 import io.camunda.optimize.dto.optimize.query.collection.CollectionRoleUpdateRequestDto;
 import io.camunda.optimize.dto.optimize.rest.AuthorizedCollectionDefinitionDto;
+import io.camunda.optimize.rest.exceptions.NotFoundException;
 import io.camunda.optimize.service.db.reader.CollectionReader;
 import io.camunda.optimize.service.db.writer.CollectionWriter;
 import io.camunda.optimize.service.exceptions.OptimizeUserOrGroupIdNotFoundException;
@@ -21,23 +22,31 @@ import io.camunda.optimize.service.exceptions.OptimizeValidationException;
 import io.camunda.optimize.service.exceptions.conflict.OptimizeCollectionConflictException;
 import io.camunda.optimize.service.identity.AbstractIdentityService;
 import io.camunda.optimize.service.security.AuthorizedCollectionService;
-import jakarta.ws.rs.NotFoundException;
 import java.util.List;
 import java.util.Optional;
 import java.util.stream.Collectors;
-import lombok.AllArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
+import org.slf4j.Logger;
 import org.springframework.stereotype.Component;
 
 @Component
-@AllArgsConstructor
-@Slf4j
 public class CollectionRoleService {
 
+  private static final Logger LOG = org.slf4j.LoggerFactory.getLogger(CollectionRoleService.class);
   private final AuthorizedCollectionService authorizedCollectionService;
   private final CollectionWriter collectionWriter;
   private final CollectionReader collectionReader;
   private final AbstractIdentityService identityService;
+
+  public CollectionRoleService(
+      final AuthorizedCollectionService authorizedCollectionService,
+      final CollectionWriter collectionWriter,
+      final CollectionReader collectionReader,
+      final AbstractIdentityService identityService) {
+    this.authorizedCollectionService = authorizedCollectionService;
+    this.collectionWriter = collectionWriter;
+    this.collectionReader = collectionReader;
+    this.identityService = identityService;
+  }
 
   public void addRolesToCollection(
       final String userId,
@@ -51,7 +60,7 @@ public class CollectionRoleService {
   }
 
   private List<CollectionRoleRequestDto> validateAndResolveIdentities(
-      final String userId, List<CollectionRoleRequestDto> rolesToAdd) {
+      final String userId, final List<CollectionRoleRequestDto> rolesToAdd) {
     return rolesToAdd.stream()
         .map(
             roleData -> {
@@ -64,7 +73,7 @@ public class CollectionRoleService {
         .collect(Collectors.toList());
   }
 
-  private void enrichWithIdentityIfMissing(CollectionRoleRequestDto role) {
+  private void enrichWithIdentityIfMissing(final CollectionRoleRequestDto role) {
     final IdentityDto requestIdentityDto = role.getIdentity();
     if (requestIdentityDto.getType() == null) {
       final IdentityDto resolvedIdentityDto =
@@ -99,44 +108,44 @@ public class CollectionRoleService {
   }
 
   public void removeRoleFromCollectionUnlessIsLastManager(
-      String userId, String collectionId, String roleEntryId) {
+      final String userId, final String collectionId, final String roleEntryId) {
     collectionWriter.removeRoleFromCollectionUnlessIsLastManager(collectionId, roleEntryId, userId);
   }
 
   public void removeRolesFromCollection(
-      String userId, String collectionId, List<String> roleEntryIds) {
+      final String userId, final String collectionId, final List<String> roleEntryIds) {
     verifyCollectionExists(collectionId);
     roleEntryIds.forEach(
         roleEntryId ->
             authorizedCollectionService.verifyUserAuthorizedToEditCollectionRole(
                 userId, collectionId, roleEntryId));
-    for (String roleId : roleEntryIds) {
+    for (final String roleId : roleEntryIds) {
       try {
         collectionWriter.removeRoleFromCollectionUnlessIsLastManager(collectionId, roleId, userId);
-      } catch (NotFoundException e) {
-        log.debug("Could not delete role with id {}. The role is already deleted.", roleId);
-      } catch (OptimizeCollectionConflictException e) {
-        log.debug(
+      } catch (final NotFoundException e) {
+        LOG.debug("Could not delete role with id {}. The role is already deleted.", roleId);
+      } catch (final OptimizeCollectionConflictException e) {
+        LOG.debug(
             "Could not delete role with id {}, because the user with that id is a manager.",
             roleId);
       }
     }
   }
 
-  private void verifyCollectionExists(String collectionId) {
+  private void verifyCollectionExists(final String collectionId) {
     final Optional<CollectionDefinitionDto> collectionDefinition =
         collectionReader.getCollection(collectionId);
     if (collectionDefinition.isEmpty()) {
-      log.error(
-          "Was not able to retrieve collection with id [{}] from Elasticsearch.", collectionId);
+      LOG.error(
+          "Was not able to retrieve collection with id [{}] from the database.", collectionId);
       throw new NotFoundException(
           "Collection does not exist! Tried to retrieve collection with id " + collectionId);
     }
   }
 
   public List<CollectionRoleResponseDto> getAllRolesOfCollectionSorted(
-      String userId, String collectionId) {
-    AuthorizedCollectionDefinitionDto authCollectionDto =
+      final String userId, final String collectionId) {
+    final AuthorizedCollectionDefinitionDto authCollectionDto =
         authorizedCollectionService.getAuthorizedCollectionDefinitionOrFail(userId, collectionId);
 
     return authCollectionDto.getDefinitionDto().getData().getRoles().stream()
@@ -149,7 +158,7 @@ public class CollectionRoleService {
                     .map(identity -> CollectionRoleResponseDto.from(roleDto, identity))
                     .orElseGet(
                         () -> {
-                          log.info(
+                          LOG.info(
                               "Identity with id {} is present in roles but does not exist anymore.",
                               roleDto.getId());
                           return CollectionRoleResponseDto.from(

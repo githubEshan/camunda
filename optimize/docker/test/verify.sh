@@ -3,10 +3,10 @@
 # on `jq` as an external dependency.
 #
 # Example usage:
-#   $ ./verify.sh camunda/optimize:3.9.0 registry.camunda.cloud/team-optimize/optimize:latest
+#   $ ./verify.sh camunda/optimize:8.6.0 registry.camunda.cloud/team-optimize/optimize:8-latest
 #
 # Globals:
-#   VERSION - required; the semantic version, e.g. 3.9.0 or 3.9.0-alpha1
+#   VERSION - required; the semantic version, e.g. 8.6.0 or 8.6.0-alpha1
 #   REVISION - required; the sha1 of the commit used to build the artifact
 #   DATE - required; the ISO 8601 date at which the image was built
 #   BASE_IMAGE - required; Docker base image name (e.g. docker.io/library/alpine:3.20.0)
@@ -51,15 +51,15 @@ if ! baseImageInfo="$(docker manifest inspect "${BASE_IMAGE}")"; then
   exit 1
 fi
 
-DIGEST_REGEX="BASE_SHA=\"(sha256\:[a-f0-9\:]+)\""
-DOCKERFILE=$(<"${BASH_SOURCE%/*}/../../../optimize.Dockerfile")
-if [[ $DOCKERFILE =~ $DIGEST_REGEX ]]; then
-    DIGEST="${BASH_REMATCH[1]}"
-    echo "Digest found: $DIGEST"
-else
-    echo >&2 "Docker image digest can not be found in the Dockerfile (with name $DOCKERFILENAME)"
+SCRIPT_DIR=$(dirname -- "$(readlink -f -- "${BASH_SOURCE[0]}")")
+DOCKERFILE_PATH="${SCRIPT_DIR}/../../../optimize.Dockerfile"
+DIGEST=$(cat $DOCKERFILE_PATH | grep -o 'sha256:[a-f0-9]\{64\}')
+if [[ -z "$DIGEST" ]]; then
+    echo >&2 "Docker image digest can not be found in the Dockerfile (with name $DOCKERFILE_PATH)"
     exit 1
 fi
+
+echo "Digest found: $DIGEST"
 
 imageName="${1}"
 # Iterate through all the images passed as parameter

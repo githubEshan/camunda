@@ -7,16 +7,17 @@
  */
 package io.camunda.tasklist.data.es;
 
+import static io.camunda.tasklist.util.ElasticsearchUtil.LENIENT_EXPAND_OPEN_FORBID_NO_INDICES_IGNORE_THROTTLED;
 import static java.util.Arrays.asList;
 
 import io.camunda.tasklist.data.DataGenerator;
 import io.camunda.tasklist.data.DevDataGeneratorAbstract;
 import io.camunda.tasklist.data.conditionals.ElasticSearchCondition;
 import io.camunda.tasklist.entities.UserEntity;
+import io.camunda.tasklist.zeebe.ZeebeESConstants;
 import java.io.IOException;
 import java.util.List;
 import org.elasticsearch.action.index.IndexRequest;
-import org.elasticsearch.action.support.IndicesOptions;
 import org.elasticsearch.client.RequestOptions;
 import org.elasticsearch.client.RestHighLevelClient;
 import org.elasticsearch.client.indices.GetIndexRequest;
@@ -46,7 +47,7 @@ public class DevDataGeneratorElasticSearch extends DevDataGeneratorAbstract
   private RestHighLevelClient esClient;
 
   @Override
-  public void createUser(String username, String firstname, String lastname) {
+  public void createUser(final String username, final String firstname, final String lastname) {
     final String password = username;
     final String passwordEncoded = passwordEncoder.encode(password);
     final UserEntity user =
@@ -59,7 +60,7 @@ public class DevDataGeneratorElasticSearch extends DevDataGeneratorAbstract
               .id(user.getId())
               .source(userEntityToJSONString(user), XContentType.JSON);
       esClient.index(request, RequestOptions.DEFAULT);
-    } catch (Exception t) {
+    } catch (final Exception t) {
       LOGGER.error("Could not create demo user with user id {}", user.getUserId(), t);
     }
     LOGGER.info("Created demo user {} with password {}", username, password);
@@ -69,15 +70,19 @@ public class DevDataGeneratorElasticSearch extends DevDataGeneratorAbstract
   public boolean shouldCreateData() {
     try {
       final GetIndexRequest request =
-          new GetIndexRequest(tasklistProperties.getZeebeElasticsearch().getPrefix() + "*");
-      request.indicesOptions(IndicesOptions.fromOptions(true, false, true, false));
+          new GetIndexRequest(
+              tasklistProperties.getZeebeElasticsearch().getPrefix()
+                  + "*"
+                  + ZeebeESConstants.DEPLOYMENT
+                  + "*");
+      request.indicesOptions(LENIENT_EXPAND_OPEN_FORBID_NO_INDICES_IGNORE_THROTTLED);
       final boolean exists = zeebeEsClient.indices().exists(request, RequestOptions.DEFAULT);
       if (exists) {
         // data already exists
         LOGGER.debug("Data already exists in Zeebe.");
         return false;
       }
-    } catch (IOException io) {
+    } catch (final IOException io) {
       LOGGER.debug(
           "Error occurred while checking existance of data in Zeebe: {}. Demo data won't be created.",
           io.getMessage());

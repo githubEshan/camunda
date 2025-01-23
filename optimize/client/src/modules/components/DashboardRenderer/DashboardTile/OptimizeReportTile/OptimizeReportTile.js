@@ -14,7 +14,7 @@ import deepEqual from 'fast-deep-equal';
 
 import {
   ReportRenderer,
-  LoadingIndicator,
+  Loading,
   EntityName,
   ReportDetails,
   InstanceCount,
@@ -88,11 +88,11 @@ export default function OptimizeReportTile({
   }, []);
 
   if (loading) {
-    return <LoadingIndicator />;
+    return <Loading />;
   }
 
   const refreshTile = () => loadTileData(lastParams);
-  const tileLink = customizeTileLink(data?.id);
+  const tileLink = customizeTileLink(data?.id || tile?.id);
   let tileProps = {
     className: 'OptimizeReportTile DashboardTile',
   };
@@ -127,9 +127,8 @@ export default function OptimizeReportTile({
             onClick={() => {
               track('drillDownToReport');
             }}
-          >
-            {data.name}
-          </EntityName>
+            name={data.name}
+          />
           <InstanceCount
             key="instanceCount"
             trigger={

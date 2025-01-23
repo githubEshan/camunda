@@ -25,18 +25,18 @@ import java.net.URL;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.TimeUnit;
-import lombok.extern.slf4j.Slf4j;
 import org.agrona.Strings;
 import org.apache.commons.lang3.StringUtils;
+import org.slf4j.Logger;
 import org.springframework.context.ApplicationContext;
 import org.springframework.stereotype.Component;
 
 @Component
-@Slf4j
 public class LocalizationService implements ConfigurationReloadable {
 
   public static final String LOCALIZATION_PATH = "localization/";
-
+  public static final String REPORT_COUNT_KEY = "count";
+  public static final String REPORT_DURATION_KEY = "duration";
   private static final String API_ERRORS_FIELD = "apiErrors";
   private static final String MANAGEMENT_DASHBOARD_FIELD = "managementDashboard";
   private static final String INSTANT_DASHBOARD_FIELD = "instantDashboard";
@@ -44,9 +44,8 @@ public class LocalizationService implements ConfigurationReloadable {
   private static final String REPORT_FIELD = "report";
   private static final String REPORT_GROUPING_FIELD = "groupBy";
   private static final String REPORT_VIEW_FIELD = "view";
-  public static final String REPORT_COUNT_KEY = "count";
-  public static final String REPORT_DURATION_KEY = "duration";
   private static final String MISSING_ASSIGNEE_FIELD = "missingAssignee";
+  private static final Logger LOG = org.slf4j.LoggerFactory.getLogger(LocalizationService.class);
 
   private final ObjectMapper objectMapper = new ObjectMapper();
   private final ConfigurationService configurationService;
@@ -70,7 +69,7 @@ public class LocalizationService implements ConfigurationReloadable {
   public String getDefaultLocaleMessageForApiErrorCode(final String code) {
     try {
       return getMessageForCode(configurationService.getFallbackLocale(), API_ERRORS_FIELD, code);
-    } catch (Exception e) {
+    } catch (final Exception e) {
       return String.format("Failed to localize error message for code [%s]", code);
     }
   }
@@ -79,7 +78,7 @@ public class LocalizationService implements ConfigurationReloadable {
     try {
       return getMessageForCode(
           configurationService.getFallbackLocale(), REPORT_FIELD, MISSING_ASSIGNEE_FIELD);
-    } catch (Exception e) {
+    } catch (final Exception e) {
       return String.format(
           "Failed to localize label for missing assignee field with localization code: %s",
           MISSING_ASSIGNEE_FIELD);
@@ -140,7 +139,7 @@ public class LocalizationService implements ConfigurationReloadable {
       return locale;
     } else {
       final String fallbackLocale = configurationService.getFallbackLocale();
-      log.error(
+      LOG.error(
           "No valid localization files found for given locale [{}]. Defaulting to fallback locale [{}] instead.",
           locale,
           fallbackLocale);
@@ -184,7 +183,7 @@ public class LocalizationService implements ConfigurationReloadable {
     final URL localizationFile = getClass().getClassLoader().getResource(fileName);
     try {
       objectMapper.readTree(localizationFile);
-    } catch (IOException e) {
+    } catch (final IOException e) {
       throw new OptimizeConfigurationException(
           String.format(
               "File for configured availableLocale is not a valid JSON file [%s].", fileName),
@@ -226,13 +225,13 @@ public class LocalizationService implements ConfigurationReloadable {
                     try {
                       return Optional.of(ByteStreams.toByteArray(inputStream));
                     } catch (final IOException e) {
-                      log.error(
+                      LOG.error(
                           "Failed reading localization file {} from classpath", localeFileName, e);
                       return Optional.empty();
                     }
                   });
     } catch (final IOException e) {
-      log.debug("Failed closing stream of locale file {}.", localeFileName, e);
+      LOG.debug("Failed closing stream of locale file {}.", localeFileName, e);
     }
     return result.orElseThrow(
         () -> new OptimizeRuntimeException("Could not load localization file: " + localeFileName));

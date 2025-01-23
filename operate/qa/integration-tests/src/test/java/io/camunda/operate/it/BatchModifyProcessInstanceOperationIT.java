@@ -11,39 +11,47 @@ package io.camunda.operate.it;
 // the next round of test refactoring
 import static org.assertj.core.api.Assertions.assertThat;
 
-import io.camunda.operate.entities.FlowNodeInstanceEntity;
-import io.camunda.operate.entities.FlowNodeState;
-import io.camunda.operate.entities.OperationType;
-import io.camunda.operate.entities.VariableEntity;
-import io.camunda.operate.schema.templates.FlowNodeInstanceTemplate;
-import io.camunda.operate.schema.templates.VariableTemplate;
 import io.camunda.operate.util.j5templates.OperateZeebeSearchAbstractIT;
 import io.camunda.operate.webapp.rest.dto.listview.ListViewQueryDto;
 import io.camunda.operate.webapp.rest.dto.operation.CreateBatchOperationRequestDto;
 import io.camunda.operate.webapp.rest.dto.operation.ModifyProcessInstanceRequestDto.Modification;
 import io.camunda.operate.webapp.zeebe.operation.process.modify.ModifyProcessInstanceHandler;
+import io.camunda.webapps.schema.descriptors.operate.template.FlowNodeInstanceTemplate;
+import io.camunda.webapps.schema.descriptors.operate.template.VariableTemplate;
+import io.camunda.webapps.schema.entities.operate.FlowNodeInstanceEntity;
+import io.camunda.webapps.schema.entities.operate.FlowNodeState;
+import io.camunda.webapps.schema.entities.operate.VariableEntity;
+import io.camunda.webapps.schema.entities.operation.OperationType;
 import java.io.IOException;
 import java.util.List;
 import java.util.Map;
-import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.Disabled;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Qualifier;
 
 public class BatchModifyProcessInstanceOperationIT extends OperateZeebeSearchAbstractIT {
-  @Autowired private FlowNodeInstanceTemplate flowNodeInstanceTemplate;
-  @Autowired private VariableTemplate variableTemplate;
+
+  @Autowired
+  @Qualifier("operateVariableTemplate")
+  private VariableTemplate variableTemplate;
+
+  @Autowired
+  @Qualifier("operateFlowNodeInstanceTemplate")
+  private FlowNodeInstanceTemplate flowNodeInstanceTemplate;
+
   @Autowired private ModifyProcessInstanceHandler modifyProcessInstanceHandler;
 
   @Override
   protected void runAdditionalBeforeAllSetup() {
     // Zeebe client utilized by the handler needs to be set to the one manually created during test
     // startup to correctly communicate with zeebe
-    modifyProcessInstanceHandler.setZeebeClient(zeebeContainerManager.getClient());
+    modifyProcessInstanceHandler.setCamundaClient(zeebeContainerManager.getClient());
 
     final Long processDefinitionKey = operateTester.deployProcess("demoProcess_v_2.bpmn");
     operateTester.waitForProcessDeployed(processDefinitionKey);
   }
 
-  @Test
+  @Disabled("To be re-enabled with the fix in https://github.com/camunda/camunda/issues/24084")
   public void shouldMoveTokenInBatchCall() throws Exception {
     final String bpmnProcessId = "demoProcess";
     final String sourceFlowNodeId = "taskA";

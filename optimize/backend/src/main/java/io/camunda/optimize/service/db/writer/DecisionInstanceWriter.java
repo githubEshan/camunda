@@ -19,22 +19,32 @@ import io.camunda.optimize.service.db.repository.TaskRepository;
 import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Set;
-import lombok.AllArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
+import org.slf4j.Logger;
 import org.springframework.stereotype.Component;
 
-@AllArgsConstructor
 @Component
-@Slf4j
 public class DecisionInstanceWriter {
+
+  private static final Logger LOG = org.slf4j.LoggerFactory.getLogger(DecisionInstanceWriter.class);
   private final IndexRepository indexRepository;
   private final TaskRepository taskRepository;
   private final Repository repository;
   private final DecisionInstanceRepository decisionInstanceRepository;
 
-  public void importDecisionInstances(List<DecisionInstanceDto> decisionInstanceDtos) {
+  public DecisionInstanceWriter(
+      final IndexRepository indexRepository,
+      final TaskRepository taskRepository,
+      final Repository repository,
+      final DecisionInstanceRepository decisionInstanceRepository) {
+    this.indexRepository = indexRepository;
+    this.taskRepository = taskRepository;
+    this.repository = repository;
+    this.decisionInstanceRepository = decisionInstanceRepository;
+  }
+
+  public void importDecisionInstances(final List<DecisionInstanceDto> decisionInstanceDtos) {
     final String importItemName = "decision instances";
-    log.debug("Writing [{}] {} to Database.", decisionInstanceDtos.size(), importItemName);
+    LOG.debug("Writing [{}] {} to Database.", decisionInstanceDtos.size(), importItemName);
     final Set<String> decisionDefinitionKeys =
         decisionInstanceDtos.stream()
             .map(DecisionInstanceDto::getDecisionDefinitionKey)
@@ -47,7 +57,7 @@ public class DecisionInstanceWriter {
   public void deleteDecisionInstancesByDefinitionKeyAndEvaluationDateOlderThan(
       final String decisionDefinitionKey, final OffsetDateTime evaluationDate) {
     if (!indexRepository.indexExists(DECISION_INSTANCE_INDEX, decisionDefinitionKey)) {
-      log.info(
+      LOG.info(
           "Aborting deletion of instances of definition with key {} because no instances exist for this definition.",
           decisionDefinitionKey);
       return;
@@ -58,6 +68,6 @@ public class DecisionInstanceWriter {
             decisionInstanceRepository
                 .deleteDecisionInstancesByDefinitionKeyAndEvaluationDateOlderThan(
                     decisionDefinitionKey, evaluationDate),
-        log);
+        LOG);
   }
 }

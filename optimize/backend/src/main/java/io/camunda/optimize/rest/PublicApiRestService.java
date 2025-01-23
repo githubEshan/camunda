@@ -8,6 +8,7 @@
 package io.camunda.optimize.rest;
 
 import static io.camunda.optimize.rest.SharingRestService.SHARE_PATH;
+import static io.camunda.optimize.tomcat.OptimizeResourceConstants.REST_API_PATH;
 
 import io.camunda.optimize.dto.optimize.SettingsDto;
 import io.camunda.optimize.dto.optimize.query.EntityIdResponseDto;
@@ -18,44 +19,37 @@ import io.camunda.optimize.dto.optimize.rest.export.report.ReportDefinitionExpor
 import io.camunda.optimize.dto.optimize.rest.pagination.PaginatedDataExportDto;
 import io.camunda.optimize.dto.optimize.rest.pagination.PaginationScrollableDto;
 import io.camunda.optimize.dto.optimize.rest.pagination.PaginationScrollableRequestDto;
+import io.camunda.optimize.rest.exceptions.BadRequestException;
 import io.camunda.optimize.service.SettingsService;
 import io.camunda.optimize.service.dashboard.DashboardService;
 import io.camunda.optimize.service.entities.EntityExportService;
 import io.camunda.optimize.service.entities.EntityImportService;
+import io.camunda.optimize.service.exceptions.OptimizeRuntimeException;
 import io.camunda.optimize.service.export.JsonReportResultExportService;
 import io.camunda.optimize.service.report.ReportService;
 import io.camunda.optimize.service.variable.ProcessVariableLabelService;
 import jakarta.validation.Valid;
-import jakarta.ws.rs.BadRequestException;
-import jakarta.ws.rs.BeanParam;
-import jakarta.ws.rs.Consumes;
-import jakarta.ws.rs.DELETE;
-import jakarta.ws.rs.GET;
-import jakarta.ws.rs.POST;
-import jakarta.ws.rs.Path;
-import jakarta.ws.rs.PathParam;
-import jakarta.ws.rs.Produces;
-import jakarta.ws.rs.QueryParam;
-import jakarta.ws.rs.container.ContainerRequestContext;
-import jakarta.ws.rs.core.Context;
-import jakarta.ws.rs.core.MediaType;
 import java.time.ZoneId;
 import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
-import lombok.AllArgsConstructor;
-import lombok.SneakyThrows;
-import lombok.extern.slf4j.Slf4j;
-import org.elasticsearch.ElasticsearchStatusException;
-import org.springframework.stereotype.Component;
+import org.slf4j.Logger;
+import org.springframework.validation.annotation.Validated;
+import org.springframework.web.bind.annotation.DeleteMapping;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RestController;
 
-@AllArgsConstructor
-@Slf4j
-@Path(PublicApiRestService.PUBLIC_PATH)
-@Component
+@Validated
+@RestController
+@RequestMapping(REST_API_PATH + PublicApiRestService.PUBLIC_PATH)
 public class PublicApiRestService {
+
   public static final String PUBLIC_PATH = "/public";
 
   public static final String EXPORT_SUB_PATH = "/export";
@@ -63,16 +57,17 @@ public class PublicApiRestService {
   public static final String REPORT_SUB_PATH = "/report";
   public static final String DASHBOARD_SUB_PATH = "/dashboard";
   public static final String LABELS_SUB_PATH = "/variables/labels";
+  public static final String DASHBOARD_EXPORT_DEFINITION_SUB_PATH =
+      EXPORT_SUB_PATH + DASHBOARD_SUB_PATH + "/definition/json";
   private static final String REPORT_EXPORT_PATH = EXPORT_SUB_PATH + REPORT_SUB_PATH;
+  public static final String REPORT_EXPORT_DEFINITION_SUB_PATH =
+      REPORT_EXPORT_PATH + "/definition/json";
   private static final String REPORT_BY_ID_PATH = REPORT_SUB_PATH + "/{reportId}";
-  private static final String DASHBOARD_BY_ID_PATH = DASHBOARD_SUB_PATH + "/{dashboardId}";
   private static final String REPORT_EXPORT_BY_ID_PATH = EXPORT_SUB_PATH + REPORT_BY_ID_PATH;
   private static final String REPORT_EXPORT_DATA_SUB_PATH =
       REPORT_EXPORT_BY_ID_PATH + "/result/json";
-  public static final String REPORT_EXPORT_DEFINITION_SUB_PATH =
-      REPORT_EXPORT_PATH + "/definition/json";
-  public static final String DASHBOARD_EXPORT_DEFINITION_SUB_PATH =
-      EXPORT_SUB_PATH + DASHBOARD_SUB_PATH + "/definition/json";
+  private static final String DASHBOARD_BY_ID_PATH = DASHBOARD_SUB_PATH + "/{dashboardId}";
+  private static final Logger LOG = org.slf4j.LoggerFactory.getLogger(PublicApiRestService.class);
 
   private final JsonReportResultExportService jsonReportResultExportService;
   private final EntityExportService entityExportService;
@@ -82,84 +77,67 @@ public class PublicApiRestService {
   private final ProcessVariableLabelService processVariableLabelService;
   private final SettingsService settingsService;
 
-  @GET
-  @Path(REPORT_SUB_PATH)
-  @Produces(MediaType.APPLICATION_JSON)
-  @SneakyThrows
+  public PublicApiRestService(
+      final JsonReportResultExportService jsonReportResultExportService,
+      final EntityExportService entityExportService,
+      final EntityImportService entityImportService,
+      final ReportService reportService,
+      final DashboardService dashboardService,
+      final ProcessVariableLabelService processVariableLabelService,
+      final SettingsService settingsService) {
+    this.jsonReportResultExportService = jsonReportResultExportService;
+    this.entityExportService = entityExportService;
+    this.entityImportService = entityImportService;
+    this.reportService = reportService;
+    this.dashboardService = dashboardService;
+    this.processVariableLabelService = processVariableLabelService;
+    this.settingsService = settingsService;
+  }
+
+  @GetMapping(REPORT_SUB_PATH)
   public List<IdResponseDto> getReportIds(
-      final @Context ContainerRequestContext requestContext,
-      final @QueryParam("collectionId") String collectionId) {
+      final @RequestParam(name = "collectionId", required = false) String collectionId) {
     validateCollectionIdNotNull(collectionId);
     return reportService.getAllReportIdsInCollection(collectionId);
   }
 
-  @GET
-  @Path(DASHBOARD_SUB_PATH)
-  @Produces(MediaType.APPLICATION_JSON)
-  @SneakyThrows
+  @GetMapping(DASHBOARD_SUB_PATH)
   public List<IdResponseDto> getDashboardIds(
-      final @Context ContainerRequestContext requestContext,
-      final @QueryParam("collectionId") String collectionId) {
+      final @RequestParam(name = "collectionId", required = false) String collectionId) {
     validateCollectionIdNotNull(collectionId);
     return dashboardService.getAllDashboardIdsInCollection(collectionId);
   }
 
-  @GET
-  @Path(REPORT_EXPORT_DATA_SUB_PATH)
-  @Produces(MediaType.APPLICATION_JSON)
-  @SneakyThrows
+  @GetMapping(REPORT_EXPORT_DATA_SUB_PATH)
   public PaginatedDataExportDto exportReportData(
-      @Context ContainerRequestContext requestContext,
-      @SuppressWarnings("UnresolvedRestParam") @PathParam("reportId") String reportId,
-      @BeanParam @Valid final PaginationScrollableRequestDto paginationRequestDto) {
+      @PathVariable("reportId") final String reportId,
+      @Valid final PaginationScrollableRequestDto paginationRequestDto) {
     final ZoneId timezone = ZoneId.of("UTC");
     try {
       return jsonReportResultExportService.getJsonForEvaluatedReportResult(
           reportId, timezone, PaginationScrollableDto.fromPaginationRequest(paginationRequestDto));
-      // TODO this would be handled in the OPT-7236
-    } catch (ElasticsearchStatusException e) {
-      // In case the user provides a parsable but invalid scroll id (e.g. scroll id was earlier
-      // valid, but now
-      // expired) the message from ElasticSearch is a bit cryptic. Therefore, we extract the useful
-      // information so
-      // that the user gets an appropriate response.
-      throw Optional.ofNullable(e.getCause())
-          .filter(pag -> pag.getMessage().contains("search_context_missing_exception"))
-          .map(pag -> (Exception) new BadRequestException(pag.getMessage()))
-          // In case the exception happened for another reason, just re-throw it as is
-          .orElse(e);
+    } catch (final Exception ex) {
+      throw new OptimizeRuntimeException(ex);
     }
   }
 
-  @POST
-  @Path(REPORT_EXPORT_DEFINITION_SUB_PATH)
-  @Consumes(MediaType.APPLICATION_JSON)
-  @Produces(MediaType.APPLICATION_JSON)
+  @PostMapping(REPORT_EXPORT_DEFINITION_SUB_PATH)
   public List<ReportDefinitionExportDto> exportReportDefinition(
-      final @Context ContainerRequestContext requestContext,
       final @RequestBody Set<String> reportIds) {
     return entityExportService.getReportExportDtos(
         Optional.ofNullable(reportIds).orElse(Collections.emptySet()));
   }
 
-  @POST
-  @Path(DASHBOARD_EXPORT_DEFINITION_SUB_PATH)
-  @Consumes(MediaType.APPLICATION_JSON)
-  @Produces(MediaType.APPLICATION_JSON)
+  @PostMapping(DASHBOARD_EXPORT_DEFINITION_SUB_PATH)
   public List<OptimizeEntityExportDto> exportDashboardDefinition(
-      final @Context ContainerRequestContext requestContext,
       final @RequestBody Set<String> dashboardIds) {
     return entityExportService.getDashboardExportDtos(
         Optional.ofNullable(dashboardIds).orElse(Collections.emptySet()));
   }
 
-  @POST
-  @Path(IMPORT_SUB_PATH)
-  @Produces(MediaType.APPLICATION_JSON)
-  @Consumes(MediaType.APPLICATION_JSON)
+  @PostMapping(IMPORT_SUB_PATH)
   public List<EntityIdResponseDto> importEntities(
-      @Context final ContainerRequestContext requestContext,
-      @QueryParam("collectionId") String collectionId,
+      @RequestParam(name = "collectionId", required = false) final String collectionId,
       final String exportedDtoJson) {
     validateCollectionIdNotNull(collectionId);
     final Set<OptimizeEntityExportDto> exportDtos =
@@ -167,30 +145,19 @@ public class PublicApiRestService {
     return entityImportService.importEntities(collectionId, exportDtos);
   }
 
-  @DELETE
-  @Path(REPORT_BY_ID_PATH)
-  @Produces(MediaType.APPLICATION_JSON)
-  public void deleteReportDefinition(
-      final @Context ContainerRequestContext requestContext,
-      final @PathParam("reportId") String reportId) {
+  @DeleteMapping(REPORT_BY_ID_PATH)
+  public void deleteReportDefinition(final @PathVariable("reportId") String reportId) {
     reportService.deleteReport(reportId);
   }
 
-  @DELETE
-  @Path(DASHBOARD_BY_ID_PATH)
-  @Produces(MediaType.APPLICATION_JSON)
-  public void deleteDashboardDefinition(
-      final @Context ContainerRequestContext requestContext,
-      final @PathParam("dashboardId") String dashboardId) {
+  @DeleteMapping(DASHBOARD_BY_ID_PATH)
+  public void deleteDashboardDefinition(final @PathVariable("dashboardId") String dashboardId) {
     dashboardService.deleteDashboard(dashboardId);
   }
 
-  @POST
-  @Path(LABELS_SUB_PATH)
-  @Consumes(MediaType.APPLICATION_JSON)
+  @PostMapping(LABELS_SUB_PATH)
   public void modifyVariableLabels(
-      @Context ContainerRequestContext requestContext,
-      @Valid DefinitionVariableLabelsDto definitionVariableLabelsDto) {
+      @Valid final DefinitionVariableLabelsDto definitionVariableLabelsDto) {
     processVariableLabelService.storeVariableLabels(definitionVariableLabelsDto);
   }
 
@@ -200,17 +167,15 @@ public class PublicApiRestService {
     }
   }
 
-  @POST
-  @Path(SHARE_PATH + "/enable")
+  @PostMapping(SHARE_PATH + "/enable")
   public void enableShare() {
-    SettingsDto settings = SettingsDto.builder().sharingEnabled(true).build();
+    final SettingsDto settings = SettingsDto.builder().sharingEnabled(true).build();
     settingsService.setSettings(settings);
   }
 
-  @POST
-  @Path(SHARE_PATH + "/disable")
+  @PostMapping(SHARE_PATH + "/disable")
   public void disableShare() {
-    SettingsDto settings = SettingsDto.builder().sharingEnabled(false).build();
+    final SettingsDto settings = SettingsDto.builder().sharingEnabled(false).build();
     settingsService.setSettings(settings);
   }
 }

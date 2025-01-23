@@ -50,14 +50,14 @@ import java.util.Collection;
 import java.util.List;
 import java.util.Objects;
 import java.util.Set;
-import lombok.AccessLevel;
-import lombok.NoArgsConstructor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-@NoArgsConstructor(access = AccessLevel.PRIVATE)
-public class ValidationHelper {
-  protected static final Logger logger = LoggerFactory.getLogger(ValidationHelper.class);
+public final class ValidationHelper {
+
+  protected static final Logger LOG = LoggerFactory.getLogger(ValidationHelper.class);
+
+  private ValidationHelper() {}
 
   public static void validate(final BranchAnalysisRequestDto dto) {
     ensureNotEmpty("gateway activity id", dto.getGateway());
@@ -127,7 +127,7 @@ public class ValidationHelper {
       validate(dataDto);
       return true;
     } catch (final Exception e) {
-      logger.debug("Report Data Validation failed", e);
+      LOG.debug("Report Data Validation failed", e);
       return false;
     }
   }

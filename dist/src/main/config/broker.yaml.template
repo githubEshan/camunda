@@ -34,10 +34,6 @@
 # This setting can also be overridden using the environment variable CAMUNDA_REST_ENABLED.
 # camunda.rest.enabled: true
 
-# Enable the Camunda REST Query API to start on broker startup.
-# This setting can also be overridden using the environment variable CAMUNDA_REST_QUERY_ENABLED.
-# camunda.rest.query.enabled: false
-
 # zeebe:
   # broker:
     # gateway:
@@ -81,6 +77,23 @@
       # Sets the maximum size of the incoming and outgoing messages (i.e. commands and events).
       # This setting can also be overridden using the environment variable ZEEBE_BROKER_NETWORK_MAXMESSAGESIZE.
       # maxMessageSize: 4MB
+
+      # Sets the size of the socket receive buffer (SO_RCVBUF).
+      # This setting can also be overridden using the environment variable ZEEBE_BROKER_NETWORK_SOCKETRECEIVEBUFFER.
+      # socketReceiveBuffer: 1MB
+
+      # Sets the size of the socket send buffer (SO_SNDBUF).
+      # This setting can also be overridden using the environment variable ZEEBE_BROKER_NETWORK_SOCKETSENDBUFFER.
+      # socketSendBuffer: 1MB
+
+      # Connections that did not receive any message within the specified timeout will be closed.
+      # This setting can also be overridden using the environment variable ZEEBE_BROKER_NETWORK_HEARTBEATTIMEOUT.
+      # heartbeatTimeout: 15s
+
+      # Sends a heartbeat when no other data is sent over an open connection within the specified timeout.
+      # This is to ensure that the connection is kept open.
+      # This setting can also be overridden using the environment variable ZEEBE_BROKER_NETWORK_HEARTBEATINTERVAL.
+      # heartbeatInterval: 5s
 
       # security:
         # Enables TLS authentication between this gateway and other nodes in the cluster
@@ -495,6 +508,21 @@
         # This setting can also be overridden using the environment variable ZEEBE_BROKER_CLUSTER_MEMBERSHIP_SYNCINTERVAL
         # syncInterval: 10s
 
+      # Configure the parameters used to propagate the dynamic cluster configuration across brokers and gateways
+      # configManager:
+        # Configure the parameters used for gossiping the configuration
+        # Note that this is not related to cluster membership gossip.
+        # gossip:
+          # Sets the interval between two synchronization requests to other members of the cluster
+          # This setting can also be overridden using the environment variable ZEEBE_BROKER_CLUSTER_CONFIGMANAGER_GOSSIP_SYNCDELAY
+          # syncDelay: 10s
+          # Sets the timeout for the synchronization requests
+          # This setting can also be overridden using the environment variable ZEEBE_BROKER_CLUSTER_CONFIGMANAGER_GOSSIP_SYNCREQUESTTIMEOUT
+          # syncRequestTimeout: 2s
+          # Sets the number of cluster members the configuration is gossiped to.
+          # This setting can also be overridden using the environment variable ZEEBE_BROKER_CLUSTER_CONFIGMANAGER_GOSSIP_GOSSIPFANOUT
+          # gossipFanout: 2
+
       # Configure compression algorithm for all message sent between the brokers and between the broker and
       # the gateway. Available options are NONE, GZIP and SNAPPY.
       # This feature is useful when the network latency between the brokers is very high (for example when the brokers are deployed in different data centers).
@@ -787,7 +815,7 @@
         #     enabled: false
         #     minimumAge: 30d
         #     policyName: zeebe-record-retention-policy
-        #     policyDecsription: Zeebe record retention policy
+        #     policyDescription: Zeebe record retention policy
         #
         #   authentication:
         #     username: opensearch
@@ -843,6 +871,61 @@
         #     variable: true
         #     variableDocument: true
 
+      # Camunda Exporter ----------
+      # An example configuration for the camunda exporter:
+      #
+      # These setting can also be overridden using the environment variables "ZEEBE_BROKER_EXPORTERS_CAMUNDAEXPORTER_..."
+      #
+      # camundaExporter:
+        # className: io.camunda.exporter.CamundaExporter
+        #
+        # args:
+        #   connect:
+        #     type: elasticsearch
+        #     url: http://localhost:9200
+        #     clusterName: elasticsearch
+        #     dateFormat: yyyy-MM-dd'T'HH:mm:ss.SSSZZ
+        #     socketTimeout: 1000
+        #     connectTimeout: 1000
+        #     username: elastic
+        #     password: changeme
+        #     security:
+        #       enabled: false
+        #       certificatePath: /path/to/certificate
+        #       verifyHostname: true
+        #       selfSigned: false
+        #
+        #   bulk:
+        #     delay: 5
+        #     size: 1000
+        #
+        #   index:
+        #     prefix:
+        #     numberOfShards: 3
+        #     numberOfReplicas: 0
+        #     variableSizeThreshold: 8191
+        #
+        #   retention:
+        #     enabled: false
+        #     minimumAge: 30d
+        #     policyName: camunda-retention-policy
+        #
+        #   createSchema: true
+        #
+        #   archiver:
+        #     enabled: true
+        #     elsRolloverDateFormat: "date"
+        #     rolloverInterval: "1d"
+        #     rolloverBatchSize: 100
+        #     waitPeriodBeforeArchiving: "1h"
+        #     delayBetweenRuns: 2000
+        #
+        #   processCache:
+        #     maxCacheSize: 10000
+        #
+        #   formCache:
+        #     maxCacheSize: 10000
+
     # processing:
       # Sets the maximum number of commands that processed within one batch.
       # The processor will process until no more follow up commands are created by the initial command
@@ -879,14 +962,21 @@
       # Using a low interval will result in unnecessary load while idle. We recommend to benchmark any changes to this setting.
       # This setting can also be overridden using the environment variable ZEEBE_BROKER_PROCESSING_SCHEDULEDTASKCHECKINTERVAL
       # scheduledTaskCheckInterval: 1s
+
     # experimental
       # Be aware that all configuration's which are part of the experimental section
       # are subject to change and can be dropped at any time.
       # It might be that also some of them are actually dangerous so be aware when you change one of these!
 
+      # Toggles the version check restriction, used for migration. Useful for testing migration logic on
+      # snapshot or alpha versions. Default: True, means it is not allowed to migrate to incompatible version
+      # like: SNAPSHOT or alpha.
+      # This setting can also be overridden using the environment variable ZEEBE_BROKER_EXPERIMENTAL_VERSIONCHECKRESTRICTIONENABLED
+      # versionCheckRestrictionEnabled = true
+
       # Sets the maximum of appends which are send per follower.
       # This setting can also be overridden using the environment variable ZEEBE_BROKER_EXPERIMENTAL_MAXAPPENDSPERFOLLOWER
-      # maxAppendsPerFollower = 2
+      # maxAppendsPerFollower = 6
 
       # Sets the maximum batch size, which is send per append request to a follower.
       # This setting can also be overridden using the environment variable ZEEBE_BROKER_EXPERIMENTAL_MAXAPPENDBATCHSIZE
@@ -1158,6 +1248,12 @@
           # This setting can also be set using the environment variable ZEEBE_BROKER_EXPERIMENTAL_ENGINE_VALIDATORS_RESULTSOUTPUTMAXSIZE
           # PS: The default value is 12kb. Increasing it to a higher value introduces a risk that it will be throttled by NGINX proxy configs or the zeebe client configs.
           # resultsOutputMaxSize: 12288
+
+        # authorization
+          # Enables authorization checks. If enabled a default user will be created with the credentials demo/demo.
+          # This default user can be used to setup the system. It is recommended to change the password of the default user afterwards.
+          # This setting can also be overridden using the environment variable ZEEBE_BROKER_EXPERIMENTAL_ENGINE_AUTHORIZATIONS_ENABLEAUTHORIZATION
+          # enableAuthorization: false
 
       # Allows to configure feature flags. These are used to test new features in dev and int environments prior
       # to rolling them out to production

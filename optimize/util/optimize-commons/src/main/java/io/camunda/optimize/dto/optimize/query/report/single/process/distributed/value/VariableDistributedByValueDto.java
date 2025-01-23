@@ -8,10 +8,46 @@
 package io.camunda.optimize.dto.optimize.query.report.single.process.distributed.value;
 
 import io.camunda.optimize.dto.optimize.query.variable.VariableType;
-import lombok.Data;
 
-@Data
 public class VariableDistributedByValueDto implements ProcessReportDistributedByValueDto {
+
   protected String name;
   protected VariableType type;
+
+  public VariableDistributedByValueDto() {}
+
+  public String getName() {
+    return name;
+  }
+
+  public void setName(final String name) {
+    this.name = name;
+  }
+
+  public VariableType getType() {
+    return type;
+  }
+
+  public void setType(final VariableType type) {
+    this.type = type;
+  }
+
+  protected boolean canEqual(final Object other) {
+    return other instanceof VariableDistributedByValueDto;
+  }
+
+  @Override
+  public int hashCode() {
+    return org.apache.commons.lang3.builder.HashCodeBuilder.reflectionHashCode(this);
+  }
+
+  @Override
+  public boolean equals(final Object o) {
+    return org.apache.commons.lang3.builder.EqualsBuilder.reflectionEquals(this, o);
+  }
+
+  @Override
+  public String toString() {
+    return "VariableDistributedByValueDto(name=" + getName() + ", type=" + getType() + ")";
+  }
 }

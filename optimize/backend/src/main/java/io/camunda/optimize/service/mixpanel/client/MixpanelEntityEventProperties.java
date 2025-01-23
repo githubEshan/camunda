@@ -8,12 +8,9 @@
 package io.camunda.optimize.service.mixpanel.client;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
-import lombok.Data;
-import lombok.EqualsAndHashCode;
 
-@Data
-@EqualsAndHashCode(callSuper = true)
 public class MixpanelEntityEventProperties extends MixpanelEventProperties {
+
   @JsonProperty("entityId")
   private String entityId;
 
@@ -24,5 +21,34 @@ public class MixpanelEntityEventProperties extends MixpanelEventProperties {
       final String clusterId) {
     super(stage, organizationId, clusterId);
     this.entityId = entityId;
+  }
+
+  public String getEntityId() {
+    return entityId;
+  }
+
+  @JsonProperty("entityId")
+  public void setEntityId(final String entityId) {
+    this.entityId = entityId;
+  }
+
+  @Override
+  protected boolean canEqual(final Object other) {
+    return other instanceof MixpanelEntityEventProperties;
+  }
+
+  @Override
+  public int hashCode() {
+    return org.apache.commons.lang3.builder.HashCodeBuilder.reflectionHashCode(this);
+  }
+
+  @Override
+  public boolean equals(final Object o) {
+    return org.apache.commons.lang3.builder.EqualsBuilder.reflectionEquals(this, o);
+  }
+
+  @Override
+  public String toString() {
+    return "MixpanelEntityEventProperties(entityId=" + getEntityId() + ")";
   }
 }

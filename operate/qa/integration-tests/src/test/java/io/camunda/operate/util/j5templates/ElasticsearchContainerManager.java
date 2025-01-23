@@ -15,6 +15,8 @@ import io.camunda.operate.conditions.ElasticsearchCondition;
 import io.camunda.operate.property.OperateElasticsearchProperties;
 import io.camunda.operate.property.OperateProperties;
 import io.camunda.operate.schema.SchemaManager;
+import io.camunda.operate.schema.util.camunda.exporter.SchemaWithExporter;
+import io.camunda.operate.util.IndexPrefixHolder;
 import io.camunda.operate.util.TestUtil;
 import java.io.IOException;
 import org.elasticsearch.action.support.IndicesOptions;
@@ -44,12 +46,31 @@ public class ElasticsearchContainerManager extends SearchContainerManager {
 
   protected final RestHighLevelClient esClient;
 
+  private final IndexPrefixHolder indexPrefixHolder;
+
   public ElasticsearchContainerManager(
-      @Qualifier("esClient") RestHighLevelClient esClient,
-      OperateProperties operateProperties,
-      SchemaManager schemaManager) {
+      @Qualifier("esClient") final RestHighLevelClient esClient,
+      final OperateProperties operateProperties,
+      final SchemaManager schemaManager,
+      final IndexPrefixHolder indexPrefixHolder) {
     super(operateProperties, schemaManager);
     this.esClient = esClient;
+    this.indexPrefixHolder = indexPrefixHolder;
+  }
+
+  @Override
+  public void startContainer() {
+    if (indexPrefix == null) {
+      indexPrefix = indexPrefixHolder.createNewIndexPrefix();
+    }
+    updatePropertiesIndexPrefix();
+    if (shouldCreateSchema()) {
+      final var schemaExporterHelper = new SchemaWithExporter(indexPrefix, true);
+      schemaExporterHelper.createSchema();
+      assertThat(areIndicesCreatedAfterChecks(indexPrefix, 19, 5 * 60 /*sec*/))
+          .describedAs("Search %s (min %d) indices are created", indexPrefix, 5)
+          .isTrue();
+    }
   }
 
   @Override
@@ -62,7 +83,8 @@ public class ElasticsearchContainerManager extends SearchContainerManager {
     return operateProperties.getElasticsearch().isCreateSchema();
   }
 
-  protected boolean areIndicesCreated(String indexPrefix, int minCountOfIndices)
+  @Override
+  protected boolean areIndicesCreated(final String indexPrefix, final int minCountOfIndices)
       throws IOException {
     final GetIndexResponse response =
         esClient
@@ -75,6 +97,7 @@ public class ElasticsearchContainerManager extends SearchContainerManager {
     return indices != null && indices.length >= minCountOfIndices;
   }
 
+  @Override
   public void stopContainer() {
     // TestUtil.removeIlmPolicy(esClient);
     final String indexPrefix = operateProperties.getElasticsearch().getIndexPrefix();
@@ -99,7 +122,7 @@ public class ElasticsearchContainerManager extends SearchContainerManager {
       if (field != null) {
         return field.asInt(defaultValue);
       }
-    } catch (Exception e) {
+    } catch (final Exception e) {
       LOGGER.error("Couldn't retrieve json object from elasticsearch. Return Optional.Empty.", e);
     }
 

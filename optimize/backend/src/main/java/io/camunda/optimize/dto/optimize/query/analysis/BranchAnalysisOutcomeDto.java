@@ -7,11 +7,60 @@
  */
 package io.camunda.optimize.dto.optimize.query.analysis;
 
-import lombok.Data;
-
-@Data
 public class BranchAnalysisOutcomeDto {
+
   protected Long activitiesReached;
   protected Long activityCount;
   protected String activityId;
+
+  public BranchAnalysisOutcomeDto() {}
+
+  public Long getActivitiesReached() {
+    return activitiesReached;
+  }
+
+  public void setActivitiesReached(final Long activitiesReached) {
+    this.activitiesReached = activitiesReached;
+  }
+
+  public Long getActivityCount() {
+    return activityCount;
+  }
+
+  public void setActivityCount(final Long activityCount) {
+    this.activityCount = activityCount;
+  }
+
+  public String getActivityId() {
+    return activityId;
+  }
+
+  public void setActivityId(final String activityId) {
+    this.activityId = activityId;
+  }
+
+  protected boolean canEqual(final Object other) {
+    return other instanceof BranchAnalysisOutcomeDto;
+  }
+
+  @Override
+  public int hashCode() {
+    return org.apache.commons.lang3.builder.HashCodeBuilder.reflectionHashCode(this);
+  }
+
+  @Override
+  public boolean equals(final Object o) {
+    return org.apache.commons.lang3.builder.EqualsBuilder.reflectionEquals(this, o);
+  }
+
+  @Override
+  public String toString() {
+    return "BranchAnalysisOutcomeDto(activitiesReached="
+        + getActivitiesReached()
+        + ", activityCount="
+        + getActivityCount()
+        + ", activityId="
+        + getActivityId()
+        + ")";
+  }
 }

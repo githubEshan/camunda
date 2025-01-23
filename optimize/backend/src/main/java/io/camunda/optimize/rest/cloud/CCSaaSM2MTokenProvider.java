@@ -13,25 +13,26 @@ import io.camunda.optimize.dto.optimize.cloud.TokenResponseDto;
 import io.camunda.optimize.service.exceptions.OptimizeRuntimeException;
 import io.camunda.optimize.service.util.configuration.ConfigurationService;
 import io.camunda.optimize.service.util.configuration.condition.CCSaaSCondition;
-import jakarta.ws.rs.core.HttpHeaders;
-import jakarta.ws.rs.core.MediaType;
-import jakarta.ws.rs.core.Response;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
-import lombok.extern.slf4j.Slf4j;
 import org.apache.http.client.methods.CloseableHttpResponse;
 import org.apache.http.client.methods.HttpPost;
 import org.apache.http.entity.ContentType;
 import org.apache.http.entity.StringEntity;
 import org.apache.http.util.EntityUtils;
+import org.slf4j.Logger;
 import org.springframework.context.annotation.Conditional;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.stereotype.Component;
 
 @Component
-@Slf4j
 @Conditional(CCSaaSCondition.class)
 public class CCSaaSM2MTokenProvider extends AbstractCCSaaSClient {
+
   private static final String TOKEN_REQUEST_GRANT_TYPE = "client_credentials";
+  private static final Logger LOG = org.slf4j.LoggerFactory.getLogger(CCSaaSM2MTokenProvider.class);
 
   protected CCSaaSM2MTokenProvider(
       final ObjectMapper objectMapper, final ConfigurationService configurationService) {
@@ -46,21 +47,20 @@ public class CCSaaSM2MTokenProvider extends AbstractCCSaaSClient {
             .clientId(getM2MClientId())
             .clientSecret(getM2MClientSecret())
             .build();
-    log.info("Requesting M2M token");
+    LOG.info("Requesting M2M token");
     try {
       final HttpPost request = new HttpPost(getTokenProviderUrl());
       final StringEntity notificationRequestBody =
           new StringEntity(
               objectMapper.writeValueAsString(tokenRequestDto), ContentType.APPLICATION_JSON);
-      request.setHeader(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_JSON);
+      request.setHeader(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_JSON_VALUE);
       request.setEntity(notificationRequestBody);
 
       try (final CloseableHttpResponse response = performRequest(request)) {
-        final Response.Status statusCode =
-            Response.Status.fromStatusCode(response.getStatusLine().getStatusCode());
-        if (!Response.Status.OK.equals(statusCode)) {
+        final HttpStatus status = HttpStatus.resolve(response.getStatusLine().getStatusCode());
+        if (!HttpStatus.OK.equals(status)) {
           throw new OptimizeRuntimeException(
-              "Unexpected response when retrieving M2M token: " + statusCode);
+              "Unexpected response when retrieving M2M token: " + status);
         }
         return objectMapper.readValue(
             EntityUtils.toString(response.getEntity(), StandardCharsets.UTF_8),

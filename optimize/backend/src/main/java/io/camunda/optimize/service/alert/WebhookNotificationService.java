@@ -15,16 +15,11 @@ import io.camunda.optimize.service.util.configuration.ConfigurationService;
 import io.camunda.optimize.service.util.configuration.ProxyConfiguration;
 import io.camunda.optimize.service.util.configuration.WebhookConfiguration;
 import jakarta.annotation.PreDestroy;
-import jakarta.ws.rs.HttpMethod;
-import jakarta.ws.rs.core.HttpHeaders;
-import jakarta.ws.rs.core.MediaType;
-import jakarta.ws.rs.core.Response;
 import java.io.IOException;
 import java.util.HashMap;
 import java.util.Map;
-import lombok.NonNull;
-import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
+import org.apache.hc.core5.http.Method;
 import org.apache.http.HttpHost;
 import org.apache.http.client.methods.CloseableHttpResponse;
 import org.apache.http.client.methods.HttpEntityEnclosingRequestBase;
@@ -36,14 +31,19 @@ import org.apache.http.entity.StringEntity;
 import org.apache.http.impl.client.CloseableHttpClient;
 import org.apache.http.impl.client.HttpClients;
 import org.apache.http.impl.conn.DefaultProxyRoutePlanner;
+import org.slf4j.Logger;
 import org.springframework.context.ApplicationContext;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.stereotype.Component;
 
 @Component
-@Slf4j
 public class WebhookNotificationService
     implements AlertNotificationService, ConfigurationReloadable {
 
+  private static final Logger LOG =
+      org.slf4j.LoggerFactory.getLogger(WebhookNotificationService.class);
   private final ConfigurationService configurationService;
   private Map<String, CloseableHttpClient> webhookClientsByWebhookName;
 
@@ -58,8 +58,8 @@ public class WebhookNotificationService
         (key, value) -> {
           try {
             value.close();
-          } catch (IOException e) {
-            log.error(
+          } catch (final IOException e) {
+            LOG.error(
                 "Could not close Http client for webhook with name: {}. Exception: {}", key, e);
           }
         });
@@ -72,11 +72,15 @@ public class WebhookNotificationService
   }
 
   @Override
-  public void notify(@NonNull final AlertNotificationDto notification) {
+  public void notify(final AlertNotificationDto notification) {
+    if (notification == null) {
+      throw new OptimizeRuntimeException("Notification cannot be null");
+    }
+
     final AlertDefinitionDto alert = notification.getAlert();
     final String destination = alert.getWebhook();
     if (StringUtils.isEmpty(destination)) {
-      log.debug(
+      LOG.debug(
           "No webhook configured for alert [id: {}, name: {}], no action performed.",
           alert.getId(),
           alert.getName());
@@ -86,7 +90,7 @@ public class WebhookNotificationService
     final Map<String, WebhookConfiguration> webhookConfigurationMap =
         configurationService.getConfiguredWebhooks();
     if (!webhookConfigurationMap.containsKey(destination)) {
-      log.error(
+      LOG.error(
           "Could not send webhook notification as the configuration for webhook with name {} "
               + "no longer exists in the configuration file.",
           destination);
@@ -94,7 +98,7 @@ public class WebhookNotificationService
     }
 
     final WebhookConfiguration webhookConfiguration = webhookConfigurationMap.get(destination);
-    log.info(
+    LOG.info(
         "Sending webhook notification for alert [id: {}, name: {}] to webhook: '{}'.",
         alert.getId(),
         alert.getName(),
@@ -111,27 +115,25 @@ public class WebhookNotificationService
       final AlertNotificationDto notification,
       final WebhookConfiguration webhook,
       final String webhookName) {
-    HttpEntityEnclosingRequestBase request = buildRequestFromMethod(webhook);
+    final HttpEntityEnclosingRequestBase request = buildRequestFromMethod(webhook);
     request.setEntity(
         new StringEntity(
             composePayload(notification, webhook), resolveContentTypeFromHeaders(webhook)));
 
     if (webhook.getHeaders() != null) {
-      request.setHeader(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_JSON);
-      for (Map.Entry<String, String> headerEntry : webhook.getHeaders().entrySet()) {
+      request.setHeader(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_JSON_VALUE);
+      for (final Map.Entry<String, String> headerEntry : webhook.getHeaders().entrySet()) {
         request.setHeader(headerEntry.getKey(), headerEntry.getValue());
       }
     }
 
     try (final CloseableHttpResponse response =
         webhookClientsByWebhookName.get(webhookName).execute(request)) {
-      final Response.Status statusCode =
-          Response.Status.fromStatusCode(response.getStatusLine().getStatusCode());
-      if (!Response.Status.Family.familyOf(statusCode.getStatusCode())
-          .equals(Response.Status.Family.SUCCESSFUL)) {
-        log.error("Unexpected response when sending webhook notification: " + statusCode);
+      final HttpStatus status = HttpStatus.resolve(response.getStatusLine().getStatusCode());
+      if (!status.is2xxSuccessful()) {
+        LOG.error("Unexpected response when sending webhook notification: " + status);
       }
-    } catch (IOException e) {
+    } catch (final IOException e) {
       throw new OptimizeRuntimeException(
           "There was a problem when sending webhook notification.", e);
     }
@@ -140,15 +142,15 @@ public class WebhookNotificationService
   private HttpEntityEnclosingRequestBase buildRequestFromMethod(
       final WebhookConfiguration webhook) {
     final String httpMethod = webhook.getHttpMethod();
-    HttpEntityEnclosingRequestBase request;
-    switch (httpMethod) {
-      case HttpMethod.POST:
+    final HttpEntityEnclosingRequestBase request;
+    switch (Method.normalizedValueOf(httpMethod)) {
+      case Method.POST:
         request = new HttpPost(webhook.getUrl());
         break;
-      case HttpMethod.PATCH:
+      case Method.PATCH:
         request = new HttpPatch(webhook.getUrl());
         break;
-      case HttpMethod.PUT:
+      case Method.PUT:
         request = new HttpPut(webhook.getUrl());
         break;
       default:
@@ -161,7 +163,8 @@ public class WebhookNotificationService
   private String composePayload(
       final AlertNotificationDto notification, final WebhookConfiguration webhook) {
     String payloadString = webhook.getDefaultPayload();
-    for (WebhookConfiguration.Placeholder placeholder : WebhookConfiguration.Placeholder.values()) {
+    for (final WebhookConfiguration.Placeholder placeholder :
+        WebhookConfiguration.Placeholder.values()) {
       final String value = placeholder.extractValue(notification);
       // replace potential real new lines with escape
       payloadString =
@@ -184,7 +187,7 @@ public class WebhookNotificationService
     if (proxyConfiguration == null || !proxyConfiguration.isEnabled()) {
       return HttpClients.createDefault();
     }
-    HttpHost proxy =
+    final HttpHost proxy =
         new HttpHost(
             proxyConfiguration.getHost(),
             proxyConfiguration.getPort(),
@@ -193,7 +196,7 @@ public class WebhookNotificationService
   }
 
   private Map<String, CloseableHttpClient> buildHttpClientMap() {
-    Map<String, CloseableHttpClient> httpClientMap = new HashMap<>();
+    final Map<String, CloseableHttpClient> httpClientMap = new HashMap<>();
     configurationService
         .getConfiguredWebhooks()
         .entrySet()

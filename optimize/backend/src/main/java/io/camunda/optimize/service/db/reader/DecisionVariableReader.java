@@ -16,29 +16,34 @@ import io.camunda.optimize.service.db.repository.VariableRepository;
 import io.camunda.optimize.service.exceptions.OptimizeRuntimeException;
 import java.util.Collections;
 import java.util.List;
-import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
+import org.slf4j.Logger;
 import org.springframework.stereotype.Component;
 
-@RequiredArgsConstructor
 @Component
-@Slf4j
 public class DecisionVariableReader {
 
+  private static final Logger LOG = org.slf4j.LoggerFactory.getLogger(DecisionVariableReader.class);
   private final DecisionDefinitionReader decisionDefinitionReader;
   private final VariableRepository variableRepository;
+
+  public DecisionVariableReader(
+      final DecisionDefinitionReader decisionDefinitionReader,
+      final VariableRepository variableRepository) {
+    this.decisionDefinitionReader = decisionDefinitionReader;
+    this.variableRepository = variableRepository;
+  }
 
   public List<DecisionVariableNameResponseDto> getInputVariableNames(
       final String decisionDefinitionKey,
       final List<String> decisionDefinitionVersions,
       final List<String> tenantIds) {
     if (decisionDefinitionVersions == null || decisionDefinitionVersions.isEmpty()) {
-      log.debug(
+      LOG.debug(
           "Cannot fetch output variable values for decision definition with missing versions.");
       return Collections.emptyList();
     }
 
-    List<DecisionVariableNameResponseDto> decisionDefinitions =
+    final List<DecisionVariableNameResponseDto> decisionDefinitions =
         decisionDefinitionReader
             .getDecisionDefinition(decisionDefinitionKey, decisionDefinitionVersions, tenantIds)
             .orElseThrow(
@@ -63,7 +68,7 @@ public class DecisionVariableReader {
     if (decisionDefinitionVersions == null || decisionDefinitionVersions.isEmpty()) {
       return Collections.emptyList();
     } else {
-      List<DecisionVariableNameResponseDto> decisionDefinitions =
+      final List<DecisionVariableNameResponseDto> decisionDefinitions =
           decisionDefinitionReader
               .getDecisionDefinition(decisionDefinitionKey, decisionDefinitionVersions, tenantIds)
               .orElseThrow(
@@ -85,12 +90,12 @@ public class DecisionVariableReader {
   public List<String> getInputVariableValues(final DecisionVariableValueRequestDto requestDto) {
     if (requestDto.getDecisionDefinitionVersions() == null
         || requestDto.getDecisionDefinitionVersions().isEmpty()) {
-      log.debug(
+      LOG.debug(
           "Cannot fetch input variable values for decision definition with missing versions.");
       return Collections.emptyList();
     }
 
-    log.debug(
+    LOG.debug(
         "Fetching input variable values for decision definition with key [{}] and versions [{}]",
         requestDto.getDecisionDefinitionKey(),
         requestDto.getDecisionDefinitionVersions());
@@ -101,12 +106,12 @@ public class DecisionVariableReader {
   public List<String> getOutputVariableValues(final DecisionVariableValueRequestDto requestDto) {
     if (requestDto.getDecisionDefinitionVersions() == null
         || requestDto.getDecisionDefinitionVersions().isEmpty()) {
-      log.debug(
+      LOG.debug(
           "Cannot fetch output variable values for decision definition with missing versions.");
       return Collections.emptyList();
     }
 
-    log.debug(
+    LOG.debug(
         "Fetching output variable values for decision definition with key [{}] and versions [{}]",
         requestDto.getDecisionDefinitionKey(),
         requestDto.getDecisionDefinitionVersions());

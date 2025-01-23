@@ -16,6 +16,7 @@ import io.camunda.zeebe.engine.processing.common.DecisionBehavior;
 import io.camunda.zeebe.engine.processing.common.ElementActivationBehavior;
 import io.camunda.zeebe.engine.processing.common.EventTriggerBehavior;
 import io.camunda.zeebe.engine.processing.common.ExpressionProcessor;
+import io.camunda.zeebe.engine.processing.identity.AuthorizationCheckBehavior;
 import io.camunda.zeebe.engine.processing.job.behaviour.JobUpdateBehaviour;
 import io.camunda.zeebe.engine.processing.message.command.SubscriptionCommandSender;
 import io.camunda.zeebe.engine.processing.streamprocessor.JobStreamer;
@@ -23,6 +24,7 @@ import io.camunda.zeebe.engine.processing.streamprocessor.writers.Writers;
 import io.camunda.zeebe.engine.processing.timer.DueDateTimerChecker;
 import io.camunda.zeebe.engine.processing.variable.VariableBehavior;
 import io.camunda.zeebe.engine.processing.variable.VariableStateEvaluationContextLookup;
+import io.camunda.zeebe.engine.state.message.TransientPendingSubscriptionState;
 import io.camunda.zeebe.engine.state.mutable.MutableProcessingState;
 import io.camunda.zeebe.engine.state.routing.RoutingInfo;
 import java.time.InstantSource;
@@ -60,7 +62,9 @@ public final class BpmnBehaviorsImpl implements BpmnBehaviors {
       final RoutingInfo routingInfo,
       final DueDateTimerChecker timerChecker,
       final JobStreamer jobStreamer,
-      final InstantSource clock) {
+      final InstantSource clock,
+      final AuthorizationCheckBehavior authCheckBehavior,
+      final TransientPendingSubscriptionState transientProcessMessageSubscriptionState) {
     expressionBehavior =
         new ExpressionProcessor(
             ExpressionLanguageFactory.createExpressionLanguage(new ZeebeFeelEngineClock(clock)),
@@ -80,7 +84,8 @@ public final class BpmnBehaviorsImpl implements BpmnBehaviors {
             writers.sideEffect(),
             timerChecker,
             routingInfo,
-            clock);
+            clock,
+            transientProcessMessageSubscriptionState);
 
     eventTriggerBehavior =
         new EventTriggerBehavior(
@@ -135,7 +140,7 @@ public final class BpmnBehaviorsImpl implements BpmnBehaviors {
     jobActivationBehavior =
         new BpmnJobActivationBehavior(
             jobStreamer,
-            processingState.getVariableState(),
+            processingState,
             writers,
             processingState.getKeyGenerator(),
             jobMetrics,
@@ -184,7 +189,8 @@ public final class BpmnBehaviorsImpl implements BpmnBehaviors {
         new BpmnCompensationSubscriptionBehaviour(
             processingState.getKeyGenerator(), processingState, writers, stateBehavior);
 
-    jobUpdateBehaviour = new JobUpdateBehaviour(processingState.getJobState(), writers, clock);
+    jobUpdateBehaviour =
+        new JobUpdateBehaviour(processingState.getJobState(), clock, authCheckBehavior);
   }
 
   @Override

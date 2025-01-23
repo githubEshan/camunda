@@ -7,15 +7,40 @@
  */
 package io.camunda.optimize.dto.optimize.query;
 
-import lombok.AccessLevel;
-import lombok.AllArgsConstructor;
-import lombok.Data;
-import lombok.NoArgsConstructor;
-
-@Data
-@NoArgsConstructor(access = AccessLevel.PROTECTED)
-@AllArgsConstructor
 public class IdResponseDto {
 
   protected String id;
+
+  public IdResponseDto(final String id) {
+    this.id = id;
+  }
+
+  protected IdResponseDto() {}
+
+  public String getId() {
+    return id;
+  }
+
+  public void setId(final String id) {
+    this.id = id;
+  }
+
+  protected boolean canEqual(final Object other) {
+    return other instanceof IdResponseDto;
+  }
+
+  @Override
+  public int hashCode() {
+    return org.apache.commons.lang3.builder.HashCodeBuilder.reflectionHashCode(this);
+  }
+
+  @Override
+  public boolean equals(final Object o) {
+    return org.apache.commons.lang3.builder.EqualsBuilder.reflectionEquals(this, o);
+  }
+
+  @Override
+  public String toString() {
+    return "IdResponseDto(id=" + getId() + ")";
+  }
 }

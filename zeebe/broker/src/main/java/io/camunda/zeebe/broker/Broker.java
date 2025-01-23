@@ -16,6 +16,7 @@ import io.camunda.zeebe.broker.exporter.repo.ExporterRepository;
 import io.camunda.zeebe.broker.system.SystemContext;
 import io.camunda.zeebe.broker.system.configuration.BrokerCfg;
 import io.camunda.zeebe.broker.system.monitoring.BrokerHealthCheckService;
+import io.camunda.zeebe.broker.system.monitoring.HealthTreeMetrics;
 import io.camunda.zeebe.protocol.impl.encoding.BrokerInfo;
 import io.camunda.zeebe.scheduler.Actor;
 import io.camunda.zeebe.scheduler.ActorScheduler;
@@ -24,8 +25,8 @@ import io.camunda.zeebe.util.LogUtil;
 import io.camunda.zeebe.util.VersionUtil;
 import io.camunda.zeebe.util.exception.UncheckedExecutionException;
 import io.camunda.zeebe.util.jar.ExternalJarLoadException;
+import io.micrometer.core.instrument.Tag;
 import io.netty.util.NetUtil;
-import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import org.slf4j.Logger;
@@ -35,6 +36,7 @@ public final class Broker implements AutoCloseable {
   public static final Logger LOG = Loggers.SYSTEM_LOGGER;
 
   private final SystemContext systemContext;
+  private final ExporterRepository exporterRepository;
   private boolean isClosed = false;
 
   private CompletableFuture<Broker> startFuture;
@@ -44,21 +46,29 @@ public final class Broker implements AutoCloseable {
   private final BrokerStartupActor brokerStartupActor;
   private BrokerContext brokerContext;
 
-  // TODO make Broker class itself the actor
-  public Broker(final SystemContext systemContext, final SpringBrokerBridge springBrokerBridge) {
-    this(systemContext, springBrokerBridge, Collections.emptyList());
+  // TODO just used by tests ...
+  public Broker(
+      final SystemContext systemContext,
+      final SpringBrokerBridge springBrokerBridge,
+      final List<PartitionListener> additionalPartitionListeners) {
+    this(systemContext, springBrokerBridge, additionalPartitionListeners, new ExporterRepository());
   }
 
   public Broker(
       final SystemContext systemContext,
       final SpringBrokerBridge springBrokerBridge,
-      final List<PartitionListener> additionalPartitionListeners) {
+      final List<PartitionListener> additionalPartitionListeners,
+      final ExporterRepository exporterRepository) {
     this.systemContext = systemContext;
+    this.exporterRepository = exporterRepository;
 
     final ActorScheduler scheduler = this.systemContext.getScheduler();
     final BrokerInfo localBroker = createBrokerInfo(getConfig());
 
-    healthCheckService = new BrokerHealthCheckService(localBroker);
+    healthCheckService =
+        new BrokerHealthCheckService(
+            localBroker,
+            new HealthTreeMetrics(systemContext.getMeterRegistry(), Tag.of("partition", "none")));
 
     final var startupContext =
         new BrokerStartupContextImpl(
@@ -73,7 +83,10 @@ public final class Broker implements AutoCloseable {
             systemContext.getBrokerClient(),
             additionalPartitionListeners,
             systemContext.getShutdownTimeout(),
-            systemContext.getMeterRegistry());
+            systemContext.getMeterRegistry(),
+            systemContext.getSecurityConfiguration(),
+            systemContext.getUserServices(),
+            systemContext.getPasswordEncoder());
 
     brokerStartupActor = new BrokerStartupActor(startupContext);
     scheduler.submitActor(brokerStartupActor);
@@ -139,7 +152,6 @@ public final class Broker implements AutoCloseable {
   }
 
   private ExporterRepository buildExporterRepository(final BrokerCfg cfg) {
-    final ExporterRepository exporterRepository = new ExporterRepository();
     final var exporterEntries = cfg.getExporters().entrySet();
 
     // load and validate exporters

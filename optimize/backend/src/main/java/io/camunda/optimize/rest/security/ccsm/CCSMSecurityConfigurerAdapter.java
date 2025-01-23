@@ -7,10 +7,7 @@
  */
 package io.camunda.optimize.rest.security.ccsm;
 
-import static io.camunda.optimize.OptimizeJettyServerCustomizer.EXTERNAL_SUB_PATH;
-import static io.camunda.optimize.jetty.OptimizeResourceConstants.ACTUATOR_ENDPOINT;
-import static io.camunda.optimize.jetty.OptimizeResourceConstants.REST_API_PATH;
-import static io.camunda.optimize.jetty.OptimizeResourceConstants.STATIC_RESOURCE_PATH;
+import static io.camunda.optimize.OptimizeTomcatConfig.EXTERNAL_SUB_PATH;
 import static io.camunda.optimize.rest.AuthenticationRestService.AUTHENTICATION_PATH;
 import static io.camunda.optimize.rest.AuthenticationRestService.CALLBACK;
 import static io.camunda.optimize.rest.HealthRestService.READYZ_PATH;
@@ -18,20 +15,27 @@ import static io.camunda.optimize.rest.IngestionRestService.INGESTION_PATH;
 import static io.camunda.optimize.rest.IngestionRestService.VARIABLE_SUB_PATH;
 import static io.camunda.optimize.rest.LocalizationRestService.LOCALIZATION_PATH;
 import static io.camunda.optimize.rest.UIConfigurationRestService.UI_CONFIGURATION_PATH;
+import static io.camunda.optimize.tomcat.OptimizeResourceConstants.ACTUATOR_ENDPOINT;
+import static io.camunda.optimize.tomcat.OptimizeResourceConstants.REST_API_PATH;
+import static io.camunda.optimize.tomcat.OptimizeResourceConstants.STATIC_RESOURCE_PATH;
 
 import io.camunda.optimize.rest.security.AbstractSecurityConfigurerAdapter;
 import io.camunda.optimize.rest.security.CustomPreAuthenticatedAuthenticationProvider;
 import io.camunda.optimize.rest.security.oauth.AudienceValidator;
+import io.camunda.optimize.service.exceptions.OptimizeRuntimeException;
 import io.camunda.optimize.service.security.AuthCookieService;
 import io.camunda.optimize.service.security.CCSMTokenService;
 import io.camunda.optimize.service.security.SessionService;
 import io.camunda.optimize.service.util.configuration.ConfigurationService;
 import io.camunda.optimize.service.util.configuration.condition.CCSMCondition;
+import io.camunda.optimize.tomcat.CCSMRequestAdjustmentFilter;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import java.io.IOException;
 import java.util.Optional;
-import lombok.SneakyThrows;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.boot.web.servlet.FilterRegistrationBean;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Conditional;
 import org.springframework.context.annotation.Configuration;
@@ -55,6 +59,8 @@ import org.springframework.security.web.util.matcher.AntPathRequestMatcher;
 @Conditional(CCSMCondition.class)
 public class CCSMSecurityConfigurerAdapter extends AbstractSecurityConfigurerAdapter {
 
+  private static final Logger LOG = LoggerFactory.getLogger(CCSMSecurityConfigurerAdapter.class);
+
   private final CCSMTokenService ccsmTokenService;
 
   public CCSMSecurityConfigurerAdapter(
@@ -73,6 +79,13 @@ public class CCSMSecurityConfigurerAdapter extends AbstractSecurityConfigurerAda
   }
 
   @Bean
+  public FilterRegistrationBean registration(final CCSMAuthenticationCookieFilter filter) {
+    final FilterRegistrationBean registration = new FilterRegistrationBean(filter);
+    registration.setEnabled(false);
+    return registration;
+  }
+
+  @Bean
   public CCSMAuthenticationCookieFilter ccsmAuthenticationCookieFilter(final HttpSecurity http)
       throws Exception {
     return new CCSMAuthenticationCookieFilter(
@@ -82,7 +95,16 @@ public class CCSMSecurityConfigurerAdapter extends AbstractSecurityConfigurerAda
             .build());
   }
 
-  @SneakyThrows
+  @Bean
+  FilterRegistrationBean<CCSMRequestAdjustmentFilter> requestAdjuster() {
+    LOG.debug("Registering filter 'requestAdjuster' (CCSM)...");
+    final FilterRegistrationBean<CCSMRequestAdjustmentFilter> registration =
+        new FilterRegistrationBean<>();
+    registration.setFilter(new CCSMRequestAdjustmentFilter());
+    registration.addUrlPatterns("/*");
+    return registration;
+  }
+
   @Bean
   @Order(1)
   protected SecurityFilterChain configurePublicApi(final HttpSecurity http) {
@@ -95,55 +117,68 @@ public class CCSMSecurityConfigurerAdapter extends AbstractSecurityConfigurerAda
     return applyPublicApiOptions(httpSecurityBuilder);
   }
 
-  @SneakyThrows
   @Bean
   @Order(2)
   protected SecurityFilterChain configureWebSecurity(final HttpSecurity http) {
-    return super.configureGenericSecurityOptions(http)
-        // Then we configure the specific web security for CCSM
-        .authorizeHttpRequests(
-            requests ->
-                requests
-                    // ready endpoint is public
-                    .requestMatchers(new AntPathRequestMatcher(createApiPath(READYZ_PATH)))
-                    .permitAll()
-                    // Identity callback request handling is public
-                    .requestMatchers(
-                        new AntPathRequestMatcher(createApiPath(AUTHENTICATION_PATH + CALLBACK)))
-                    .permitAll()
-                    // public share resources
-                    .requestMatchers(
-                        new AntPathRequestMatcher(EXTERNAL_SUB_PATH + "/"),
-                        new AntPathRequestMatcher(EXTERNAL_SUB_PATH + "/index*"),
-                        new AntPathRequestMatcher(EXTERNAL_SUB_PATH + STATIC_RESOURCE_PATH + "/**"),
-                        new AntPathRequestMatcher(EXTERNAL_SUB_PATH + "/*.js"),
-                        new AntPathRequestMatcher(EXTERNAL_SUB_PATH + "/*.ico"))
-                    .permitAll()
-                    // public share related resources (API)
-                    .requestMatchers(
-                        new AntPathRequestMatcher(
-                            createApiPath(EXTERNAL_SUB_PATH + DEEP_SUB_PATH_ANY)))
-                    .permitAll()
-                    // common public api resources
-                    .requestMatchers(
-                        new AntPathRequestMatcher(createApiPath(UI_CONFIGURATION_PATH)),
-                        new AntPathRequestMatcher(createApiPath(LOCALIZATION_PATH)))
-                    .permitAll()
-                    .requestMatchers(new AntPathRequestMatcher(ACTUATOR_ENDPOINT + "/**"))
-                    .permitAll()
-                    .anyRequest()
-                    .authenticated())
-        .addFilterBefore(
-            ccsmAuthenticationCookieFilter(http), AbstractPreAuthenticatedProcessingFilter.class)
-        .exceptionHandling(
-            exceptionHandling ->
-                exceptionHandling
-                    .defaultAuthenticationEntryPointFor(
-                        new HttpStatusEntryPoint(HttpStatus.UNAUTHORIZED),
-                        new AntPathRequestMatcher(REST_API_PATH + "/**"))
-                    .defaultAuthenticationEntryPointFor(
-                        this::redirectToIdentity, new AntPathRequestMatcher("/**")))
-        .build();
+    try {
+      return super.configureGenericSecurityOptions(http)
+          // Then we configure the specific web security for CCSM
+          .authorizeHttpRequests(
+              requests ->
+                  requests
+                      // ready endpoint is public
+                      .requestMatchers(new AntPathRequestMatcher(createApiPath(READYZ_PATH)))
+                      .permitAll()
+                      // Identity callback request handling is public
+                      .requestMatchers(
+                          new AntPathRequestMatcher(createApiPath(AUTHENTICATION_PATH + CALLBACK)))
+                      .permitAll()
+                      // Static resources
+                      .requestMatchers(
+                          new AntPathRequestMatcher("/*.ico"),
+                          new AntPathRequestMatcher("/*.html"),
+                          new AntPathRequestMatcher("/static/*.js"),
+                          new AntPathRequestMatcher("/static/*.css"),
+                          new AntPathRequestMatcher("/static/*.html"))
+                      .permitAll()
+                      // public share resources
+                      .requestMatchers(
+                          new AntPathRequestMatcher(EXTERNAL_SUB_PATH + "/"),
+                          new AntPathRequestMatcher(EXTERNAL_SUB_PATH + "/index*"),
+                          new AntPathRequestMatcher(
+                              EXTERNAL_SUB_PATH + STATIC_RESOURCE_PATH + "/**"),
+                          new AntPathRequestMatcher(EXTERNAL_SUB_PATH + "/*.js"),
+                          new AntPathRequestMatcher(EXTERNAL_SUB_PATH + "/*.ico"))
+                      .permitAll()
+                      // public share related resources (API)
+                      .requestMatchers(
+                          new AntPathRequestMatcher(
+                              createApiPath(EXTERNAL_SUB_PATH + DEEP_SUB_PATH_ANY)),
+                          new AntPathRequestMatcher(EXTERNAL_SUB_PATH + "/api/**"))
+                      .permitAll()
+                      // common public api resources
+                      .requestMatchers(
+                          new AntPathRequestMatcher(createApiPath(UI_CONFIGURATION_PATH)),
+                          new AntPathRequestMatcher(createApiPath(LOCALIZATION_PATH)))
+                      .permitAll()
+                      .requestMatchers(new AntPathRequestMatcher(ACTUATOR_ENDPOINT + "/**"))
+                      .permitAll()
+                      .anyRequest()
+                      .authenticated())
+          .addFilterBefore(
+              ccsmAuthenticationCookieFilter(http), AbstractPreAuthenticatedProcessingFilter.class)
+          .exceptionHandling(
+              exceptionHandling ->
+                  exceptionHandling
+                      .defaultAuthenticationEntryPointFor(
+                          new HttpStatusEntryPoint(HttpStatus.UNAUTHORIZED),
+                          new AntPathRequestMatcher(REST_API_PATH + "/**"))
+                      .defaultAuthenticationEntryPointFor(
+                          this::redirectToIdentity, new AntPathRequestMatcher("/**")))
+          .build();
+    } catch (final Exception e) {
+      throw new OptimizeRuntimeException(e);
+    }
   }
 
   private String getAudienceFromConfiguration() {

@@ -12,15 +12,10 @@ import static io.camunda.optimize.service.util.configuration.ConfigurationServic
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import io.camunda.optimize.service.exceptions.OptimizeConfigurationException;
-import lombok.AllArgsConstructor;
-import lombok.Data;
-import lombok.NoArgsConstructor;
 
-@NoArgsConstructor
-@AllArgsConstructor
 @JsonIgnoreProperties
-@Data
 public class ProxyConfiguration {
+
   @JsonProperty("enabled")
   private boolean enabled;
 
@@ -33,8 +28,18 @@ public class ProxyConfiguration {
   @JsonProperty("sslEnabled")
   private boolean sslEnabled;
 
+  public ProxyConfiguration(
+      final boolean enabled, final String host, final Integer port, final boolean sslEnabled) {
+    this.enabled = enabled;
+    this.host = host;
+    this.port = port;
+    this.sslEnabled = sslEnabled;
+  }
+
+  public ProxyConfiguration() {}
+
   public void validate() {
-    if (this.enabled) {
+    if (enabled) {
       if (host == null || host.isEmpty()) {
         throw new OptimizeConfigurationException(
             ELASTICSEARCH_PROXY + ".host must be set and not empty if proxy is enabled");
@@ -44,5 +49,68 @@ public class ProxyConfiguration {
             ELASTICSEARCH_PROXY + ".port must be set and not empty if proxy is enabled");
       }
     }
+  }
+
+  public boolean isEnabled() {
+    return enabled;
+  }
+
+  @JsonProperty("enabled")
+  public void setEnabled(final boolean enabled) {
+    this.enabled = enabled;
+  }
+
+  public String getHost() {
+    return host;
+  }
+
+  @JsonProperty("host")
+  public void setHost(final String host) {
+    this.host = host;
+  }
+
+  public Integer getPort() {
+    return port;
+  }
+
+  @JsonProperty("port")
+  public void setPort(final Integer port) {
+    this.port = port;
+  }
+
+  public boolean isSslEnabled() {
+    return sslEnabled;
+  }
+
+  @JsonProperty("sslEnabled")
+  public void setSslEnabled(final boolean sslEnabled) {
+    this.sslEnabled = sslEnabled;
+  }
+
+  protected boolean canEqual(final Object other) {
+    return other instanceof ProxyConfiguration;
+  }
+
+  @Override
+  public int hashCode() {
+    return org.apache.commons.lang3.builder.HashCodeBuilder.reflectionHashCode(this);
+  }
+
+  @Override
+  public boolean equals(final Object o) {
+    return org.apache.commons.lang3.builder.EqualsBuilder.reflectionEquals(this, o);
+  }
+
+  @Override
+  public String toString() {
+    return "ProxyConfiguration(enabled="
+        + isEnabled()
+        + ", host="
+        + getHost()
+        + ", port="
+        + getPort()
+        + ", sslEnabled="
+        + isSslEnabled()
+        + ")";
   }
 }

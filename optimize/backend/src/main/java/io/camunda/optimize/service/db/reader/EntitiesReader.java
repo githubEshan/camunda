@@ -21,7 +21,7 @@ import java.util.Map;
 import java.util.Optional;
 
 public interface EntitiesReader {
-
+  String INDEX_FIELD = "_index";
   String AGG_BY_INDEX_COUNT = "byIndexCount";
 
   String[] ENTITY_LIST_EXCLUDES = {REPORT_DATA_XML_PROPERTY};
@@ -44,7 +44,7 @@ public interface EntitiesReader {
       final String locale) {
     if (reportEntity
         instanceof
-        SingleProcessReportDefinitionRequestDto singleProcessReportDefinitionRequestDto) {
+        final SingleProcessReportDefinitionRequestDto singleProcessReportDefinitionRequestDto) {
       if (singleProcessReportDefinitionRequestDto.getData().isInstantPreviewReport()) {
         return localizationService.getLocalizationForInstantPreviewReportCode(
             locale, reportEntity.getName());

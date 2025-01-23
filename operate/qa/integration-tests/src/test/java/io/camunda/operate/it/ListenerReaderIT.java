@@ -13,11 +13,6 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
-import io.camunda.operate.entities.JobEntity;
-import io.camunda.operate.entities.ListenerEventType;
-import io.camunda.operate.entities.ListenerState;
-import io.camunda.operate.entities.ListenerType;
-import io.camunda.operate.schema.templates.JobTemplate;
 import io.camunda.operate.util.j5templates.MockMvcManager;
 import io.camunda.operate.util.j5templates.OperateSearchAbstractIT;
 import io.camunda.operate.webapp.rest.ProcessInstanceRestService;
@@ -27,6 +22,11 @@ import io.camunda.operate.webapp.rest.dto.ListenerResponseDto;
 import io.camunda.operate.webapp.rest.dto.UserDto;
 import io.camunda.operate.webapp.rest.dto.listview.SortValuesWrapper;
 import io.camunda.operate.webapp.security.UserService;
+import io.camunda.webapps.schema.descriptors.operate.template.JobTemplate;
+import io.camunda.webapps.schema.entities.operate.JobEntity;
+import io.camunda.webapps.schema.entities.operate.ListenerEventType;
+import io.camunda.webapps.schema.entities.operate.ListenerState;
+import io.camunda.webapps.schema.entities.operate.ListenerType;
 import java.io.IOException;
 import java.time.OffsetDateTime;
 import java.util.List;
@@ -53,7 +53,7 @@ public class ListenerReaderIT extends OperateSearchAbstractIT {
   }
 
   @Test
-  public void testListenerReader() throws Exception {
+  public void testListenerReaderFlowNodeId() throws Exception {
     Mockito.when(userService.getCurrentUser()).thenReturn(new UserDto().setUserId(DEFAULT_USER));
 
     final ListenerRequestDto request =
@@ -67,14 +67,14 @@ public class ListenerReaderIT extends OperateSearchAbstractIT {
     final ListenerDto actual4 = resultListeners.get(0);
     assertEquals("22", actual4.getListenerKey());
     assertEquals(ListenerType.TASK_LISTENER, actual4.getListenerType());
-    assertEquals(ListenerEventType.UNSPECIFIED, actual4.getEvent());
+    assertEquals(ListenerEventType.COMPLETING, actual4.getEvent());
     assertEquals(ListenerState.FAILED, actual4.getState());
     assertNull(actual4.getTime());
 
     final ListenerDto actual3 = resultListeners.get(1);
     assertEquals("21", actual3.getListenerKey());
     assertEquals(ListenerType.TASK_LISTENER, actual3.getListenerType());
-    assertEquals(ListenerEventType.UNSPECIFIED, actual3.getEvent());
+    assertEquals(ListenerEventType.UNKNOWN, actual3.getEvent());
     assertEquals(ListenerState.ACTIVE, actual3.getState());
     assertNull(actual3.getTime());
 
@@ -96,8 +96,43 @@ public class ListenerReaderIT extends OperateSearchAbstractIT {
     final ListenerDto actual2 = resultListeners.get(4);
     assertEquals("31", actual2.getListenerKey());
     assertEquals(ListenerType.TASK_LISTENER, actual2.getListenerType());
-    assertEquals(ListenerEventType.UNSPECIFIED, actual2.getEvent());
+    assertEquals(ListenerEventType.ASSIGNING, actual2.getEvent());
     assertEquals(ListenerState.UNKNOWN, actual2.getState());
+    assertNotNull(actual2.getTime());
+  }
+
+  @Test
+  public void testListenerReaderFlowNodeInstanceId() throws Exception {
+    Mockito.when(userService.getCurrentUser()).thenReturn(new UserDto().setUserId(DEFAULT_USER));
+
+    final ListenerRequestDto request =
+        new ListenerRequestDto().setPageSize(20).setFlowNodeInstanceId(1L);
+    final ListenerResponseDto response = postListenerRequest("111", request);
+    final List<ListenerDto> resultListeners = response.getListeners();
+
+    assertEquals(3L, response.getTotalCount());
+    assertEquals(3, resultListeners.size());
+    // results should only contain listeners with set flowNodeInstanceId == 1L
+    final ListenerDto actual0 = resultListeners.get(0);
+    assertEquals("21", actual0.getListenerKey());
+    assertEquals(ListenerType.TASK_LISTENER, actual0.getListenerType());
+    assertEquals(ListenerEventType.UNKNOWN, actual0.getEvent());
+    assertEquals(ListenerState.ACTIVE, actual0.getState());
+    assertNull(actual0.getTime());
+
+    final ListenerDto actual1 = resultListeners.get(1);
+    assertEquals("12", actual1.getListenerKey());
+    assertEquals(ListenerType.EXECUTION_LISTENER, actual1.getListenerType());
+    assertEquals(ListenerEventType.END, actual1.getEvent());
+    assertEquals(ListenerState.COMPLETED, actual1.getState());
+    assertEquals("test_type", actual1.getJobType());
+    assertNotNull(actual1.getTime());
+
+    final ListenerDto actual2 = resultListeners.get(2);
+    assertEquals("11", actual2.getListenerKey());
+    assertEquals(ListenerType.EXECUTION_LISTENER, actual2.getListenerType());
+    assertEquals(ListenerEventType.START, actual2.getEvent());
+    assertEquals(ListenerState.COMPLETED, actual2.getState());
     assertNotNull(actual2.getTime());
   }
 
@@ -151,6 +186,55 @@ public class ListenerReaderIT extends OperateSearchAbstractIT {
     assertEquals("11", resultListeners3.get(2).getListenerKey());
   }
 
+  @Test
+  public void testListenerReaderWithTypeFilters() throws Exception {
+    Mockito.when(userService.getCurrentUser()).thenReturn(new UserDto().setUserId(DEFAULT_USER));
+
+    // request only Execution Listeners
+    final ListenerRequestDto elRequest =
+        new ListenerRequestDto()
+            .setPageSize(20)
+            .setFlowNodeId("test_task")
+            .setListenerTypeFilter(ListenerType.EXECUTION_LISTENER);
+    final ListenerResponseDto elResponse = postListenerRequest("111", elRequest);
+    final List<ListenerDto> elResultListeners = elResponse.getListeners();
+
+    assertEquals(2L, elResponse.getTotalCount());
+    assertEquals(2, elResultListeners.size());
+
+    final ListenerDto actual0 = elResultListeners.get(0);
+    assertEquals("12", actual0.getListenerKey());
+    assertEquals(ListenerType.EXECUTION_LISTENER, actual0.getListenerType());
+
+    final ListenerDto actual1 = elResultListeners.get(1);
+    assertEquals("11", actual1.getListenerKey());
+    assertEquals(ListenerType.EXECUTION_LISTENER, actual1.getListenerType());
+
+    // Request only Task Listeners
+    final ListenerRequestDto tlRequest =
+        new ListenerRequestDto()
+            .setPageSize(20)
+            .setFlowNodeId("test_task")
+            .setListenerTypeFilter(ListenerType.TASK_LISTENER);
+    final ListenerResponseDto tlResponse = postListenerRequest("111", tlRequest);
+    final List<ListenerDto> tlResultListeners = tlResponse.getListeners();
+
+    assertEquals(3L, tlResponse.getTotalCount());
+    assertEquals(3, tlResultListeners.size());
+
+    final ListenerDto actual4 = tlResultListeners.get(0);
+    assertEquals("22", actual4.getListenerKey());
+    assertEquals(ListenerType.TASK_LISTENER, actual4.getListenerType());
+
+    final ListenerDto actual3 = tlResultListeners.get(1);
+    assertEquals("21", actual3.getListenerKey());
+    assertEquals(ListenerType.TASK_LISTENER, actual3.getListenerType());
+
+    final ListenerDto actual2 = tlResultListeners.get(2);
+    assertEquals("31", actual2.getListenerKey());
+    assertEquals(ListenerType.TASK_LISTENER, actual2.getListenerType());
+  }
+
   private void createData() throws IOException {
 
     final JobEntity e1 =
@@ -180,10 +264,10 @@ public class ListenerReaderIT extends OperateSearchAbstractIT {
             .setId("21")
             .setKey(21L)
             .setProcessInstanceKey(111L)
-            .setFlowNodeInstanceId(2L)
+            .setFlowNodeInstanceId(1L)
             .setState("CREATED")
             .setJobKind("TASK_LISTENER")
-            .setListenerEventType("UPDATE");
+            .setListenerEventType("UPDATING");
 
     final JobEntity e4 =
         createJob()
@@ -193,7 +277,7 @@ public class ListenerReaderIT extends OperateSearchAbstractIT {
             .setFlowNodeInstanceId(2L)
             .setState("FAILED")
             .setJobKind("TASK_LISTENER")
-            .setListenerEventType("COMPLETE")
+            .setListenerEventType("COMPLETING")
             .setErrorCode("0")
             .setErrorMessage("Internal Error");
 
@@ -206,7 +290,7 @@ public class ListenerReaderIT extends OperateSearchAbstractIT {
             .setState("invalid")
             .setEndTime(OffsetDateTime.now().minusMinutes(5))
             .setJobKind("TASK_LISTENER")
-            .setListenerEventType("CREATE");
+            .setListenerEventType("ASSIGNING");
 
     // Execution Listener of other process instance that should *not* get returned
     final JobEntity e6 =
@@ -217,10 +301,9 @@ public class ListenerReaderIT extends OperateSearchAbstractIT {
             .setFlowNodeId("other_ID")
             .setState("COMPLETE")
             .setEndTime(OffsetDateTime.now().minusMinutes(4))
-            .setJobKind("EXECUTION_LISTENER")
-            .setListenerEventType("START");
+            .setJobKind("EXECUTION_LISTENER");
 
-    // non Execution Listener jobs to check that they do *not* get returned
+    // non Listener jobs to check that they do *not* get returned
     final JobEntity e7 =
         createJob()
             .setId("41")
@@ -238,7 +321,6 @@ public class ListenerReaderIT extends OperateSearchAbstractIT {
             .setProcessInstanceKey(111L)
             .setState("invalid")
             .setEndTime(OffsetDateTime.now().minusMinutes(7))
-            .setJobKind("BPMN_ELEMENT")
             .setListenerEventType("CREATE");
 
     testSearchRepository.createOrUpdateDocumentFromObject(jobIndexName, e1.getId(), e1);

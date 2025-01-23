@@ -16,12 +16,11 @@ import {
   C3NavigationNavBarProps,
 } from '@camunda/camunda-composite-components';
 
-// @ts-ignore
-import {NavItem} from 'components';
 import {showError} from 'notifications';
 import {t} from 'translation';
 import {track} from 'tracking';
 import {useDocs, useErrorHandling, useUiConfig} from 'hooks';
+import {UiConfig} from 'config';
 
 import {getUserToken} from './service';
 import useUserMenu from './useUserMenu';
@@ -35,17 +34,21 @@ export default function Header({noActions}: {noActions?: boolean}) {
   const location = useLocation();
   const {mightFail} = useErrorHandling();
   const {getBaseDocsUrl} = useDocs();
-  const userSideBar = useUserMenu();
   const {
     optimizeProfile,
     enterpriseMode,
     webappsLinks,
-    optimizeDatabase,
+    optimizeVersion,
     onboarding,
     notificationsUrl,
     validLicense,
     licenseType,
+    commercial,
+    expiresAt,
   } = useUiConfig();
+  const timezoneInfo =
+    t('footer.timezone') + ' ' + Intl.DateTimeFormat().resolvedOptions().timeZone;
+  const userSideBar = useUserMenu(optimizeVersion, timezoneInfo);
 
   useEffect(() => {
     mightFail(getUserToken(), setUserToken, showError);
@@ -55,14 +58,13 @@ export default function Header({noActions}: {noActions?: boolean}) {
     app: createAppProps(location),
     appBar: createAppBarProps(webappsLinks),
     navbar: {elements: []},
+    forwardRef: Link as React.ForwardRefExoticComponent<ComponentProps<Link>>,
   };
 
   if (!noActions) {
     props.navbar = createNavBarProps(
-      validLicense,
-      licenseType,
-      location.pathname,
-      optimizeDatabase
+      {validLicense, licenseType, commercial, expiresAt},
+      location.pathname
     );
     props.infoSideBar = createInfoSideBarProps(getBaseDocsUrl(), enterpriseMode);
     props.userSideBar = userSideBar;
@@ -94,8 +96,6 @@ function createAppProps(location: {pathname: string}): C3NavigationProps['app'] 
     name: t('appName').toString(),
     ariaLabel: t('appFullName').toString(),
     routeProps: {
-      as: Link,
-      className: 'cds--header__name',
       to: '/',
       replace: location.pathname === '/',
     },
@@ -133,74 +133,44 @@ function createWebappLinks(webappLinks: Record<string, string> | null): C3Naviga
 }
 
 function createNavBarProps(
-  validLicense: boolean,
-  licenseType: 'production' | 'saas' | 'unknown',
-  pathname: string,
-  optimizeDatabase?: string
+  license: Pick<UiConfig, 'validLicense' | 'licenseType' | 'commercial' | 'expiresAt'>,
+  pathname: string
 ): C3NavigationNavBarProps {
   const elements: C3NavigationNavBarProps['elements'] = [
     {
       key: 'dashboards',
       label: t('navigation.dashboards').toString(),
-      routeProps: {
-        as: NavItem,
-        name: t('navigation.dashboards'),
-        linksTo: '/',
-        active: ['/', '/processes/', '/processes/*'],
-        breadcrumbsEntities: [{entity: 'report'}],
-      },
-      isCurrentPage: isCurrentPage(['/', '/processes/', '/processes/*'], pathname),
-    },
-    {
-      key: 'collections',
-      label: t('navigation.collections').toString(),
-      routeProps: {
-        as: NavItem,
-        name: t('navigation.collections'),
-        linksTo: '/collections',
-        active: ['/collections/', '/report/*', '/dashboard/*', '/collection/*'],
-        breadcrumbsEntities: [{entity: 'collection'}, {entity: 'dashboard'}, {entity: 'report'}],
-      },
+      routeProps: {to: '/'},
       isCurrentPage: isCurrentPage(
-        ['/collections/', '/report/*', '/dashboard/*', '/collection/*'],
+        ['/', '/processes/', '/processes/*', '/dashboard/instant/*'],
         pathname
       ),
     },
     {
+      key: 'collections',
+      label: t('navigation.collections').toString(),
+      routeProps: {to: '/collections'},
+      isCurrentPage:
+        isCurrentPage(['/collections/', '/report/*', '/dashboard/*', '/collection/*'], pathname) &&
+        !isCurrentPage(['/dashboard/instant/*'], pathname),
+    },
+    {
       key: 'analysis',
       label: t('navigation.analysis').toString(),
-      routeProps: {
-        as: NavItem,
-        name: t('navigation.analysis'),
-        linksTo: '/analysis',
-        active: ['/analysis/', '/analysis/*'],
-      },
+      routeProps: {to: '/analysis'},
       isCurrentPage: isCurrentPage(['/analysis/', '/analysis/*'], pathname),
     },
   ];
 
-  const tags: C3NavigationNavBarProps['tags'] = [];
-
-  if (optimizeDatabase === 'opensearch') {
-    tags.push({
-      key: 'opensearchWarning',
-      label: t('navigation.opensearchPreview').toString(),
-      tooltip: {
-        content: t('navigation.opensearchWarningText').toString(),
-        buttonLabel: t('navigation.opensearchPreview').toString(),
-      },
-      color: 'red',
-    });
-  }
-
   const licenseTag: C3NavigationNavBarProps['licenseTag'] = {
-    show: licenseType !== 'saas',
-    isProductionLicense: validLicense,
+    show: license.licenseType !== 'saas',
+    isProductionLicense: license.validLicense,
+    isCommercial: license.commercial,
+    expiresAt: license.expiresAt ?? undefined,
   };
 
   return {
     elements,
-    tags,
     licenseTag,
   };
 }

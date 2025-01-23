@@ -12,9 +12,7 @@ import static io.camunda.optimize.util.SuppressionConstants.UNUSED;
 import io.camunda.optimize.dto.optimize.query.report.single.filter.data.date.DateFilterType;
 import io.camunda.optimize.dto.optimize.query.report.single.filter.data.date.RollingDateFilterStartDto;
 import java.util.List;
-import lombok.EqualsAndHashCode;
 
-@EqualsAndHashCode(callSuper = true)
 public class RollingFlowNodeDateFilterDataDto
     extends FlowNodeDateFilterDataDto<RollingDateFilterStartDto> {
 
@@ -26,5 +24,20 @@ public class RollingFlowNodeDateFilterDataDto
   public RollingFlowNodeDateFilterDataDto(
       final List<String> flowNodeIds, final RollingDateFilterStartDto rollingDateFilterStartDto) {
     super(flowNodeIds, DateFilterType.ROLLING, rollingDateFilterStartDto, null);
+  }
+
+  @Override
+  protected boolean canEqual(final Object other) {
+    return other instanceof RollingFlowNodeDateFilterDataDto;
+  }
+
+  @Override
+  public int hashCode() {
+    return org.apache.commons.lang3.builder.HashCodeBuilder.reflectionHashCode(this);
+  }
+
+  @Override
+  public boolean equals(final Object o) {
+    return org.apache.commons.lang3.builder.EqualsBuilder.reflectionEquals(this, o);
   }
 }

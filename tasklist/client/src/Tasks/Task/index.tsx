@@ -14,24 +14,27 @@ import {
   useSearchParams,
 } from 'react-router-dom';
 import {observer} from 'mobx-react-lite';
-import {useCompleteTask} from 'modules/mutations/useCompleteTask';
+import {
+  useCompleteTask,
+  completionErrorMap,
+} from 'modules/mutations/useCompleteTask';
 import {useTranslation} from 'react-i18next';
 import {pages, useTaskDetailsParams} from 'modules/routing';
-import {Task as TaskType, Variable} from 'modules/types';
+import type {Task as TaskType, Variable} from 'modules/types';
 import {tracking} from 'modules/tracking';
 import {notificationsStore} from 'modules/stores/notifications';
 import {getStateLocally, storeStateLocally} from 'modules/utils/localStorage';
 import {useTaskFilters} from 'modules/hooks/useTaskFilters';
-import {isRequestError} from 'modules/request';
 import {decodeTaskOpenedRef} from 'modules/utils/reftags';
 import {useTasks} from 'modules/queries/useTasks';
 import {useAutoSelectNextTask} from 'modules/auto-select-task/useAutoSelectNextTask';
 import {autoSelectNextTaskStore} from 'modules/stores/autoSelectFirstTask';
-import {OutletContext} from './Details';
+import type {OutletContext} from './Details';
 import {getCompleteTaskErrorMessage} from './getCompleteTaskErrorMessage';
-import {shouldFetchMore} from './shouldFetchMore';
 import {Variables} from './Variables';
 import {FormJS} from './FormJS';
+import {useUploadDocuments} from 'modules/mutations/useUploadDocuments';
+import {ERRORS_THAT_SHOULD_FETCH_MORE} from './constants';
 
 const CAMUNDA_FORMS_PREFIX = 'camunda-forms:bpmn:';
 
@@ -62,6 +65,7 @@ const Task: React.FC = observer(() => {
 
   const [searchParams, setSearchParams] = useSearchParams();
   const {mutateAsync: completeTask} = useCompleteTask();
+  const {mutateAsync: uploadDocuments} = useUploadDocuments();
   const {formKey, processDefinitionKey, formId, id: taskId} = task;
 
   const {enabled: autoSelectNextTaskEnabled} = autoSelectNextTaskStore;
@@ -110,6 +114,16 @@ const Task: React.FC = observer(() => {
     });
   }
 
+  async function handleFileUpload(files: Map<string, File[]>) {
+    if (files.size === 0) {
+      return new Map();
+    }
+
+    return uploadDocuments({
+      files,
+    });
+  }
+
   async function handleSubmissionSuccess() {
     storeStateLocally('hasCompletedTask', true);
 
@@ -138,19 +152,35 @@ const Task: React.FC = observer(() => {
   }
 
   function handleSubmissionFailure(error: Error) {
-    const errorMessage = isRequestError(error)
-      ? (error?.networkError?.message ?? error.message)
-      : error.message;
+    if (error.name === completionErrorMap.taskProcessingTimeout) {
+      tracking.track({eventName: 'task-completion-delayed-notification'});
+      notificationsStore.displayNotification({
+        kind: 'info',
+        title: t('taskCompletionDelayedInfoTitle'),
+        subtitle: t('taskCompletionDelayedInfoSubtitle'),
+        isDismissable: true,
+      });
+      return;
+    }
 
-    notificationsStore.displayNotification({
-      kind: 'error',
-      title: t('taskCouldNotBeCompletedNotification'),
-      subtitle: getCompleteTaskErrorMessage(errorMessage),
-      isDismissable: true,
-    });
+    if (error.name === completionErrorMap.invalidState) {
+      tracking.track({eventName: 'task-completion-rejected-notification'});
+      notificationsStore.displayNotification({
+        kind: 'error',
+        title: t('taskCouldNotBeCompletedNotification'),
+        subtitle: t('taskDetailsTaskCompletionRejectionErrorSubtitle'),
+        isDismissable: true,
+      });
+    } else {
+      notificationsStore.displayNotification({
+        kind: 'error',
+        title: t('taskCouldNotBeCompletedNotification'),
+        subtitle: getCompleteTaskErrorMessage(error.message),
+        isDismissable: true,
+      });
+    }
 
-    // TODO: this does not have to be a separate function, once we are able to use error codes we can move this inside getCompleteTaskErrorMessage
-    if (shouldFetchMore(errorMessage)) {
+    if (ERRORS_THAT_SHOULD_FETCH_MORE.includes(error.name)) {
       refetchTask();
     }
   }
@@ -165,6 +195,7 @@ const Task: React.FC = observer(() => {
         id={isEmbeddedForm ? getFormId(formKey) : formId!}
         user={currentUser}
         onSubmit={handleSubmission}
+        onFileUpload={handleFileUpload}
         onSubmitSuccess={handleSubmissionSuccess}
         onSubmitFailure={handleSubmissionFailure}
         processDefinitionKey={processDefinitionKey!}

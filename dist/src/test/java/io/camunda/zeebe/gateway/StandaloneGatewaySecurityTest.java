@@ -18,6 +18,7 @@ import io.camunda.application.commons.clustering.AtomixClusterConfiguration;
 import io.camunda.application.commons.clustering.DynamicClusterServices;
 import io.camunda.application.commons.configuration.GatewayBasedConfiguration;
 import io.camunda.application.commons.configuration.GatewayBasedConfiguration.GatewayBasedProperties;
+import io.camunda.security.configuration.SecurityConfiguration;
 import io.camunda.zeebe.broker.client.api.BrokerClient;
 import io.camunda.zeebe.gateway.impl.SpringGatewayBridge;
 import io.camunda.zeebe.gateway.impl.configuration.ClusterCfg;
@@ -192,7 +193,7 @@ final class StandaloneGatewaySecurityTest {
     final var brokerClientConfig = gatewayConfig.brokerClientConfig();
 
     final var clusterConfig = gatewayConfig.clusterConfig();
-    final var clusterConfiguration = new AtomixClusterConfiguration(clusterConfig);
+    final var clusterConfiguration = new AtomixClusterConfiguration(clusterConfig, null);
     atomixCluster = clusterConfiguration.atomixCluster();
     final ActorSchedulerConfiguration actorSchedulerConfiguration =
         new ActorSchedulerConfiguration(
@@ -201,7 +202,7 @@ final class StandaloneGatewaySecurityTest {
     actorScheduler = actorSchedulerConfiguration.scheduler();
     final var topologyServices = new DynamicClusterServices(actorScheduler, atomixCluster);
     final var topologyManager = topologyServices.brokerTopologyManager();
-    topologyServices.gatewayClusterTopologyService(topologyManager);
+    topologyServices.gatewayClusterTopologyService(topologyManager, gatewayCfg);
 
     final var brokerClientConfiguration =
         new BrokerClientConfiguration(
@@ -212,10 +213,13 @@ final class StandaloneGatewaySecurityTest {
     return new GatewayModuleConfiguration(
         gatewayConfig,
         null, // identity is disabled by default
+        new SecurityConfiguration(),
         new SpringGatewayBridge(),
         actorScheduler,
         atomixCluster,
         brokerClient,
-        jobStreamClient);
+        jobStreamClient,
+        null,
+        null);
   }
 }

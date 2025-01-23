@@ -12,9 +12,6 @@ import static io.camunda.operate.store.opensearch.dsl.RequestDSL.searchRequestBu
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.camunda.operate.conditions.OpensearchCondition;
-import io.camunda.operate.entities.JobEntity;
-import io.camunda.operate.entities.ListenerType;
-import io.camunda.operate.schema.templates.JobTemplate;
 import io.camunda.operate.store.opensearch.client.sync.RichOpenSearchClient;
 import io.camunda.operate.util.CollectionUtil;
 import io.camunda.operate.webapp.reader.ListenerReader;
@@ -22,6 +19,9 @@ import io.camunda.operate.webapp.rest.dto.ListenerDto;
 import io.camunda.operate.webapp.rest.dto.ListenerRequestDto;
 import io.camunda.operate.webapp.rest.dto.ListenerResponseDto;
 import io.camunda.operate.webapp.rest.dto.listview.SortValuesWrapper;
+import io.camunda.webapps.schema.descriptors.operate.template.JobTemplate;
+import io.camunda.webapps.schema.entities.operate.JobEntity;
+import io.camunda.webapps.schema.entities.operate.ListenerType;
 import java.util.Collections;
 import java.util.List;
 import java.util.stream.Collectors;
@@ -39,8 +39,10 @@ public class OpensearchListenerReader extends OpensearchAbstractReader implement
 
   private final JobTemplate jobTemplate;
   private final RichOpenSearchClient richOpenSearchClient;
-
   private final ObjectMapper objectMapper;
+
+  private final Query executionListenersQ;
+  private final Query taskListenersQ;
 
   public OpensearchListenerReader(
       final JobTemplate jobTemplate,
@@ -49,6 +51,8 @@ public class OpensearchListenerReader extends OpensearchAbstractReader implement
     this.jobTemplate = jobTemplate;
     this.richOpenSearchClient = richOpenSearchClient;
     this.objectMapper = objectMapper;
+    executionListenersQ = term(JobTemplate.JOB_KIND, ListenerType.EXECUTION_LISTENER.name());
+    taskListenersQ = term(JobTemplate.JOB_KIND, ListenerType.TASK_LISTENER.name());
   }
 
   @Override
@@ -57,10 +61,8 @@ public class OpensearchListenerReader extends OpensearchAbstractReader implement
     final Query query =
         and(
             term(JobTemplate.PROCESS_INSTANCE_KEY, processInstanceId),
-            term(JobTemplate.FLOW_NODE_ID, request.getFlowNodeId()),
-            or(
-                term(JobTemplate.JOB_KIND, ListenerType.EXECUTION_LISTENER.name()),
-                term(JobTemplate.JOB_KIND, ListenerType.TASK_LISTENER.name())));
+            getFlowNodeQuery(request),
+            getListenerTypeQuery(request));
 
     final var searchRequestBuilder = searchRequestBuilder(jobTemplate.getAlias()).query(query);
     applySorting(searchRequestBuilder, request);
@@ -83,6 +85,25 @@ public class OpensearchListenerReader extends OpensearchAbstractReader implement
       Collections.reverse(listeners);
     }
     return new ListenerResponseDto(listeners, totalHitCount);
+  }
+
+  private Query getFlowNodeQuery(final ListenerRequestDto request) {
+    if (request.getFlowNodeInstanceId() != null) {
+      return term(JobTemplate.FLOW_NODE_INSTANCE_ID, request.getFlowNodeInstanceId());
+    }
+    return term(JobTemplate.FLOW_NODE_ID, request.getFlowNodeId());
+  }
+
+  private Query getListenerTypeQuery(final ListenerRequestDto request) {
+    final ListenerType listenerFilter = request.getListenerTypeFilter();
+    if (listenerFilter == null) {
+      return or(executionListenersQ, taskListenersQ);
+    } else if (listenerFilter.equals(ListenerType.EXECUTION_LISTENER)) {
+      return executionListenersQ;
+    } else if (listenerFilter.equals(ListenerType.TASK_LISTENER)) {
+      return taskListenersQ;
+    }
+    throw new IllegalArgumentException("'listenerFilter' is set to an unsupported value.");
   }
 
   private void applySorting(

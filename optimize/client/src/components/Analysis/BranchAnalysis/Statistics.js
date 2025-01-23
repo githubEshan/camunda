@@ -9,10 +9,11 @@
 import React from 'react';
 import equal from 'fast-deep-equal';
 import {Chart as ChartRenderer} from 'chart.js';
+import {Stack} from '@carbon/react';
 
 import {t} from 'translation';
 import {getFlowNodeNames, getDiagramElementsBetween} from 'services';
-import {LoadingIndicator} from 'components';
+import {Loading} from 'components';
 
 import {loadCorrelationData} from './service';
 
@@ -31,17 +32,12 @@ export default class Statistics extends React.Component {
   }
 
   loadFlowNodeNames = () => {
-    return new Promise(async (resolve) =>
-      this.setState(
-        {
-          flowNodeNames: await getFlowNodeNames(
-            this.props.config.processDefinitionKey,
-            this.props.config.processDefinitionVersions[0],
-            this.props.config.tenantIds[0]
-          ),
-        },
-        resolve
-      )
+    return new Promise((resolve) =>
+      getFlowNodeNames(
+        this.props.config.processDefinitionKey,
+        this.props.config.processDefinitionVersions[0],
+        this.props.config.tenantIds[0]
+      ).then((flowNodeNames) => this.setState({flowNodeNames}, resolve))
     );
   };
 
@@ -61,7 +57,7 @@ export default class Statistics extends React.Component {
       }
 
       return (
-        <div className="Statistics" ref={this.rootRef}>
+        <Stack gap={4} className="Statistics" ref={this.rootRef}>
           <p>{t('analysis.gatewayInstances', {totalGateway})}</p>
           <ul className="branchDistribution">
             {Object.keys(this.state.data.followingNodes).map((key) => {
@@ -88,14 +84,14 @@ export default class Statistics extends React.Component {
           <div className="diagram-container">
             <canvas ref={(node) => (this.relativeChartRef = node)} />
           </div>
-        </div>
+        </Stack>
       );
     }
 
     if (this.props.gateway && this.props.endEvent && !this.state.data) {
       return (
         <div className="Statistics">
-          <LoadingIndicator />
+          <Loading />
         </div>
       );
     }
@@ -257,7 +253,7 @@ export default class Statistics extends React.Component {
           },
         },
         hover: {
-          onHover: (e, activeElements) => {
+          onHover: (_e, activeElements) => {
             const canvas = viewer.get('canvas');
             const classMark = 'PartHighlight';
             if (activeElements.length > 0 && !isInside) {

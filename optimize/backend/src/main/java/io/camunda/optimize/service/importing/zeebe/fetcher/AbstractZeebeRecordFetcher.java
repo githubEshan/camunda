@@ -17,13 +17,12 @@ import java.util.ArrayDeque;
 import java.util.Collections;
 import java.util.Deque;
 import java.util.List;
-import lombok.Getter;
-import lombok.extern.slf4j.Slf4j;
+import org.slf4j.Logger;
 
-@Slf4j
-@Getter
 public abstract class AbstractZeebeRecordFetcher<T> {
 
+  private static final Logger LOG =
+      org.slf4j.LoggerFactory.getLogger(AbstractZeebeRecordFetcher.class);
   protected final int partitionId;
   protected final ConfigurationService configurationService;
   private int dynamicBatchSize;
@@ -46,7 +45,7 @@ public abstract class AbstractZeebeRecordFetcher<T> {
       results = fetchZeebeRecordsForPrefixAndPartitionFrom(positionBasedImportPage);
     } catch (final Exception e) {
       if (isZeebeInstanceIndexNotFoundException(e)) {
-        log.warn("No Zeebe index with alias {} found to read records from!", getIndexAlias());
+        LOG.warn("No Zeebe index with alias {} found to read records from!", getIndexAlias());
         return Collections.emptyList();
       } else {
         if (e instanceof IOException) {
@@ -56,7 +55,7 @@ public abstract class AbstractZeebeRecordFetcher<T> {
             String.format(
                 "Was not able to retrieve zeebe records of type %s from partition %s",
                 getBaseIndexName(), partitionId);
-        log.error(errorMessage, e);
+        LOG.error(errorMessage, e);
         throw new OptimizeRuntimeException(errorMessage, e);
       }
     }
@@ -118,7 +117,7 @@ public abstract class AbstractZeebeRecordFetcher<T> {
         batchSizeDeque.push(newBatchSize);
       }
       dynamicBatchSize = newBatchSize;
-      log.info(
+      LOG.info(
           "Dynamically reducing import page size to {} for next fetch attempt for type {} from partition {}",
           dynamicBatchSize,
           getBaseIndexName(),
@@ -141,12 +140,12 @@ public abstract class AbstractZeebeRecordFetcher<T> {
         if (!batchSizeDeque.isEmpty()) {
           dynamicBatchSize = batchSizeDeque.pop();
         } else {
-          log.debug(
+          LOG.debug(
               "Dynamic resizing complete, can now revert batch size back to default of {}",
               configuredDefaultBatchSize);
           dynamicBatchSize = configuredDefaultBatchSize;
         }
-        log.info(
+        LOG.info(
             "Reverting batch size back to {} for fetching of {} records from partition {}",
             dynamicBatchSize,
             getBaseIndexName(),
@@ -169,5 +168,29 @@ public abstract class AbstractZeebeRecordFetcher<T> {
     } else {
       consecutiveEmptyPages = 0;
     }
+  }
+
+  public int getPartitionId() {
+    return partitionId;
+  }
+
+  public ConfigurationService getConfigurationService() {
+    return configurationService;
+  }
+
+  public int getDynamicBatchSize() {
+    return dynamicBatchSize;
+  }
+
+  public int getConsecutiveSuccessfulFetches() {
+    return consecutiveSuccessfulFetches;
+  }
+
+  public int getConsecutiveEmptyPages() {
+    return consecutiveEmptyPages;
+  }
+
+  public Deque<Integer> getBatchSizeDeque() {
+    return batchSizeDeque;
   }
 }

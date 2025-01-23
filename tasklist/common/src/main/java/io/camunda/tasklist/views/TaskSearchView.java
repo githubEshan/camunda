@@ -9,9 +9,9 @@ package io.camunda.tasklist.views;
 
 import static io.camunda.tasklist.util.CollectionUtil.toArrayOfStrings;
 
-import io.camunda.tasklist.entities.TaskEntity;
-import io.camunda.tasklist.entities.TaskImplementation;
-import io.camunda.tasklist.entities.TaskState;
+import io.camunda.webapps.schema.entities.tasklist.TaskEntity;
+import io.camunda.webapps.schema.entities.tasklist.TaskEntity.TaskImplementation;
+import io.camunda.webapps.schema.entities.tasklist.TaskState;
 import java.time.OffsetDateTime;
 import java.util.Arrays;
 import java.util.Objects;
@@ -42,6 +42,7 @@ public class TaskSearchView {
   private String[] sortValues;
   private TaskImplementation implementation;
   private Integer priority;
+  private String externalFormReference;
 
   public String getId() {
     return id;
@@ -241,6 +242,15 @@ public class TaskSearchView {
     return this;
   }
 
+  public String getExternalFormReference() {
+    return externalFormReference;
+  }
+
+  public TaskSearchView setExternalFormReference(String externalFormReference) {
+    this.externalFormReference = externalFormReference;
+    return this;
+  }
+
   public Integer getPriority() {
     return priority;
   }
@@ -274,7 +284,8 @@ public class TaskSearchView {
             dueDate,
             first,
             implementation,
-            priority);
+            priority,
+            externalFormReference);
     result = 31 * result + Arrays.hashCode(candidateGroups);
     result = 31 * result + Arrays.hashCode(candidateUsers);
     result = 31 * result + Arrays.hashCode(sortValues);
@@ -315,7 +326,8 @@ public class TaskSearchView {
         && Objects.equals(followUpDate, that.followUpDate)
         && Objects.equals(dueDate, that.dueDate)
         && Objects.equals(priority, that.priority)
-        && Arrays.equals(sortValues, that.sortValues);
+        && Arrays.equals(sortValues, that.sortValues)
+        && Objects.equals(externalFormReference, that.externalFormReference);
   }
 
   @Override
@@ -350,7 +362,7 @@ public class TaskSearchView {
   public static TaskSearchView createFrom(TaskEntity taskEntity, Object[] sortValues) {
     final TaskSearchView taskSearchView =
         new TaskSearchView()
-            .setId(taskEntity.getId())
+            .setId(String.valueOf(taskEntity.getKey()))
             .setCreationTime(taskEntity.getCreationTime())
             .setCompletionTime(taskEntity.getCompletionTime())
             .setProcessInstanceId(taskEntity.getProcessInstanceId())
@@ -370,7 +382,8 @@ public class TaskSearchView {
             .setCandidateGroups(taskEntity.getCandidateGroups())
             .setCandidateUsers(taskEntity.getCandidateUsers())
             .setImplementation(taskEntity.getImplementation())
-            .setPriority(taskEntity.getPriority());
+            .setPriority(taskEntity.getPriority())
+            .setExternalFormReference(taskEntity.getExternalFormReference());
     if (sortValues != null) {
       taskSearchView.setSortValues(toArrayOfStrings(sortValues));
     }

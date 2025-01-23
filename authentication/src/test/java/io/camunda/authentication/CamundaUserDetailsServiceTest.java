@@ -12,16 +12,21 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
 
+import io.camunda.authentication.entity.CamundaUser;
+import io.camunda.search.entities.RoleEntity;
+import io.camunda.search.entities.UserEntity;
+import io.camunda.search.query.RoleQuery;
+import io.camunda.search.query.SearchQueryResult;
+import io.camunda.service.AuthorizationServices;
+import io.camunda.service.RoleServices;
+import io.camunda.service.TenantServices;
 import io.camunda.service.UserServices;
-import io.camunda.service.entities.UserEntity;
-import io.camunda.service.search.query.SearchQueryResult;
 import java.util.Collections;
 import java.util.List;
 import org.junit.Before;
 import org.junit.Test;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
-import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.core.userdetails.UsernameNotFoundException;
 
 public class CamundaUserDetailsServiceTest {
@@ -29,12 +34,17 @@ public class CamundaUserDetailsServiceTest {
   private static final String TEST_USER_ID = "username1";
 
   @Mock private UserServices userService;
+  @Mock private AuthorizationServices authorizationServices;
+  @Mock private RoleServices roleServices;
+  @Mock private TenantServices tenantServices;
   private CamundaUserDetailsService userDetailsService;
 
   @Before
   public void setup() throws Exception {
     MockitoAnnotations.openMocks(this).close();
-    userDetailsService = new CamundaUserDetailsService(userService);
+    userDetailsService =
+        new CamundaUserDetailsService(
+            userService, authorizationServices, roleServices, tenantServices);
   }
 
   @Test
@@ -43,20 +53,37 @@ public class CamundaUserDetailsServiceTest {
     when(userService.search(any()))
         .thenReturn(
             new SearchQueryResult<>(
-                1, List.of(new UserEntity(1L, TEST_USER_ID, "", "", "password1")), null));
+                1,
+                List.of(new UserEntity(100L, TEST_USER_ID, "Foo Bar", "email@tested", "password1")),
+                null,
+                null));
+
+    when(authorizationServices.getAuthorizedApplications(any()))
+        .thenReturn(List.of("operate", "identity"));
+    final RoleEntity adminRole = new RoleEntity(2L, "ADMIN");
+    when(roleServices.findAll(RoleQuery.of(q -> q.filter(f -> f.memberKey(100L)))))
+        .thenReturn(List.of(adminRole));
+
     // when
-    final UserDetails user = userDetailsService.loadUserByUsername(TEST_USER_ID);
+    final CamundaUser user = (CamundaUser) userDetailsService.loadUserByUsername(TEST_USER_ID);
 
     // then
+    assertThat(user).isInstanceOf(CamundaUser.class);
+    assertThat(user.getUserKey()).isEqualTo(100L);
+    assertThat(user.getName()).isEqualTo("Foo Bar");
     assertThat(user.getUsername()).isEqualTo(TEST_USER_ID);
     assertThat(user.getPassword()).isEqualTo("password1");
+    assertThat(user.getEmail()).isEqualTo("email@tested");
+    assertThat(user.getAuthenticationContext().authorizedApplications())
+        .containsExactlyInAnyOrder("operate", "identity");
+    assertThat(user.getAuthenticationContext().roles()).isEqualTo(List.of(adminRole));
   }
 
   @Test
   public void testUserDetailsNotFound() {
     // given
     when(userService.search(any()))
-        .thenReturn(new SearchQueryResult<>(0, Collections.emptyList(), null));
+        .thenReturn(new SearchQueryResult<>(0, Collections.emptyList(), null, null));
     // when/then
     assertThatThrownBy(() -> userDetailsService.loadUserByUsername(TEST_USER_ID))
         .isInstanceOf(UsernameNotFoundException.class);

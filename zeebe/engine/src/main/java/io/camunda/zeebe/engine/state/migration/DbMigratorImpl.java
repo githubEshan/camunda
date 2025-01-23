@@ -23,6 +23,8 @@ import io.camunda.zeebe.engine.state.migration.to_8_3.MultiTenancyProcessStateMi
 import io.camunda.zeebe.engine.state.migration.to_8_3.ProcessInstanceByProcessDefinitionMigration;
 import io.camunda.zeebe.engine.state.migration.to_8_4.MultiTenancySignalSubscriptionStateMigration;
 import io.camunda.zeebe.engine.state.migration.to_8_5.ColumnFamilyPrefixCorrectionMigration;
+import io.camunda.zeebe.engine.state.migration.to_8_6.OrderedCommandDistributionMigration;
+import io.camunda.zeebe.engine.state.migration.to_8_7.IdempotentCommandDistributionMigration;
 import io.camunda.zeebe.engine.state.mutable.MutableProcessingState;
 import io.camunda.zeebe.stream.api.ClusterContext;
 import io.camunda.zeebe.util.VersionUtil;
@@ -34,11 +36,8 @@ import org.slf4j.LoggerFactory;
 
 public class DbMigratorImpl implements DbMigrator {
 
-  private static final Logger LOGGER =
-      LoggerFactory.getLogger(DbMigratorImpl.class.getPackageName());
-
   // add new migration tasks here, migrations are executed in the order they appear in the list
-  private static final List<MigrationTask> MIGRATION_TASKS =
+  public static final List<MigrationTask> MIGRATION_TASKS =
       List.of(
           new ProcessMessageSubscriptionSentTimeMigration(),
           new MessageSubscriptionSentTimeMigration(),
@@ -58,21 +57,45 @@ public class DbMigratorImpl implements DbMigrator {
           new ColumnFamilyPrefixCorrectionMigration(),
           new MultiTenancySignalSubscriptionStateMigration(),
           new JobBackoffRestoreMigration(),
-          new RoutingInfoMigration());
+          new RoutingInfoMigration(),
+          new OrderedCommandDistributionMigration(),
+          new IdempotentCommandDistributionMigration());
+  private static final Logger LOGGER =
+      LoggerFactory.getLogger(DbMigratorImpl.class.getPackageName());
   // Be mindful of https://github.com/camunda/camunda/issues/7248. In particular, that issue
   // should be solved first, before adding any migration that can take a long time
-
   private final MutableMigrationTaskContext migrationTaskContext;
   private final List<MigrationTask> migrationTasks;
+  private final boolean versionCheckRestrictionEnabled;
+
+  private int skippedMigrations = 0;
 
   public DbMigratorImpl(
       final ClusterContext clusterContext, final MutableProcessingState processingState) {
-    this(new MigrationTaskContextImpl(clusterContext, processingState), MIGRATION_TASKS);
+    this(true, new MigrationTaskContextImpl(clusterContext, processingState), MIGRATION_TASKS);
+  }
+
+  public DbMigratorImpl(
+      final boolean versionCheckRestrictionEnabled,
+      final ClusterContext clusterContext,
+      final MutableProcessingState processingState) {
+    this(
+        versionCheckRestrictionEnabled,
+        new MigrationTaskContextImpl(clusterContext, processingState),
+        MIGRATION_TASKS);
   }
 
   public DbMigratorImpl(
       final MutableMigrationTaskContext migrationTaskContext,
       final List<MigrationTask> migrationTasks) {
+    this(true, migrationTaskContext, migrationTasks);
+  }
+
+  public DbMigratorImpl(
+      final boolean versionCheckRestrictionEnabled,
+      final MutableMigrationTaskContext migrationTaskContext,
+      final List<MigrationTask> migrationTasks) {
+    this.versionCheckRestrictionEnabled = versionCheckRestrictionEnabled;
     this.migrationTaskContext = migrationTaskContext;
     this.migrationTasks = migrationTasks;
   }
@@ -112,12 +135,26 @@ public class DbMigratorImpl implements DbMigrator {
       case final Indeterminate indeterminate ->
           LOGGER.warn(
               "Could not check compatibility of snapshot with current version: {}", indeterminate);
-      case final Incompatible.UseOfPreReleaseVersion preRelease ->
-          throw new IllegalStateException(
-              "Cannot upgrade to or from a pre-release version: %s".formatted(preRelease));
-      case final Incompatible incompatible ->
-          throw new IllegalStateException(
-              "Snapshot is not compatible with current version: %s".formatted(incompatible));
+      case final Incompatible.UseOfPreReleaseVersion preRelease -> {
+        final String errorMsg =
+            "Cannot upgrade to or from a pre-release version: %s".formatted(preRelease);
+        if (versionCheckRestrictionEnabled) {
+          throw new IllegalStateException(errorMsg);
+        } else {
+          LOGGER.warn(
+              "Detected issue with migration, but ignoring as configured. Details: '{}'", errorMsg);
+        }
+      }
+      case final Incompatible incompatible -> {
+        final String errorMsg =
+            "Snapshot is not compatible with current version: %s".formatted(incompatible);
+        if (versionCheckRestrictionEnabled) {
+          throw new IllegalStateException(errorMsg);
+        } else {
+          LOGGER.warn(
+              "Detected issue with migration, but ignoring as configured. Details: '{}'", errorMsg);
+        }
+      }
       case final Compatible.SameVersion sameVersion ->
           LOGGER.trace("Snapshot is from the same version as the current version: {}", sameVersion);
       case final Compatible compatible ->
@@ -135,7 +172,8 @@ public class DbMigratorImpl implements DbMigrator {
 
   private void logPreview(final List<MigrationTask> migrationTasks) {
     LOGGER.info(
-        "Starting processing of migration tasks (use LogLevel.DEBUG for more details) ... ");
+        "Starting processing {} migration tasks (use LogLevel.DEBUG for more details) ... ",
+        migrationTasks.size());
     LOGGER.debug(
         "Found {} migration tasks: {}",
         migrationTasks.size(),
@@ -145,14 +183,21 @@ public class DbMigratorImpl implements DbMigrator {
   }
 
   private void logSummary(final List<MigrationTask> migrationTasks) {
+    final var executedTasks = migrationTasks.size() - skippedMigrations;
+
     LOGGER.info(
-        "Completed processing of migration tasks (use LogLevel.DEBUG for more details) ... ");
+        "Completed processing of {}/{} migration tasks (use LogLevel.DEBUG for more details) ... ",
+        executedTasks,
+        migrationTasks.size());
     LOGGER.debug(
-        "Executed {} migration tasks: {}",
+        "Executed {} migration tasks ({} skipped out of {}): {}",
+        executedTasks,
+        skippedMigrations,
         migrationTasks.size(),
         migrationTasks.stream()
             .map(MigrationTask::getIdentifier)
             .collect(Collectors.joining(", ")));
+    skippedMigrations = 0;
   }
 
   private boolean handleMigrationTask(
@@ -168,20 +213,25 @@ public class DbMigratorImpl implements DbMigrator {
 
   private void logMigrationSkipped(
       final MigrationTask migrationTask, final int index, final int total) {
-    LOGGER.info(
-        "Skipping {} migration ({}/{}).  It was determined it does not need to run right now.",
+    skippedMigrations++;
+    LOGGER.debug(
+        "Skipping {} migration ({}/{}). It was determined it does not need to run right now.",
         migrationTask.getIdentifier(),
         index,
         total);
   }
 
   private void runMigration(final MigrationTask migrationTask, final int index, final int total) {
-    LOGGER.info("Starting {} migration ({}/{})", migrationTask.getIdentifier(), index, total);
+    LOGGER.debug("Starting {} migration ({}/{})", migrationTask.getIdentifier(), index, total);
     final var startTime = System.currentTimeMillis();
     migrationTask.runMigration(migrationTaskContext);
     final var duration = System.currentTimeMillis() - startTime;
 
-    LOGGER.debug("{} migration completed in {} ms.", migrationTask.getIdentifier(), duration);
-    LOGGER.info("Finished {} migration ({}/{})", migrationTask.getIdentifier(), index, total);
+    LOGGER.debug(
+        "Finished {} migration ({}/{}) in {} ms.",
+        migrationTask.getIdentifier(),
+        index,
+        total,
+        duration);
   }
 }

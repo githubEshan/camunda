@@ -7,28 +7,35 @@
  */
 package io.camunda.optimize.upgrade.steps.schema;
 
+import io.camunda.optimize.service.db.DatabaseQueryWrapper;
 import io.camunda.optimize.service.db.schema.IndexMappingCreator;
-import io.camunda.optimize.upgrade.es.SchemaUpgradeClient;
+import io.camunda.optimize.upgrade.db.SchemaUpgradeClient;
 import io.camunda.optimize.upgrade.steps.UpgradeStep;
 import io.camunda.optimize.upgrade.steps.UpgradeStepType;
-import lombok.AllArgsConstructor;
-import lombok.EqualsAndHashCode;
-import lombok.Getter;
-import org.elasticsearch.index.query.QueryBuilder;
 
-@AllArgsConstructor
-@EqualsAndHashCode(callSuper = true)
 public class ReindexStep extends UpgradeStep {
-  @Getter private final IndexMappingCreator sourceIndex;
-  @Getter private final IndexMappingCreator targetIndex;
-  private final QueryBuilder sourceIndexFilterQuery;
+
+  private final IndexMappingCreator sourceIndex;
+  private final IndexMappingCreator targetIndex;
+  private final DatabaseQueryWrapper queryWrapper;
   private final String mappingScript;
 
   public ReindexStep(
       final IndexMappingCreator sourceIndex,
       final IndexMappingCreator targetIndex,
-      final QueryBuilder sourceIndexFilterQuery) {
-    this(sourceIndex, targetIndex, sourceIndexFilterQuery, null);
+      final DatabaseQueryWrapper queryWrapper) {
+    this(sourceIndex, targetIndex, queryWrapper, null);
+  }
+
+  public ReindexStep(
+      final IndexMappingCreator sourceIndex,
+      final IndexMappingCreator targetIndex,
+      final DatabaseQueryWrapper queryWrapper,
+      final String mappingScript) {
+    this.sourceIndex = sourceIndex;
+    this.targetIndex = targetIndex;
+    this.queryWrapper = queryWrapper;
+    this.mappingScript = mappingScript;
   }
 
   @Override
@@ -37,7 +44,30 @@ public class ReindexStep extends UpgradeStep {
   }
 
   @Override
-  public void execute(final SchemaUpgradeClient schemaUpgradeClient) {
-    schemaUpgradeClient.reindex(sourceIndex, targetIndex, sourceIndexFilterQuery, mappingScript);
+  public void performUpgradeStep(final SchemaUpgradeClient<?, ?, ?> schemaUpgradeClient) {
+    schemaUpgradeClient.reindex(sourceIndex, targetIndex, queryWrapper, mappingScript);
+  }
+
+  @Override
+  protected boolean canEqual(final Object other) {
+    return other instanceof ReindexStep;
+  }
+
+  @Override
+  public int hashCode() {
+    return org.apache.commons.lang3.builder.HashCodeBuilder.reflectionHashCode(this);
+  }
+
+  @Override
+  public boolean equals(final Object o) {
+    return org.apache.commons.lang3.builder.EqualsBuilder.reflectionEquals(this, o);
+  }
+
+  public IndexMappingCreator getSourceIndex() {
+    return sourceIndex;
+  }
+
+  public IndexMappingCreator getTargetIndex() {
+    return targetIndex;
   }
 }

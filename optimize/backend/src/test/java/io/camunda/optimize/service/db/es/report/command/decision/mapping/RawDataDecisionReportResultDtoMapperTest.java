@@ -17,6 +17,7 @@ import io.camunda.optimize.dto.optimize.query.report.single.decision.result.raw.
 import io.camunda.optimize.dto.optimize.query.report.single.decision.result.raw.RawDataDecisionInstanceDto;
 import io.camunda.optimize.dto.optimize.query.report.single.decision.result.raw.VariableEntry;
 import io.camunda.optimize.dto.optimize.query.variable.VariableType;
+import io.camunda.optimize.service.db.report.interpreter.util.RawDecisionDataResultDtoMapper;
 import io.camunda.optimize.service.util.IdGenerator;
 import java.util.Arrays;
 import java.util.Collections;
@@ -29,7 +30,7 @@ import org.junit.jupiter.api.Test;
 public class RawDataDecisionReportResultDtoMapperTest {
 
   @Test
-  public void testMapFromSearchResponse_hitCountNotEqualTotalCount() {
+  public void testMapFromSearchResponseHitCountNotEqualTotalCount() {
     // given
     final int rawDataLimit = 2;
     final RawDecisionDataResultDtoMapper mapper = new RawDecisionDataResultDtoMapper();
@@ -44,7 +45,7 @@ public class RawDataDecisionReportResultDtoMapperTest {
   }
 
   @Test
-  public void testMapFromSearchResponse_additionalVariablesAddedToResults() {
+  public void testMapFromSearchResponseAdditionalVariablesAddedToResults() {
     // given
     final RawDecisionDataResultDtoMapper mapper = new RawDecisionDataResultDtoMapper();
     final List<DecisionInstanceDto> decisionInstanceDtos =

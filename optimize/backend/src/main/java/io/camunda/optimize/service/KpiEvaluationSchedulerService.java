@@ -21,21 +21,31 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
-import lombok.AllArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
+import org.slf4j.Logger;
 import org.springframework.scheduling.Trigger;
 import org.springframework.scheduling.support.PeriodicTrigger;
 import org.springframework.stereotype.Component;
 
-@AllArgsConstructor
 @Component
-@Slf4j
 public class KpiEvaluationSchedulerService extends AbstractScheduledService {
 
+  private static final Logger LOG =
+      org.slf4j.LoggerFactory.getLogger(KpiEvaluationSchedulerService.class);
   private final ProcessOverviewWriter processOverviewWriter;
   private final DefinitionService definitionService;
   private final ConfigurationService configurationService;
   private final KpiService kpiService;
+
+  public KpiEvaluationSchedulerService(
+      final ProcessOverviewWriter processOverviewWriter,
+      final DefinitionService definitionService,
+      final ConfigurationService configurationService,
+      final KpiService kpiService) {
+    this.processOverviewWriter = processOverviewWriter;
+    this.definitionService = definitionService;
+    this.configurationService = configurationService;
+    this.kpiService = kpiService;
+  }
 
   @PostConstruct
   public void init() {
@@ -44,7 +54,7 @@ public class KpiEvaluationSchedulerService extends AbstractScheduledService {
 
   @PreDestroy
   public synchronized void stopCleanupScheduling() {
-    log.info("Stopping KPI evaluation scheduler");
+    LOG.info("Stopping KPI evaluation scheduler");
     stopScheduling();
   }
 
@@ -54,7 +64,7 @@ public class KpiEvaluationSchedulerService extends AbstractScheduledService {
 
   @Override
   protected void run() {
-    log.debug("Scheduling KPI evaluation tasks for all existing processes.");
+    LOG.debug("Scheduling KPI evaluation tasks for all existing processes.");
     final List<String> processDefinitionKeys =
         definitionService.getAllDefinitionsWithTenants(PROCESS).stream()
             .map(SimpleDefinitionDto::getKey)
@@ -82,7 +92,7 @@ public class KpiEvaluationSchedulerService extends AbstractScheduledService {
 
   @Override
   public synchronized boolean startScheduling() {
-    log.info("Scheduling KPI evaluation scheduler.");
+    LOG.info("Scheduling KPI evaluation scheduler.");
     return super.startScheduling();
   }
 }

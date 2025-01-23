@@ -9,28 +9,32 @@ package io.camunda.zeebe.it.client.command;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import io.camunda.zeebe.client.ZeebeClient;
+import io.camunda.client.CamundaClient;
 import io.camunda.zeebe.it.util.ZeebeResourcesHelper;
 import io.camunda.zeebe.protocol.record.intent.ProcessInstanceIntent;
 import io.camunda.zeebe.qa.util.cluster.TestStandaloneBroker;
 import io.camunda.zeebe.qa.util.junit.ZeebeIntegration;
 import io.camunda.zeebe.qa.util.junit.ZeebeIntegration.TestZeebe;
-import io.camunda.zeebe.test.util.junit.AutoCloseResources.AutoCloseResource;
 import io.camunda.zeebe.test.util.record.RecordingExporter;
 import java.time.Duration;
+import org.junit.jupiter.api.AutoClose;
 import org.junit.jupiter.api.Test;
 
 @ZeebeIntegration
 public class OperationReferenceTest {
   private static final long OPERATION_REFERENCE = 1234L;
 
-  @TestZeebe
-  private static final TestStandaloneBroker ZEEBE =
-      new TestStandaloneBroker().withRecordingExporter(true);
+  @TestZeebe(initMethod = "initTestStandaloneBroker")
+  private static TestStandaloneBroker zeebe;
 
-  @AutoCloseResource
-  private final ZeebeClient client =
-      ZEEBE.newClientBuilder().defaultRequestTimeout(Duration.ofMinutes(2)).build();
+  @AutoClose
+  private final CamundaClient client =
+      zeebe.newClientBuilder().defaultRequestTimeout(Duration.ofMinutes(2)).build();
+
+  @SuppressWarnings("unused")
+  static void initTestStandaloneBroker() {
+    zeebe = new TestStandaloneBroker().withRecordingExporter(true);
+  }
 
   @Test
   void shouldIncludeOperationReferenceInExportedCommandRecord() {

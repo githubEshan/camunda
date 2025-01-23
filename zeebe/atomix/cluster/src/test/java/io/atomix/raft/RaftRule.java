@@ -235,12 +235,20 @@ public final class RaftRule extends ExternalResource {
     bootstrapNode(nodeId, configurator);
   }
 
-  public void bootstrapNode(final String nodeId, final Configurator configurator) throws Exception {
+  public CompletableFuture<Void> bootstrapNodeAsync(final String nodeId) {
+    return bootstrapNodeAsync(nodeId, configurator);
+  }
+
+  public CompletableFuture<Void> bootstrapNodeAsync(
+      final String nodeId, final Configurator configurator) {
     final RaftMember member = getRaftMember(nodeId);
-    createServer(member.memberId(), configurator)
+    return createServer(member.memberId(), configurator)
         .bootstrap(getMemberIds())
-        .thenAccept(this::addCommitListener)
-        .get(30, TimeUnit.SECONDS);
+        .thenAccept(this::addCommitListener);
+  }
+
+  public void bootstrapNode(final String nodeId, final Configurator configurator) throws Exception {
+    bootstrapNodeAsync(nodeId, configurator).get(30, TimeUnit.SECONDS);
   }
 
   public void bootstrapNodeWithMemberIds(final String nodeId, final List<MemberId> memberIds)
@@ -270,6 +278,10 @@ public final class RaftRule extends ExternalResource {
 
   public Collection<RaftServer> getServers() {
     return servers.values();
+  }
+
+  public RaftServer getServer(final String id) {
+    return servers.get(id);
   }
 
   public void shutdownServer(final RaftServer raftServer) throws Exception {
@@ -487,6 +499,10 @@ public final class RaftRule extends ExternalResource {
   }
 
   public void awaitCommit(final long commitIndex) throws Exception {
+    awaitCommit(commitIndex, Duration.ofSeconds(30));
+  }
+
+  public void awaitCommit(final long commitIndex, final Duration timeout) throws Exception {
     if (highestCommit >= commitIndex) {
       return;
     }
@@ -494,7 +510,11 @@ public final class RaftRule extends ExternalResource {
     final var commitAwaiter = new CommitAwaiter(commitIndex);
     commitAwaiterRef.set(commitAwaiter);
 
-    commitAwaiter.awaitCommit();
+    commitAwaiter.awaitCommit(timeout);
+  }
+
+  public RaftServer createServer(final MemberId memberId) {
+    return createServer(memberId, configurator);
   }
 
   private RaftServer createServer(final MemberId memberId, final Configurator configurator) {
@@ -530,7 +550,6 @@ public final class RaftRule extends ExternalResource {
             .withMaxSegmentSize(1024 * 10)
             .withFreeDiskSpace(100)
             .withSnapshotStore(snapshotStore);
-
     return builder.build();
   }
 
@@ -558,6 +577,15 @@ public final class RaftRule extends ExternalResource {
     final var leader = getLeader().orElseThrow();
 
     return appendEntry(leader, 1024);
+  }
+
+  public TestAppendListener appendEntryAsync() {
+    final var raftRole = getLeader().orElseThrow().getContext().getRaftRole();
+    if (raftRole instanceof LeaderRole) {
+      return appendEntry(1024, (LeaderRole) raftRole);
+    } else {
+      throw new IllegalStateException("Expected Leader to be a LeaderRole, was: " + raftRole);
+    }
   }
 
   private long appendEntry(final RaftServer leader, final int entrySize) throws Exception {
@@ -641,29 +669,7 @@ public final class RaftRule extends ExternalResource {
     protocolFactory.heal(follower.cluster().getLocalMember().memberId());
   }
 
-  private static final class CommitAwaiter {
-
-    private final long awaitedIndex;
-    private final CountDownLatch latch = new CountDownLatch(1);
-
-    public CommitAwaiter(final long index) {
-      awaitedIndex = index;
-    }
-
-    public boolean reachedCommit(final long currentIndex) {
-      if (awaitedIndex <= currentIndex) {
-        latch.countDown();
-        return true;
-      }
-      return false;
-    }
-
-    public void awaitCommit() throws Exception {
-      latch.await(30, TimeUnit.SECONDS);
-    }
-  }
-
-  private static final class TestAppendListener implements ZeebeLogAppender.AppendListener {
+  public static final class TestAppendListener implements ZeebeLogAppender.AppendListener {
 
     private final CompletableFuture<Long> commitFuture = new CompletableFuture<>();
 
@@ -684,6 +690,36 @@ public final class RaftRule extends ExternalResource {
 
     public long awaitCommit() throws Exception {
       return commitFuture.get(30, TimeUnit.SECONDS);
+    }
+
+    public long awaitCommit(final Duration duration) throws Exception {
+      return commitFuture.get(duration.toMillis(), TimeUnit.MILLISECONDS);
+    }
+  }
+
+  private static final class CommitAwaiter {
+
+    private final long awaitedIndex;
+    private final CountDownLatch latch = new CountDownLatch(1);
+
+    public CommitAwaiter(final long index) {
+      awaitedIndex = index;
+    }
+
+    public boolean reachedCommit(final long currentIndex) {
+      if (awaitedIndex <= currentIndex) {
+        latch.countDown();
+        return true;
+      }
+      return false;
+    }
+
+    public void awaitCommit(final Duration timeout) throws Exception {
+      latch.await(timeout.toMillis(), TimeUnit.MILLISECONDS);
+    }
+
+    public void awaitCommit() throws Exception {
+      latch.await(30, TimeUnit.SECONDS);
     }
   }
 

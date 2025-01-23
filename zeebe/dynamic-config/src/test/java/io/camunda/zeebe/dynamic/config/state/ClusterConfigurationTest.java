@@ -18,11 +18,11 @@ import io.camunda.zeebe.dynamic.config.state.ClusterConfigurationChangeOperation
 import io.camunda.zeebe.dynamic.config.state.ClusterConfigurationChangeOperation.PartitionChangeOperation.PartitionLeaveOperation;
 import io.camunda.zeebe.dynamic.config.state.MemberState.State;
 import io.camunda.zeebe.dynamic.config.state.RoutingState.MessageCorrelation.HashMod;
+import io.camunda.zeebe.dynamic.config.state.RoutingState.RequestHandling.AllPartitions;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
-import java.util.Set;
 import org.junit.jupiter.api.Test;
 
 class ClusterConfigurationTest {
@@ -172,8 +172,8 @@ class ClusterConfigurationTest {
             .addMember(member(1), MemberState.uninitialized())
             .startConfigurationChange(
                 List.of(
-                    new PartitionLeaveOperation(member(1), 1),
-                    new PartitionLeaveOperation(member(2), 2)));
+                    new PartitionLeaveOperation(member(1), 1, 1),
+                    new PartitionLeaveOperation(member(2), 2, 1)));
 
     // when
     final var updatedTopology =
@@ -192,7 +192,7 @@ class ClusterConfigurationTest {
     final var initialTopology =
         ClusterConfiguration.init()
             .addMember(member(1), MemberState.initializeAsActive(Map.of()))
-            .startConfigurationChange(List.of(new PartitionLeaveOperation(member(1), 1)));
+            .startConfigurationChange(List.of(new PartitionLeaveOperation(member(1), 1, 1)));
 
     // when
     final var updatedTopology =
@@ -213,8 +213,8 @@ class ClusterConfigurationTest {
             .addMember(member(1), MemberState.uninitialized())
             .startConfigurationChange(
                 List.of(
-                    new PartitionLeaveOperation(member(1), 1),
-                    new PartitionLeaveOperation(member(2), 2)));
+                    new PartitionLeaveOperation(member(1), 1, 1),
+                    new PartitionLeaveOperation(member(2), 2, 1)));
 
     // when
     final var updatedTopology =
@@ -337,12 +337,13 @@ class ClusterConfigurationTest {
   @Test
   void shouldMergeRoutingState() {
     // given
-    final var oldRoutingState = Optional.of(new RoutingState(1, Set.of(1, 2, 3), new HashMod(3)));
+    final var oldRoutingState =
+        Optional.of(new RoutingState(1, new AllPartitions(3), new HashMod(3)));
     final var oldConfig =
         new ClusterConfiguration(1, Map.of(), Optional.empty(), Optional.empty(), oldRoutingState);
 
     final var newRoutingState =
-        Optional.of(new RoutingState(2, Set.of(1, 2, 3, 4), new HashMod(4)));
+        Optional.of(new RoutingState(2, new AllPartitions(4), new HashMod(4)));
     final var newConfig =
         new ClusterConfiguration(1, Map.of(), Optional.empty(), Optional.empty(), newRoutingState);
 

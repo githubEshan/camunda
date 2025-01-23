@@ -7,14 +7,14 @@
  */
 package io.camunda.operate.webapp.zeebe.operation;
 
-import static io.camunda.operate.entities.ErrorType.JOB_NO_RETRIES;
-import static io.camunda.operate.entities.OperationType.RESOLVE_INCIDENT;
+import static io.camunda.webapps.schema.entities.operation.OperationType.RESOLVE_INCIDENT;
 
-import io.camunda.operate.entities.IncidentEntity;
-import io.camunda.operate.entities.OperationEntity;
-import io.camunda.operate.entities.OperationType;
 import io.camunda.operate.webapp.reader.IncidentReader;
 import io.camunda.operate.webapp.rest.exception.NotFoundException;
+import io.camunda.webapps.schema.entities.operate.ErrorType;
+import io.camunda.webapps.schema.entities.operate.IncidentEntity;
+import io.camunda.webapps.schema.entities.operation.OperationEntity;
+import io.camunda.webapps.schema.entities.operation.OperationType;
 import java.util.Set;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
@@ -41,10 +41,18 @@ public class ResolveIncidentHandler extends AbstractOperationHandler implements 
       return;
     }
 
-    if (incident.getErrorType().equals(JOB_NO_RETRIES)) {
-      zeebeClient.newUpdateRetriesCommand(incident.getJobKey()).retries(1).send().join();
+    final ErrorType errorType = incident.getErrorType();
+    if (errorType != null && errorType.isResolvedViaRetries()) {
+      final var updateRetriesJobCommand =
+          withOperationReference(
+              camundaClient.newUpdateRetriesCommand(incident.getJobKey()).retries(1),
+              operation.getId());
+      updateRetriesJobCommand.send().join();
     }
-    zeebeClient.newResolveIncidentCommand(incident.getKey()).send().join();
+    final var resolveIncidentCommand =
+        withOperationReference(
+            camundaClient.newResolveIncidentCommand(incident.getKey()), operation.getId());
+    resolveIncidentCommand.send().join();
     // mark operation as sent
     markAsSent(operation);
   }

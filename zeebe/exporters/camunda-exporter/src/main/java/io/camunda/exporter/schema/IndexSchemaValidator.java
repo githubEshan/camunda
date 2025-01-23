@@ -7,9 +7,10 @@
  */
 package io.camunda.exporter.schema;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import io.camunda.exporter.exceptions.IndexSchemaValidationException;
-import io.camunda.exporter.schema.descriptors.IndexDescriptor;
-import io.camunda.exporter.schema.descriptors.IndexTemplateDescriptor;
+import io.camunda.webapps.schema.descriptors.IndexDescriptor;
+import io.camunda.webapps.schema.descriptors.IndexTemplateDescriptor;
 import java.util.*;
 import java.util.Map.Entry;
 import java.util.stream.Collectors;
@@ -47,12 +48,7 @@ import org.slf4j.LoggerFactory;
  */
 public class IndexSchemaValidator {
   private static final Logger LOGGER = LoggerFactory.getLogger(IndexSchemaValidator.class);
-
-  private final SchemaManager schemaManager;
-
-  public IndexSchemaValidator(final SchemaManager schemaManager) {
-    this.schemaManager = schemaManager;
-  }
+  private static final ObjectMapper MAPPER = new ObjectMapper();
 
   /**
    * Validates existing indices mappings against index/index template mappings defined.
@@ -63,10 +59,10 @@ public class IndexSchemaValidator {
    * @throws IndexSchemaValidationException if the existing indices cannot be updated with the given
    *     mappings.
    */
-  public Map<IndexDescriptor, Set<IndexMappingProperty>> validateIndexMappings(
-      final Map<String, IndexMapping> mappings, final Set<IndexDescriptor> indexDescriptors)
+  public Map<IndexDescriptor, Collection<IndexMappingProperty>> validateIndexMappings(
+      final Map<String, IndexMapping> mappings, final Collection<IndexDescriptor> indexDescriptors)
       throws IndexSchemaValidationException {
-    final Map<IndexDescriptor, Set<IndexMappingProperty>> newFields = new HashMap<>();
+    final Map<IndexDescriptor, Collection<IndexMappingProperty>> newFields = new HashMap<>();
     for (final IndexDescriptor indexDescriptor : indexDescriptors) {
       final Map<String, IndexMapping> indexMappingsGroup =
           filterIndexMappings(mappings, indexDescriptor);
@@ -83,11 +79,11 @@ public class IndexSchemaValidator {
   private void validateDifferenceAndCollectNewFields(
       final IndexDescriptor indexDescriptor,
       final IndexMappingDifference difference,
-      final Map<IndexDescriptor, Set<IndexMappingProperty>> newFields) {
+      final Map<IndexDescriptor, Collection<IndexMappingProperty>> newFields) {
     if (difference != null && !difference.equal()) {
       LOGGER.debug(
           "Index fields differ from expected. Index name: {}. Difference: {}.",
-          indexDescriptor.getIndexName(),
+          indexDescriptor.getFullQualifiedName(),
           difference);
 
       if (!difference.entriesDiffering().isEmpty()) {
@@ -101,7 +97,7 @@ public class IndexSchemaValidator {
       if (!difference.entriesOnlyOnRight().isEmpty()) {
         LOGGER.info(
             "Index '{}': Field deletion is requested, will be ignored. Fields: {}",
-            indexDescriptor.getIndexName(),
+            indexDescriptor.getFullQualifiedName(),
             difference.entriesOnlyOnRight());
 
       } else if (!difference.entriesOnlyOnLeft().isEmpty()) {
@@ -109,13 +105,14 @@ public class IndexSchemaValidator {
         newFields.put(indexDescriptor, difference.entriesOnlyOnLeft());
       }
     } else {
-      LOGGER.debug("Index fields are up to date for Index '{}'.", indexDescriptor.getIndexName());
+      LOGGER.debug(
+          "Index fields are up to date for Index '{}'.", indexDescriptor.getFullQualifiedName());
     }
   }
 
   private IndexMappingDifference getIndexMappingDifference(
       final IndexDescriptor indexDescriptor, final Map<String, IndexMapping> indexMappingsGroup) {
-    final IndexMapping indexMappingMustBe = schemaManager.readIndex(indexDescriptor);
+    final IndexMapping indexMappingMustBe = IndexMapping.from(indexDescriptor, MAPPER);
 
     final var differences =
         indexMappingsGroup.values().stream()
@@ -132,7 +129,7 @@ public class IndexSchemaValidator {
       throw new IndexSchemaValidationException(
           String.format(
               "Ambiguous schema update. Multiple indices for mapping '%s' has different fields. Differences: '%s'",
-              indexDescriptor.getIndexName(), differences));
+              indexDescriptor.getFullQualifiedName(), differences));
     }
 
     return differences.getFirst();
@@ -167,13 +164,13 @@ public class IndexSchemaValidator {
     if (difference.isLeftDynamic() || difference.isRightDynamic()) {
       LOGGER.debug(
           "Index '{}' is dynamic, ignoring changes found: {}",
-          indexDescriptor.getIndexName(),
+          indexDescriptor.getFullQualifiedName(),
           difference.entriesDiffering());
     } else {
       final String errorMsg =
           String.format(
               "Index name: %s. Not supported index changes are introduced. Data migration is required. Changes found: %s",
-              indexDescriptor.getIndexName(), difference.entriesDiffering());
+              indexDescriptor.getFullQualifiedName(), difference.entriesDiffering());
       LOGGER.error(errorMsg);
       throw new IndexSchemaValidationException(errorMsg);
     }

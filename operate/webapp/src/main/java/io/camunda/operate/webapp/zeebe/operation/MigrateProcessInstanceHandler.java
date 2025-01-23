@@ -8,12 +8,12 @@
 package io.camunda.operate.webapp.zeebe.operation;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import io.camunda.operate.entities.OperationEntity;
-import io.camunda.operate.entities.OperationType;
+import io.camunda.client.api.command.MigrationPlan;
+import io.camunda.client.api.command.MigrationPlanBuilderImpl;
+import io.camunda.client.api.command.MigrationPlanImpl;
 import io.camunda.operate.webapp.rest.dto.operation.MigrationPlanDto;
-import io.camunda.zeebe.client.api.command.MigrationPlan;
-import io.camunda.zeebe.client.api.command.MigrationPlanBuilderImpl;
-import io.camunda.zeebe.client.api.command.MigrationPlanImpl;
+import io.camunda.webapps.schema.entities.operation.OperationEntity;
+import io.camunda.webapps.schema.entities.operation.OperationType;
 import java.util.ArrayList;
 import java.util.Set;
 import org.slf4j.Logger;
@@ -50,7 +50,7 @@ public class MigrateProcessInstanceHandler extends AbstractOperationHandler
         "Operation [{}]: Sending Zeebe migrate command for processInstanceKey [{}]...",
         operation.getId(),
         processInstanceKey);
-    migrate(processInstanceKey, migrationPlanDto);
+    migrate(processInstanceKey, migrationPlanDto, operation.getId());
     markAsSent(operation);
     LOGGER.info(
         "Operation [{}]: Migrate command sent to Zeebe for processInstanceKey [{}]",
@@ -63,7 +63,10 @@ public class MigrateProcessInstanceHandler extends AbstractOperationHandler
     return Set.of(OperationType.MIGRATE_PROCESS_INSTANCE);
   }
 
-  public void migrate(final Long processInstanceKey, final MigrationPlanDto migrationPlanDto) {
+  public void migrate(
+      final Long processInstanceKey,
+      final MigrationPlanDto migrationPlanDto,
+      final String operationId) {
     final long targetProcessDefinitionKey =
         Long.parseLong(migrationPlanDto.getTargetProcessDefinitionKey());
 
@@ -79,10 +82,12 @@ public class MigrateProcessInstanceHandler extends AbstractOperationHandler
                         new MigrationPlanBuilderImpl.MappingInstruction(
                             mapping.getSourceElementId(), mapping.getTargetElementId())));
 
-    zeebeClient
-        .newMigrateProcessInstanceCommand(processInstanceKey)
-        .migrationPlan(migrationPlan)
-        .send()
-        .join();
+    final var migrateProcessInstanceCommand =
+        withOperationReference(
+            camundaClient
+                .newMigrateProcessInstanceCommand(processInstanceKey)
+                .migrationPlan(migrationPlan),
+            operationId);
+    migrateProcessInstanceCommand.send().join();
   }
 }

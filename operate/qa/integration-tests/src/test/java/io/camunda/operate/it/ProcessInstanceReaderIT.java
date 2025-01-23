@@ -7,22 +7,22 @@
  */
 package io.camunda.operate.it;
 
-import static io.camunda.operate.schema.indices.IndexDescriptor.DEFAULT_TENANT_ID;
+import static io.camunda.webapps.schema.entities.AbstractExporterEntity.DEFAULT_TENANT_ID;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
-import io.camunda.operate.entities.OperationEntity;
-import io.camunda.operate.entities.OperationState;
-import io.camunda.operate.entities.listview.ListViewJoinRelation;
-import io.camunda.operate.entities.listview.ProcessInstanceForListViewEntity;
-import io.camunda.operate.entities.listview.ProcessInstanceState;
-import io.camunda.operate.schema.templates.ListViewTemplate;
-import io.camunda.operate.schema.templates.OperationTemplate;
 import io.camunda.operate.store.NotFoundException;
 import io.camunda.operate.util.j5templates.OperateSearchAbstractIT;
 import io.camunda.operate.webapp.elasticsearch.reader.ProcessInstanceReader;
 import io.camunda.operate.webapp.rest.dto.listview.ListViewProcessInstanceDto;
 import io.camunda.operate.webapp.security.UserService;
+import io.camunda.webapps.schema.descriptors.operate.template.ListViewTemplate;
+import io.camunda.webapps.schema.descriptors.operate.template.OperationTemplate;
+import io.camunda.webapps.schema.entities.operate.listview.ListViewJoinRelation;
+import io.camunda.webapps.schema.entities.operate.listview.ProcessInstanceForListViewEntity;
+import io.camunda.webapps.schema.entities.operate.listview.ProcessInstanceState;
+import io.camunda.webapps.schema.entities.operation.OperationEntity;
+import io.camunda.webapps.schema.entities.operation.OperationState;
 import java.time.OffsetDateTime;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -66,7 +66,6 @@ public class ProcessInstanceReaderIT extends OperateSearchAbstractIT {
         indexName, String.valueOf(processInstanceKey), processInstanceData);
 
     operationData = new OperationEntity();
-    operationData.setId("operation-1");
     operationData.setProcessInstanceKey(processInstanceData.getProcessInstanceKey());
     operationData.setUsername(userService.getCurrentUser().getUsername());
     operationData.setState(OperationState.SCHEDULED);

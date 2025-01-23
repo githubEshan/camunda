@@ -8,7 +8,10 @@
 package io.camunda.zeebe.engine.state.mutable;
 
 import io.camunda.zeebe.engine.state.immutable.UserTaskState;
+import io.camunda.zeebe.engine.state.instance.UserTaskIntermediateStateValue;
+import io.camunda.zeebe.engine.state.instance.UserTaskRecordRequestMetadata;
 import io.camunda.zeebe.protocol.impl.record.value.usertask.UserTaskRecord;
+import java.util.function.Consumer;
 
 public interface MutableUserTaskState extends UserTaskState {
 
@@ -19,4 +22,15 @@ public interface MutableUserTaskState extends UserTaskState {
   void updateUserTaskLifecycleState(final long userTaskKey, final LifecycleState newLifecycleState);
 
   void delete(final long userTaskKey);
+
+  void storeIntermediateState(final UserTaskRecord userTask, final LifecycleState lifecycleState);
+
+  void updateIntermediateState(long key, Consumer<UserTaskIntermediateStateValue> updater);
+
+  void deleteIntermediateState(final long userTaskKey);
+
+  void storeRecordRequestMetadata(
+      final long userTaskKey, final UserTaskRecordRequestMetadata recordRequestMetadata);
+
+  void deleteRecordRequestMetadata(final long userTaskKey);
 }

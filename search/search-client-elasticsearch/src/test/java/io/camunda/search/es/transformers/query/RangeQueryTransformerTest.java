@@ -12,8 +12,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 import co.elastic.clients.elasticsearch._types.query_dsl.RangeQuery;
 import io.camunda.search.clients.query.SearchQueryBuilders;
 import io.camunda.search.clients.query.SearchRangeQuery;
+import io.camunda.search.clients.transformers.SearchTransfomer;
 import io.camunda.search.es.transformers.ElasticsearchTransformers;
-import io.camunda.search.transformers.SearchTransfomer;
 import java.util.stream.Stream;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -56,13 +56,7 @@ public class RangeQueryTransformerTest {
             "Query: {'range':{'foo':{'gt':1234}}}"),
         Arguments.arguments(
             SearchQueryBuilders.range().field("foo").format("format").build(),
-            "Query: {'range':{'foo':{'format':'format'}}}"),
-        Arguments.arguments(
-            SearchQueryBuilders.range().field("foo").to("toBar").build(),
-            "Query: {'range':{'foo':{'to':'toBar'}}}"),
-        Arguments.arguments(
-            SearchQueryBuilders.range().field("foo").from("fromBar").build(),
-            "Query: {'range':{'foo':{'from':'fromBar'}}}"));
+            "Query: {'range':{'foo':{'format':'format'}}}"));
   }
 
   @ParameterizedTest

@@ -27,9 +27,6 @@ import com.fasterxml.jackson.annotation.JsonTypeInfo;
 import io.camunda.optimize.dto.optimize.query.report.single.filter.data.FilterDataDto;
 import io.camunda.optimize.dto.optimize.query.report.single.filter.data.variable.data.DashboardVariableFilterSubDataDto;
 import io.camunda.optimize.dto.optimize.query.variable.VariableType;
-import lombok.AccessLevel;
-import lombok.Data;
-import lombok.NoArgsConstructor;
 
 @JsonTypeInfo(
     use = JsonTypeInfo.Id.NAME,
@@ -61,8 +58,6 @@ import lombok.NoArgsConstructor;
   @JsonSubTypes.Type(value = DashboardDateVariableFilterDataDto.class, name = DATE_TYPE),
   @JsonSubTypes.Type(value = DashboardDateVariableFilterDataDto.class, name = DATE_TYPE_LOWERCASE)
 })
-@Data
-@NoArgsConstructor(access = AccessLevel.PROTECTED)
 public abstract class DashboardVariableFilterDataDto implements FilterDataDto {
 
   protected VariableType type;
@@ -74,5 +69,56 @@ public abstract class DashboardVariableFilterDataDto implements FilterDataDto {
     this.name = name;
     this.type = type;
     this.data = data;
+  }
+
+  protected DashboardVariableFilterDataDto() {}
+
+  public VariableType getType() {
+    return type;
+  }
+
+  public void setType(final VariableType type) {
+    this.type = type;
+  }
+
+  public String getName() {
+    return name;
+  }
+
+  public void setName(final String name) {
+    this.name = name;
+  }
+
+  public DashboardVariableFilterSubDataDto getData() {
+    return data;
+  }
+
+  public void setData(final DashboardVariableFilterSubDataDto data) {
+    this.data = data;
+  }
+
+  protected boolean canEqual(final Object other) {
+    return other instanceof DashboardVariableFilterDataDto;
+  }
+
+  @Override
+  public int hashCode() {
+    return org.apache.commons.lang3.builder.HashCodeBuilder.reflectionHashCode(this);
+  }
+
+  @Override
+  public boolean equals(final Object o) {
+    return org.apache.commons.lang3.builder.EqualsBuilder.reflectionEquals(this, o);
+  }
+
+  @Override
+  public String toString() {
+    return "DashboardVariableFilterDataDto(type="
+        + getType()
+        + ", name="
+        + getName()
+        + ", data="
+        + getData()
+        + ")";
   }
 }

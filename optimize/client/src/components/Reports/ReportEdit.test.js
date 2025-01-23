@@ -8,7 +8,7 @@
 
 import {runAllEffects} from 'react';
 import {shallow} from 'enzyme';
-import {useLocation} from 'react-router-dom';
+import {useHistory, useLocation} from 'react-router-dom';
 
 import {updateEntity, createEntity, evaluateReport} from 'services';
 import {nowDirty, nowPristine} from 'saveGuard';
@@ -22,6 +22,7 @@ import {useErrorHandling} from 'hooks';
 jest.mock('react-router-dom', () => ({
   ...jest.requireActual('react-router-dom'),
   useLocation: jest.fn().mockReturnValue({pathname: '/report/1'}),
+  useHistory: jest.fn().mockReturnValue({push: jest.fn()}),
 }));
 
 jest.mock('services', () => {
@@ -39,7 +40,7 @@ jest.mock('notifications', () => ({addNotification: jest.fn()}));
 jest.mock('saveGuard', () => ({nowDirty: jest.fn(), nowPristine: jest.fn()}));
 jest.mock('tracking', () => ({track: jest.fn()}));
 jest.mock('hooks', () => ({
-  ...jest.requireActual('hooks'),
+  useChangedState: jest.requireActual('react').useState,
   useErrorHandling: jest.fn(() => ({
     mightFail: jest.fn().mockImplementation((data, cb) => cb(data)),
   })),
@@ -196,13 +197,13 @@ it('should use original data as result data if report cant be evaluated on cance
 it('should set conflict state when conflict happens on save button click', async () => {
   const conflictedItems = [{id: '1', name: 'alert', type: 'alert'}];
 
-  mightFail.mockImplementationOnce((promise, cb, err) => err({status: 409, conflictedItems}));
+  mightFail.mockImplementationOnce((_promise, _cb, err) => err({status: 409, conflictedItems}));
 
   const node = shallow(<ReportEdit {...props} />);
 
   try {
     node.find('EntityNameForm').simulate('save');
-  } catch (e) {
+  } catch (_e) {
     expect(node.find('ConflictModal').prop('conflict').type).toEqual('save');
     expect(node.find('ConflictModal').prop('conflict').items).toEqual(conflictedItems);
   }
@@ -273,7 +274,7 @@ it('should only resolve the save promise if a decision for conflicts has been ma
   });
   const node = shallow(<ReportEdit {...props} />);
 
-  mightFail.mockImplementationOnce((promise, cb, err) =>
+  mightFail.mockImplementationOnce((_promise, _cb, err) =>
     err({status: 409, conflictedItems: [{id: '1', name: 'alert', type: 'alert'}]})
   );
 
@@ -296,23 +297,25 @@ it('should only resolve the save promise if a decision for conflicts has been ma
 });
 
 it('should go back to a custom route after saving if provided as URL Search Param', async () => {
+  const spy = {push: jest.fn()};
+  useHistory.mockReturnValue(spy);
   useLocation.mockReturnValue({pathname: '/report/1', search: '?returnTo=/dashboard/1/edit'});
   const node = shallow(<ReportEdit {...props} />);
 
   await node.find(EntityNameForm).prop('onSave')();
 
-  expect(node.find('Redirect')).toExist();
-  expect(node.find('Redirect').prop('to')).toBe('/dashboard/1/edit');
+  expect(spy.push).toHaveBeenCalledWith('/dashboard/1/edit');
 });
 
 it('should go back to a custom route after canceling if provided as URL Search Param', async () => {
+  const spy = {push: jest.fn()};
+  useHistory.mockReturnValue(spy);
   useLocation.mockReturnValue({pathname: '/report/1', search: '?returnTo=/dashboard/1/edit'});
   const node = shallow(<ReportEdit {...props} />);
 
   node.find(EntityNameForm).prop('onCancel')({preventDefault: jest.fn()});
 
-  expect(node.find('Redirect')).toExist();
-  expect(node.find('Redirect').prop('to')).toBe('/dashboard/1/edit');
+  expect(spy.push).toHaveBeenCalledWith('/dashboard/1/edit');
 });
 
 it('should show loading indicator if specified by children components', () => {
@@ -329,7 +332,7 @@ it('should show loading indicator if specified by children components', () => {
 
 it('should pass the error to reportRenderer if evaluation fails', async () => {
   const testError = {status: 400, message: 'testError', reportDefinition: report};
-  const mightFail = (promise, cb, err) => err(testError);
+  const mightFail = (_promise, _cb, err) => err(testError);
   useErrorHandling.mockReturnValueOnce({
     mightFail,
   });

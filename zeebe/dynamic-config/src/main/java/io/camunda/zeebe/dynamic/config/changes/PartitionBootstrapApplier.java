@@ -18,6 +18,8 @@ import io.camunda.zeebe.protocol.Protocol;
 import io.camunda.zeebe.scheduler.future.ActorFuture;
 import io.camunda.zeebe.scheduler.future.CompletableActorFuture;
 import io.camunda.zeebe.util.Either;
+import java.util.Map.Entry;
+import java.util.Optional;
 import java.util.function.UnaryOperator;
 
 public class PartitionBootstrapApplier implements MemberOperationApplier {
@@ -26,7 +28,21 @@ public class PartitionBootstrapApplier implements MemberOperationApplier {
   private final int priority;
   private final MemberId memberId;
   private final PartitionChangeExecutor partitionChangeExecutor;
+  private final Optional<DynamicPartitionConfig> config;
   private DynamicPartitionConfig partitionConfig;
+
+  public PartitionBootstrapApplier(
+      final int partitionId,
+      final int priority,
+      final MemberId memberId,
+      final Optional<DynamicPartitionConfig> config,
+      final PartitionChangeExecutor partitionChangeExecutor) {
+    this.partitionId = partitionId;
+    this.priority = priority;
+    this.memberId = memberId;
+    this.config = config;
+    this.partitionChangeExecutor = partitionChangeExecutor;
+  }
 
   public PartitionBootstrapApplier(
       final int partitionId,
@@ -36,6 +52,7 @@ public class PartitionBootstrapApplier implements MemberOperationApplier {
     this.partitionId = partitionId;
     this.priority = priority;
     this.memberId = memberId;
+    config = Optional.empty();
     this.partitionChangeExecutor = partitionChangeExecutor;
   }
 
@@ -51,14 +68,14 @@ public class PartitionBootstrapApplier implements MemberOperationApplier {
     if (partitionId > Protocol.MAXIMUM_PARTITIONS) {
       return Either.left(
           new IllegalArgumentException(
-              "Failed to bootstrap partition '{}'. Partition ID is greater than the maximum allowed partition ID '{}'"
+              "Failed to bootstrap partition '%s'. Partition ID is greater than the maximum allowed partition ID '%s'"
                   .formatted(partitionId, Protocol.MAXIMUM_PARTITIONS)));
     }
 
     if (!isLocalMemberIsActive(currentClusterConfiguration)) {
       return Either.left(
           new IllegalStateException(
-              "Expected to bootstrap partition, but the member '{}' is not active"
+              "Expected to bootstrap partition, but the member '%s' is not active"
                   .formatted(memberId)));
     }
 
@@ -69,25 +86,22 @@ public class PartitionBootstrapApplier implements MemberOperationApplier {
     if (partitionExists(currentClusterConfiguration)) {
       return Either.left(
           new IllegalStateException(
-              "Failed to bootstrap partition '{}'. Partition already exists in the cluster"
+              "Failed to bootstrap partition '%s'. Partition already exists in the cluster"
                   .formatted(partitionId)));
     }
 
     if (!isPartitionIdContiguous(currentClusterConfiguration, partitionId)) {
       return Either.left(
           new IllegalStateException(
-              "Failed to bootstrap partition '{}'. Partition ID is not contiguous"
+              "Failed to bootstrap partition '%s'. Partition ID is not contiguous"
                   .formatted(partitionId)));
     }
 
-    // Let's assume Partition 1 always exists
     partitionConfig =
-        currentClusterConfiguration.members().values().stream()
-            .flatMap(m -> m.partitions().entrySet().stream().filter(p -> p.getKey() == 1))
-            .findFirst()
-            .get()
-            .getValue()
-            .config();
+        config.orElse(
+            getFirstMemberFirstPartitionConfig(currentClusterConfiguration)
+                .orElse(getFallbackPartitionConfig()));
+
     return Either.right(
         memberState ->
             memberState.addPartition(
@@ -113,6 +127,21 @@ public class PartitionBootstrapApplier implements MemberOperationApplier {
             });
 
     return result;
+  }
+
+  private DynamicPartitionConfig getFallbackPartitionConfig() {
+    return DynamicPartitionConfig.init();
+  }
+
+  private Optional<DynamicPartitionConfig> getFirstMemberFirstPartitionConfig(
+      final ClusterConfiguration currentClusterConfiguration) {
+    return currentClusterConfiguration.members().values().stream()
+        .flatMap(m -> m.partitions().entrySet().stream().filter(p -> p.getKey() == 1))
+        .toList()
+        .stream()
+        .findFirst()
+        .map(Entry::getValue)
+        .map(PartitionState::config);
   }
 
   private boolean isLocalMemberIsActive(final ClusterConfiguration currentClusterConfiguration) {

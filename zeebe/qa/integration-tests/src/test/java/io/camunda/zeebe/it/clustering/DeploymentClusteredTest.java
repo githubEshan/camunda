@@ -10,7 +10,7 @@ package io.camunda.zeebe.it.clustering;
 import static io.camunda.zeebe.engine.processing.deployment.distribute.DeploymentRedistributor.DEPLOYMENT_REDISTRIBUTION_INTERVAL;
 import static org.assertj.core.api.Assertions.assertThat;
 
-import io.camunda.zeebe.client.api.response.DeploymentEvent;
+import io.camunda.client.api.response.DeploymentEvent;
 import io.camunda.zeebe.it.util.GrpcClientRule;
 import io.camunda.zeebe.model.bpmn.Bpmn;
 import io.camunda.zeebe.model.bpmn.BpmnModelInstance;
@@ -187,7 +187,7 @@ public final class DeploymentClusteredTest {
     clusteringRule.startBroker(leaderForDeploymentPartition);
 
     // then
-    Awaitility.await("until partition 2 has processed distribute command twice")
+    Awaitility.await("until partition 2 has processed the distribute command once")
         .atMost(Duration.ofMinutes(1))
         .pollInterval(Duration.ofMillis(200))
         .untilAsserted(
@@ -195,8 +195,21 @@ public final class DeploymentClusteredTest {
                 assertThat(
                         RecordingExporter.deploymentRecords(DeploymentIntent.CREATED)
                             .withPartitionId(2)
-                            .limit(2))
-                    .describedAs("expect that deployment is distributed twice")
-                    .hasSize(2));
+                            .limit(1))
+                    .describedAs("expect that deployment is distributed")
+                    .isNotEmpty());
+
+    Awaitility.await("until partition 2 has rejected the second distribute command")
+        .atMost(Duration.ofMinutes(1))
+        .pollInterval(Duration.ofMillis(200))
+        .untilAsserted(
+            () ->
+                assertThat(
+                        RecordingExporter.records()
+                            .onlyCommandRejections()
+                            .withPartitionId(2)
+                            .limit(1))
+                    .describedAs("expect that retried deployment is rejected")
+                    .isNotEmpty());
   }
 }

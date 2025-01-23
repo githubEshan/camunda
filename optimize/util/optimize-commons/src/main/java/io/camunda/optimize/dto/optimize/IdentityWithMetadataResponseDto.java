@@ -12,11 +12,6 @@ import com.fasterxml.jackson.annotation.JsonSubTypes;
 import com.fasterxml.jackson.annotation.JsonTypeInfo;
 import java.util.List;
 import java.util.function.Supplier;
-import lombok.AccessLevel;
-import lombok.Data;
-import lombok.EqualsAndHashCode;
-import lombok.NoArgsConstructor;
-import lombok.ToString;
 import org.apache.commons.lang3.StringUtils;
 
 @JsonTypeInfo(
@@ -28,10 +23,6 @@ import org.apache.commons.lang3.StringUtils;
   @JsonSubTypes.Type(value = UserDto.class, name = "user"),
   @JsonSubTypes.Type(value = GroupDto.class, name = "group"),
 })
-@Data
-@NoArgsConstructor(access = AccessLevel.PROTECTED)
-@ToString(callSuper = true)
-@EqualsAndHashCode(callSuper = true)
 public abstract class IdentityWithMetadataResponseDto extends IdentityDto {
 
   private String name;
@@ -45,6 +36,8 @@ public abstract class IdentityWithMetadataResponseDto extends IdentityDto {
     super(id, type);
     this.name = name;
   }
+
+  protected IdentityWithMetadataResponseDto() {}
 
   @JsonIgnore
   protected abstract List<Supplier<String>> getSearchableDtoFields();
@@ -63,6 +56,39 @@ public abstract class IdentityWithMetadataResponseDto extends IdentityDto {
                         && StringUtils.containsAnyIgnoreCase(searchableField.get(), searchTerm));
   }
 
+  public String getName() {
+    return name;
+  }
+
+  public void setName(final String name) {
+    this.name = name;
+  }
+
+  @Override
+  protected boolean canEqual(final Object other) {
+    return other instanceof IdentityWithMetadataResponseDto;
+  }
+
+  @Override
+  public int hashCode() {
+    return org.apache.commons.lang3.builder.HashCodeBuilder.reflectionHashCode(this);
+  }
+
+  @Override
+  public boolean equals(final Object o) {
+    return org.apache.commons.lang3.builder.EqualsBuilder.reflectionEquals(this, o);
+  }
+
+  @Override
+  public String toString() {
+    return "IdentityWithMetadataResponseDto(super="
+        + super.toString()
+        + ", name="
+        + getName()
+        + ")";
+  }
+
+  @SuppressWarnings("checkstyle:ConstantName")
   public static final class Fields {
 
     public static final String name = "name";

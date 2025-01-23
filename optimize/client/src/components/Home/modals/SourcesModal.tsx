@@ -131,13 +131,17 @@ export default function SourcesModal({
           id="checked"
           key="checked"
           name="checked"
-          ariaLabel="checked"
+          aria-label="checked"
           className={classnames({hidden: !filteredDefinitions.length})}
           indeterminate={allIndeterminate}
           checked={allChecked}
           onSelect={({target}) => {
             const {checked} = target as HTMLInputElement;
-            checked ? deselectAll() : selectAll();
+            if (checked) {
+              deselectAll();
+            } else {
+              selectAll();
+            }
           }}
         />
       ),
@@ -217,14 +221,16 @@ export default function SourcesModal({
                 checked={!!selectedDefinition}
                 id={def.key}
                 name={key}
-                ariaLabel={key}
+                aria-label={key}
                 onSelect={({target}) => {
                   const {checked} = target as HTMLInputElement;
-                  checked
-                    ? setSelected([...selected, removeExtraTenants(format(def))])
-                    : setSelected((selected) =>
-                        selected.filter(({definitionKey}) => def.key !== definitionKey)
-                      );
+                  if (checked) {
+                    setSelected([...selected, removeExtraTenants(format(def))]);
+                  } else {
+                    setSelected((selected) =>
+                      selected.filter(({definitionKey}) => def.key !== definitionKey)
+                    );
+                  }
                 }}
               />,
               key,

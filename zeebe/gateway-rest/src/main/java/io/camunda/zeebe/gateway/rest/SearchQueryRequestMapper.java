@@ -7,36 +7,86 @@
  */
 package io.camunda.zeebe.gateway.rest;
 
+import static io.camunda.search.filter.Operation.eq;
+import static io.camunda.zeebe.gateway.protocol.rest.AuthorizationSearchQuerySortRequest.FieldEnum.OWNER_KEY;
+import static io.camunda.zeebe.gateway.protocol.rest.AuthorizationSearchQuerySortRequest.FieldEnum.OWNER_TYPE;
+import static io.camunda.zeebe.gateway.protocol.rest.AuthorizationSearchQuerySortRequest.FieldEnum.RESOURCE_TYPE;
+import static io.camunda.zeebe.gateway.rest.RequestMapper.getResult;
+import static io.camunda.zeebe.gateway.rest.util.AdvancedSearchFilterUtil.mapToOperations;
 import static io.camunda.zeebe.gateway.rest.validator.ErrorMessages.ERROR_SEARCH_BEFORE_AND_AFTER;
 import static io.camunda.zeebe.gateway.rest.validator.ErrorMessages.ERROR_SORT_FIELD_MUST_NOT_BE_NULL;
 import static io.camunda.zeebe.gateway.rest.validator.ErrorMessages.ERROR_UNKNOWN_SORT_BY;
-import static io.camunda.zeebe.gateway.rest.validator.ErrorMessages.ERROR_UNKNOWN_SORT_ORDER;
+import static io.camunda.zeebe.gateway.rest.validator.RequestValidator.validate;
+import static io.camunda.zeebe.gateway.rest.validator.RequestValidator.validateDate;
 import static java.util.Optional.ofNullable;
 
-import io.camunda.service.search.filter.*;
-import io.camunda.service.search.page.SearchQueryPage;
-import io.camunda.service.search.query.DecisionDefinitionQuery;
-import io.camunda.service.search.query.DecisionRequirementsQuery;
-import io.camunda.service.search.query.FlowNodeInstanceQuery;
-import io.camunda.service.search.query.IncidentQuery;
-import io.camunda.service.search.query.ProcessInstanceQuery;
-import io.camunda.service.search.query.SearchQueryBuilders;
-import io.camunda.service.search.query.TypedSearchQueryBuilder;
-import io.camunda.service.search.query.UserQuery;
-import io.camunda.service.search.query.UserTaskQuery;
-import io.camunda.service.search.sort.DecisionDefinitionSort;
-import io.camunda.service.search.sort.DecisionRequirementsSort;
-import io.camunda.service.search.sort.FlowNodeInstanceSort;
-import io.camunda.service.search.sort.IncidentSort;
-import io.camunda.service.search.sort.ProcessInstanceSort;
-import io.camunda.service.search.sort.SortOption;
-import io.camunda.service.search.sort.SortOptionBuilders;
-import io.camunda.service.search.sort.UserSort;
-import io.camunda.service.search.sort.UserTaskSort;
+import io.camunda.search.entities.DecisionInstanceEntity.DecisionDefinitionType;
+import io.camunda.search.entities.DecisionInstanceEntity.DecisionInstanceState;
+import io.camunda.search.entities.FlowNodeInstanceEntity.FlowNodeState;
+import io.camunda.search.entities.FlowNodeInstanceEntity.FlowNodeType;
+import io.camunda.search.entities.IncidentEntity;
+import io.camunda.search.entities.IncidentEntity.IncidentState;
+import io.camunda.search.entities.UserTaskEntity.UserTaskState;
+import io.camunda.search.filter.AuthorizationFilter;
+import io.camunda.search.filter.DateValueFilter;
+import io.camunda.search.filter.DecisionDefinitionFilter;
+import io.camunda.search.filter.DecisionInstanceFilter;
+import io.camunda.search.filter.DecisionRequirementsFilter;
+import io.camunda.search.filter.FilterBase;
+import io.camunda.search.filter.FilterBuilders;
+import io.camunda.search.filter.FlowNodeInstanceFilter;
+import io.camunda.search.filter.IncidentFilter;
+import io.camunda.search.filter.MappingFilter;
+import io.camunda.search.filter.ProcessDefinitionFilter;
+import io.camunda.search.filter.ProcessInstanceFilter;
+import io.camunda.search.filter.TenantFilter;
+import io.camunda.search.filter.UntypedOperation;
+import io.camunda.search.filter.UsageMetricsFilter;
+import io.camunda.search.filter.UserFilter;
+import io.camunda.search.filter.UserTaskFilter;
+import io.camunda.search.filter.VariableFilter;
+import io.camunda.search.filter.VariableValueFilter;
+import io.camunda.search.page.SearchQueryPage;
+import io.camunda.search.query.AuthorizationQuery;
+import io.camunda.search.query.DecisionDefinitionQuery;
+import io.camunda.search.query.DecisionInstanceQuery;
+import io.camunda.search.query.DecisionRequirementsQuery;
+import io.camunda.search.query.FlowNodeInstanceQuery;
+import io.camunda.search.query.GroupQuery;
+import io.camunda.search.query.IncidentQuery;
+import io.camunda.search.query.MappingQuery;
+import io.camunda.search.query.ProcessDefinitionQuery;
+import io.camunda.search.query.ProcessInstanceQuery;
+import io.camunda.search.query.RoleQuery;
+import io.camunda.search.query.SearchQueryBuilders;
+import io.camunda.search.query.TenantQuery;
+import io.camunda.search.query.TypedSearchQueryBuilder;
+import io.camunda.search.query.UsageMetricsQuery;
+import io.camunda.search.query.UserQuery;
+import io.camunda.search.query.UserTaskQuery;
+import io.camunda.search.query.VariableQuery;
+import io.camunda.search.sort.AuthorizationSort;
+import io.camunda.search.sort.DecisionDefinitionSort;
+import io.camunda.search.sort.DecisionInstanceSort;
+import io.camunda.search.sort.DecisionRequirementsSort;
+import io.camunda.search.sort.FlowNodeInstanceSort;
+import io.camunda.search.sort.GroupSort;
+import io.camunda.search.sort.IncidentSort;
+import io.camunda.search.sort.MappingSort;
+import io.camunda.search.sort.ProcessDefinitionSort;
+import io.camunda.search.sort.ProcessInstanceSort;
+import io.camunda.search.sort.RoleSort;
+import io.camunda.search.sort.SortOption;
+import io.camunda.search.sort.SortOptionBuilders;
+import io.camunda.search.sort.TenantSort;
+import io.camunda.search.sort.UserSort;
+import io.camunda.search.sort.UserTaskSort;
+import io.camunda.search.sort.VariableSort;
 import io.camunda.util.ObjectBuilder;
 import io.camunda.zeebe.gateway.protocol.rest.*;
 import io.camunda.zeebe.gateway.rest.validator.RequestValidator;
 import io.camunda.zeebe.util.Either;
+import jakarta.validation.constraints.NotNull;
 import java.time.OffsetDateTime;
 import java.util.ArrayList;
 import java.util.List;
@@ -50,6 +100,43 @@ public final class SearchQueryRequestMapper {
 
   private SearchQueryRequestMapper() {}
 
+  public static Either<ProblemDetail, UsageMetricsQuery> toUsageMetricsQuery(
+      final String startTime, final String endTime) {
+    return getResult(
+        validate(
+            violations -> {
+              if (startTime == null || endTime == null) {
+                violations.add("The startTime and endTime must both be specified");
+              }
+              validateDate(startTime, "startTime", violations);
+              validateDate(endTime, "endTime", violations);
+            }),
+        () ->
+            new UsageMetricsQuery.Builder()
+                .filter(
+                    new UsageMetricsFilter.Builder()
+                        .startTime(toOffsetDateTime(startTime))
+                        .endTime(toOffsetDateTime(endTime))
+                        .build())
+                .build());
+  }
+
+  public static Either<ProblemDetail, ProcessDefinitionQuery> toProcessDefinitionQuery(
+      final ProcessDefinitionSearchQueryRequest request) {
+    if (request == null) {
+      return Either.right(SearchQueryBuilders.processDefinitionSearchQuery().build());
+    }
+    final var page = toSearchQueryPage(request.getPage());
+    final var sort =
+        toSearchQuerySort(
+            SearchQuerySortRequestMapper.fromProcessDefinitionSearchQuerySortRequest(
+                request.getSort()),
+            SortOptionBuilders::processDefinition,
+            SearchQueryRequestMapper::applyProcessDefinitionSortField);
+    final var filter = toProcessDefinitionFilter(request.getFilter());
+    return buildSearchQuery(filter, sort, page, SearchQueryBuilders::processDefinitionSearchQuery);
+  }
+
   public static Either<ProblemDetail, ProcessInstanceQuery> toProcessInstanceQuery(
       final ProcessInstanceSearchQueryRequest request) {
     if (request == null) {
@@ -58,11 +145,69 @@ public final class SearchQueryRequestMapper {
     final var page = toSearchQueryPage(request.getPage());
     final var sort =
         toSearchQuerySort(
-            request.getSort(),
+            SearchQuerySortRequestMapper.fromProcessInstanceSearchQuerySortRequest(
+                request.getSort()),
             SortOptionBuilders::processInstance,
             SearchQueryRequestMapper::applyProcessInstanceSortField);
     final var filter = toProcessInstanceFilter(request.getFilter());
     return buildSearchQuery(filter, sort, page, SearchQueryBuilders::processInstanceSearchQuery);
+  }
+
+  public static Either<ProblemDetail, RoleQuery> toRoleQuery(final RoleSearchQueryRequest request) {
+    if (request == null) {
+      return Either.right(SearchQueryBuilders.roleSearchQuery().build());
+    }
+    final var page = toSearchQueryPage(request.getPage());
+    final var sort =
+        toSearchQuerySort(
+            SearchQuerySortRequestMapper.fromRoleSearchQuerySortRequest(request.getSort()),
+            SortOptionBuilders::role,
+            SearchQueryRequestMapper::applyRoleSortField);
+    return buildSearchQuery(null, sort, page, SearchQueryBuilders::roleSearchQuery);
+  }
+
+  public static Either<ProblemDetail, GroupQuery> toGroupQuery(
+      final GroupSearchQueryRequest request) {
+    if (request == null) {
+      return Either.right(SearchQueryBuilders.groupSearchQuery().build());
+    }
+    final var page = toSearchQueryPage(request.getPage());
+    final var sort =
+        toSearchQuerySort(
+            SearchQuerySortRequestMapper.fromGroupSearchQuerySortRequest(request.getSort()),
+            SortOptionBuilders::group,
+            SearchQueryRequestMapper::applyGroupSortField);
+    return buildSearchQuery(null, sort, page, SearchQueryBuilders::groupSearchQuery);
+  }
+
+  public static Either<ProblemDetail, TenantQuery> toTenantQuery(
+      final TenantSearchQueryRequest request) {
+    if (request == null) {
+      return Either.right(SearchQueryBuilders.tenantSearchQuery().build());
+    }
+    final var page = toSearchQueryPage(request.getPage());
+    final var sort =
+        toSearchQuerySort(
+            SearchQuerySortRequestMapper.fromTenantSearchQuerySortRequest(request.getSort()),
+            SortOptionBuilders::tenant,
+            SearchQueryRequestMapper::applyTenantSortField);
+    final var filter = toTenantFilter(request.getFilter());
+    return buildSearchQuery(filter, sort, page, SearchQueryBuilders::tenantSearchQuery);
+  }
+
+  public static Either<ProblemDetail, MappingQuery> toMappingQuery(
+      final MappingSearchQueryRequest request) {
+    if (request == null) {
+      return Either.right(SearchQueryBuilders.mappingSearchQuery().build());
+    }
+    final var page = toSearchQueryPage(request.getPage());
+    final var sort =
+        toSearchQuerySort(
+            SearchQuerySortRequestMapper.fromMappingSearchQuerySortRequest(request.getSort()),
+            SortOptionBuilders::mapping,
+            SearchQueryRequestMapper::applyMappingSortField);
+    final var filter = toMappingFilter(request.getFilter());
+    return buildSearchQuery(filter, sort, page, SearchQueryBuilders::mappingSearchQuery);
   }
 
   public static Either<ProblemDetail, DecisionDefinitionQuery> toDecisionDefinitionQuery(
@@ -73,7 +218,8 @@ public final class SearchQueryRequestMapper {
     final var page = toSearchQueryPage(request.getPage());
     final var sort =
         toSearchQuerySort(
-            request.getSort(),
+            SearchQuerySortRequestMapper.fromDecisionDefinitionSearchQuerySortRequest(
+                request.getSort()),
             SortOptionBuilders::decisionDefinition,
             SearchQueryRequestMapper::applyDecisionDefinitionSortField);
     final var filter = toDecisionDefinitionFilter(request.getFilter());
@@ -88,7 +234,8 @@ public final class SearchQueryRequestMapper {
     final var page = toSearchQueryPage(request.getPage());
     final var sort =
         toSearchQuerySort(
-            request.getSort(),
+            SearchQuerySortRequestMapper.fromDecisionRequirementsSearchQuerySortRequest(
+                request.getSort()),
             SortOptionBuilders::decisionRequirements,
             SearchQueryRequestMapper::applyDecisionRequirementsSortField);
     final var filter = toDecisionRequirementsFilter(request.getFilter());
@@ -104,11 +251,90 @@ public final class SearchQueryRequestMapper {
     final var page = toSearchQueryPage(request.getPage());
     final var sort =
         toSearchQuerySort(
-            request.getSort(),
-            SortOptionBuilders::flownodeInstance,
+            SearchQuerySortRequestMapper.fromFlowNodeInstanceSearchQuerySortRequest(
+                request.getSort()),
+            SortOptionBuilders::flowNodeInstance,
             SearchQueryRequestMapper::applyFlownodeInstanceSortField);
     final var filter = toFlownodeInstanceFilter(request.getFilter());
     return buildSearchQuery(filter, sort, page, SearchQueryBuilders::flownodeInstanceSearchQuery);
+  }
+
+  public static Either<ProblemDetail, DecisionInstanceQuery> toDecisionInstanceQuery(
+      final DecisionInstanceSearchQueryRequest request) {
+    if (request == null) {
+      return Either.right(SearchQueryBuilders.decisionInstanceSearchQuery().build());
+    }
+    final var page = toSearchQueryPage(request.getPage());
+    final var sort =
+        toSearchQuerySort(
+            SearchQuerySortRequestMapper.fromDecisionInstanceSearchQuerySortRequest(
+                request.getSort()),
+            SortOptionBuilders::decisionInstance,
+            SearchQueryRequestMapper::applyDecisionInstanceSortField);
+    final var filter = toDecisionInstanceFilter(request.getFilter());
+    return buildSearchQuery(filter, sort, page, SearchQueryBuilders::decisionInstanceSearchQuery);
+  }
+
+  private static DecisionInstanceFilter toDecisionInstanceFilter(
+      final DecisionInstanceFilterRequest filter) {
+    final var builder = FilterBuilders.decisionInstance();
+
+    if (filter != null) {
+      ofNullable(filter.getDecisionInstanceKey()).ifPresent(builder::decisionInstanceKeys);
+      ofNullable(filter.getDecisionInstanceId()).ifPresent(builder::decisionInstanceIds);
+      ofNullable(filter.getState())
+          .map(s -> convertEnum(s, DecisionInstanceState.class))
+          .ifPresent(builder::states);
+      ofNullable(filter.getEvaluationFailure()).ifPresent(builder::evaluationFailures);
+      ofNullable(filter.getEvaluationDate())
+          .map(mapToOperations(OffsetDateTime.class))
+          .ifPresent(builder::evaluationDateOperations);
+      ofNullable(filter.getProcessDefinitionKey()).ifPresent(builder::processDefinitionKeys);
+      ofNullable(filter.getDecisionDefinitionKey())
+          .map(mapToOperations(Long.class))
+          .ifPresent(builder::decisionDefinitionKeyOperations);
+      ofNullable(filter.getDecisionDefinitionId()).ifPresent(builder::decisionDefinitionIds);
+      ofNullable(filter.getDecisionDefinitionName()).ifPresent(builder::decisionDefinitionNames);
+      ofNullable(filter.getDecisionDefinitionVersion())
+          .ifPresent(builder::decisionDefinitionVersions);
+      ofNullable(filter.getDecisionDefinitionType())
+          .map(t -> convertEnum(t, DecisionDefinitionType.class))
+          .ifPresent(builder::decisionTypes);
+      ofNullable(filter.getTenantId()).ifPresent(builder::tenantIds);
+    }
+    return builder.build();
+  }
+
+  private static List<String> applyDecisionInstanceSortField(
+      final DecisionInstanceSearchQuerySortRequest.FieldEnum field,
+      final DecisionInstanceSort.Builder builder) {
+    final List<String> validationErrors = new ArrayList<>();
+    if (field == null) {
+      validationErrors.add(ERROR_SORT_FIELD_MUST_NOT_BE_NULL);
+    } else {
+      switch (field) {
+        case DECISION_INSTANCE_KEY -> builder.decisionInstanceKey();
+        case DECISION_INSTANCE_ID -> builder.decisionInstanceId();
+        case STATE -> builder.state();
+        case EVALUATION_DATE -> builder.evaluationDate();
+        case EVALUATION_FAILURE -> builder.evaluationFailure();
+        case PROCESS_DEFINITION_KEY -> builder.processDefinitionKey();
+        case PROCESS_INSTANCE_KEY -> builder.processInstanceKey();
+        case DECISION_DEFINITION_KEY -> builder.decisionDefinitionKey();
+        case DECISION_DEFINITION_ID -> builder.decisionDefinitionId();
+        case DECISION_DEFINITION_NAME -> builder.decisionDefinitionName();
+        case DECISION_DEFINITION_VERSION -> builder.decisionDefinitionVersion();
+        case DECISION_DEFINITION_TYPE -> builder.decisionDefinitionType();
+        case TENANT_ID -> builder.tenantId();
+        default -> validationErrors.add(ERROR_UNKNOWN_SORT_BY.formatted(field));
+      }
+    }
+    return validationErrors;
+  }
+
+  private static <Q extends Enum<Q>, E extends Enum<E>> E convertEnum(
+      @NotNull final Q sourceEnum, @NotNull final Class<E> targetEnumType) {
+    return Enum.valueOf(targetEnumType, sourceEnum.name());
   }
 
   public static Either<ProblemDetail, UserTaskQuery> toUserTaskQuery(
@@ -120,11 +346,87 @@ public final class SearchQueryRequestMapper {
     final var page = toSearchQueryPage(request.getPage());
     final var sort =
         toSearchQuerySort(
-            request.getSort(),
+            SearchQuerySortRequestMapper.fromUserTaskSearchQuerySortRequest(request.getSort()),
             SortOptionBuilders::userTask,
             SearchQueryRequestMapper::applyUserTaskSortField);
     final var filter = toUserTaskFilter(request.getFilter());
     return buildSearchQuery(filter, sort, page, SearchQueryBuilders::userTaskSearchQuery);
+  }
+
+  public static Either<ProblemDetail, VariableQuery> toUserTaskVariableQuery(
+      final UserTaskVariableSearchQueryRequest request) {
+    if (request == null) {
+      return Either.right(SearchQueryBuilders.variableSearchQuery().build());
+    }
+
+    final var filter = toUserTaskVariableFilter(request.getFilter());
+    final var page = toSearchQueryPage(request.getPage());
+    final var sort =
+        toSearchQuerySort(
+            SearchQuerySortRequestMapper.fromUserTaskVariableSearchQuerySortRequest(
+                request.getSort()),
+            SortOptionBuilders::variable,
+            SearchQueryRequestMapper::applyUserTaskVariableSortField);
+
+    return buildSearchQuery(filter, sort, page, SearchQueryBuilders::variableSearchQuery);
+  }
+
+  private static VariableFilter toUserTaskVariableFilter(
+      final VariableUserTaskFilterRequest filter) {
+    if (filter == null) {
+      return FilterBuilders.variable().build();
+    }
+
+    final var builder = FilterBuilders.variable();
+    ofNullable(filter.getName())
+        .map(mapToOperations(String.class))
+        .ifPresent(builder::nameOperations);
+
+    return builder.build();
+  }
+
+  public static Either<ProblemDetail, VariableQuery> toVariableQuery(
+      final VariableSearchQueryRequest request) {
+
+    if (request == null) {
+      return Either.right(SearchQueryBuilders.variableSearchQuery().build());
+    }
+    final var page = toSearchQueryPage(request.getPage());
+    final var sort =
+        toSearchQuerySort(
+            SearchQuerySortRequestMapper.fromVariableSearchQuerySortRequest(request.getSort()),
+            SortOptionBuilders::variable,
+            SearchQueryRequestMapper::applyVariableSortField);
+    final VariableFilter filter = toVariableFilter(request.getFilter());
+    return buildSearchQuery(filter, sort, page, SearchQueryBuilders::variableSearchQuery);
+  }
+
+  private static VariableFilter toVariableFilter(final VariableFilterRequest filter) {
+    if (filter == null) {
+      return FilterBuilders.variable().build();
+    }
+
+    final var builder = FilterBuilders.variable();
+
+    ofNullable(filter.getProcessInstanceKey())
+        .map(mapToOperations(Long.class))
+        .ifPresent(builder::processInstanceKeyOperations);
+    ofNullable(filter.getScopeKey())
+        .map(mapToOperations(Long.class))
+        .ifPresent(builder::scopeKeyOperations);
+    ofNullable(filter.getVariableKey())
+        .map(mapToOperations(Long.class))
+        .ifPresent(builder::variableKeyOperations);
+    ofNullable(filter.getTenantId()).ifPresent(builder::tenantIds);
+    ofNullable(filter.getIsTruncated()).ifPresent(builder::isTruncated);
+    ofNullable(filter.getName())
+        .map(mapToOperations(String.class))
+        .ifPresent(builder::nameOperations);
+    ofNullable(filter.getValue())
+        .map(mapToOperations(String.class))
+        .ifPresent(builder::valueOperations);
+
+    return builder.build();
   }
 
   public static Either<ProblemDetail, UserQuery> toUserQuery(final UserSearchQueryRequest request) {
@@ -135,7 +437,7 @@ public final class SearchQueryRequestMapper {
     final var page = toSearchQueryPage(request.getPage());
     final var sort =
         toSearchQuerySort(
-            request.getSort(),
+            SearchQuerySortRequestMapper.fromUserSearchQuerySortRequest(request.getSort()),
             SortOptionBuilders::user,
             SearchQueryRequestMapper::applyUserSortField);
     final var filter = toUserFilter(request.getFilter());
@@ -150,11 +452,34 @@ public final class SearchQueryRequestMapper {
     final var page = toSearchQueryPage(request.getPage());
     final var sort =
         toSearchQuerySort(
-            request.getSort(),
+            SearchQuerySortRequestMapper.fromIncidentSearchQuerySortRequest(request.getSort()),
             SortOptionBuilders::incident,
             SearchQueryRequestMapper::applyIncidentSortField);
     final var filter = toIncidentFilter(request.getFilter());
     return buildSearchQuery(filter, sort, page, SearchQueryBuilders::incidentSearchQuery);
+  }
+
+  private static ProcessDefinitionFilter toProcessDefinitionFilter(
+      final ProcessDefinitionFilterRequest filter) {
+    final var builder = FilterBuilders.processDefinition();
+    Optional.ofNullable(filter)
+        .ifPresent(
+            f -> {
+              Optional.ofNullable(f.getProcessDefinitionKey())
+                  .ifPresent(builder::processDefinitionKeys);
+              Optional.ofNullable(f.getName()).ifPresent(builder::names);
+              Optional.ofNullable(f.getResourceName()).ifPresent(builder::resourceNames);
+              Optional.ofNullable(f.getVersion()).ifPresent(builder::versions);
+              Optional.ofNullable(f.getVersionTag()).ifPresent(builder::versionTags);
+              Optional.ofNullable(f.getProcessDefinitionId())
+                  .ifPresent(builder::processDefinitionIds);
+              Optional.ofNullable(f.getTenantId()).ifPresent(builder::tenantIds);
+            });
+    return builder.build();
+  }
+
+  private static OffsetDateTime toOffsetDateTime(final String text) {
+    return StringUtils.isEmpty(text) ? null : OffsetDateTime.parse(text);
   }
 
   private static ProcessInstanceFilter toProcessInstanceFilter(
@@ -162,44 +487,67 @@ public final class SearchQueryRequestMapper {
     final var builder = FilterBuilders.processInstance();
 
     if (filter != null) {
-      ofNullable(filter.getRunning())
-          .ifPresentOrElse(builder::running, () -> builder.running(false));
-      ofNullable(filter.getActive()).ifPresentOrElse(builder::active, () -> builder.active(false));
-      ofNullable(filter.getIncidents())
-          .ifPresentOrElse(builder::incidents, () -> builder.incidents(false));
-      ofNullable(filter.getFinished())
-          .ifPresentOrElse(builder::finished, () -> builder.finished(false));
-      ofNullable(filter.getCompleted())
-          .ifPresentOrElse(builder::completed, () -> builder.completed(false));
-      ofNullable(filter.getCanceled())
-          .ifPresentOrElse(builder::canceled, () -> builder.canceled(false));
-      ofNullable(filter.getRetriesLeft())
-          .ifPresentOrElse(builder::retriesLeft, () -> builder.retriesLeft(false));
-      ofNullable(filter.getErrorMessage()).ifPresent(builder::errorMessage);
-      ofNullable(filter.getActivityId()).ifPresent(builder::activityId);
-      ofNullable(toDateValueFilter(filter.getStartDate())).ifPresent(builder::startDate);
-      ofNullable(toDateValueFilter(filter.getEndDate())).ifPresent(builder::endDate);
-      ofNullable(filter.getBpmnProcessId()).ifPresent(builder::bpmnProcessIds);
+      ofNullable(filter.getProcessInstanceKey())
+          .map(mapToOperations(Long.class))
+          .ifPresent(builder::processInstanceKeyOperations);
+      ofNullable(filter.getProcessDefinitionId())
+          .map(mapToOperations(String.class))
+          .ifPresent(builder::processDefinitionIdOperations);
+      ofNullable(filter.getProcessDefinitionName())
+          .map(mapToOperations(String.class))
+          .ifPresent(builder::processDefinitionNameOperations);
       ofNullable(filter.getProcessDefinitionVersion())
-          .ifPresent(builder::processDefinitionVersions);
-      ofNullable(toProcessInstanceVariableFilter(filter.getVariable()))
-          .ifPresent(builder::variable);
-      ofNullable(filter.getBatchOperationId()).ifPresent(builder::batchOperationIds);
+          .map(mapToOperations(Integer.class))
+          .ifPresent(builder::processDefinitionVersionOperations);
+      ofNullable(filter.getProcessDefinitionVersionTag())
+          .map(mapToOperations(String.class))
+          .ifPresent(builder::processDefinitionVersionTagOperations);
+      ofNullable(filter.getProcessDefinitionKey())
+          .map(mapToOperations(Long.class))
+          .ifPresent(builder::processDefinitionKeyOperations);
       ofNullable(filter.getParentProcessInstanceKey())
-          .ifPresent(builder::parentProcessInstanceKeys);
-      ofNullable(filter.getTenantId()).ifPresent(builder::tenantIds);
+          .map(mapToOperations(Long.class))
+          .ifPresent(builder::parentProcessInstanceKeyOperations);
+      ofNullable(filter.getParentFlowNodeInstanceKey())
+          .map(mapToOperations(Long.class))
+          .ifPresent(builder::parentFlowNodeInstanceKeyOperations);
+      ofNullable(filter.getStartDate())
+          .map(mapToOperations(OffsetDateTime.class))
+          .ifPresent(builder::startDateOperations);
+      ofNullable(filter.getEndDate())
+          .map(mapToOperations(OffsetDateTime.class))
+          .ifPresent(builder::endDateOperations);
+      ofNullable(filter.getState())
+          .map(mapToOperations(String.class))
+          .ifPresent(builder::stateOperations);
+      ofNullable(filter.getHasIncident()).ifPresent(builder::hasIncident);
+      ofNullable(filter.getTenantId())
+          .map(mapToOperations(String.class))
+          .ifPresent(builder::tenantIdOperations);
+      ofNullable(filter.getVariables())
+          .filter(variables -> !variables.isEmpty())
+          .ifPresent(vars -> builder.variables(toVariableValueFiltersForProcessInstance(vars)));
     }
 
     return builder.build();
   }
 
-  private static ProcessInstanceVariableFilter toProcessInstanceVariableFilter(
-      final ProcessInstanceVariableFilterRequest filter) {
-    if (filter != null && filter.getName() != null) {
-      final var builder = FilterBuilders.processInstanceVariable();
-      return builder.name(filter.getName()).values(filter.getValues()).build();
+  private static TenantFilter toTenantFilter(final TenantFilterRequest filter) {
+    final var builder = FilterBuilders.tenant();
+    if (filter != null) {
+      ofNullable(filter.getTenantId()).ifPresent(builder::tenantId);
+      ofNullable(filter.getName()).ifPresent(builder::name);
     }
-    return null;
+    return builder.build();
+  }
+
+  private static MappingFilter toMappingFilter(final MappingFilterRequest filter) {
+    final var builder = FilterBuilders.mapping();
+    if (filter != null) {
+      ofNullable(filter.getClaimName()).ifPresent(builder::claimName);
+      ofNullable(filter.getClaimValue()).ifPresent(builder::claimValue);
+    }
+    return builder.build();
   }
 
   private static DecisionDefinitionFilter toDecisionDefinitionFilter(
@@ -207,12 +555,11 @@ public final class SearchQueryRequestMapper {
     final var builder = FilterBuilders.decisionDefinition();
 
     if (filter != null) {
-      ofNullable(filter.getDecisionKey()).ifPresent(builder::decisionKeys);
-      ofNullable(filter.getDmnDecisionId()).ifPresent(builder::dmnDecisionIds);
-      ofNullable(filter.getDmnDecisionName()).ifPresent(builder::dmnDecisionNames);
+      ofNullable(filter.getDecisionDefinitionKey()).ifPresent(builder::decisionDefinitionKeys);
+      ofNullable(filter.getDecisionDefinitionId()).ifPresent(builder::decisionDefinitionIds);
+      ofNullable(filter.getName()).ifPresent(builder::names);
       ofNullable(filter.getVersion()).ifPresent(builder::versions);
-      ofNullable(filter.getDmnDecisionRequirementsId())
-          .ifPresent(builder::dmnDecisionRequirementsIds);
+      ofNullable(filter.getDecisionRequirementsId()).ifPresent(builder::decisionRequirementsIds);
       ofNullable(filter.getDecisionRequirementsKey()).ifPresent(builder::decisionRequirementsKeys);
       ofNullable(filter.getTenantId()).ifPresent(builder::tenantIds);
     }
@@ -229,11 +576,10 @@ public final class SearchQueryRequestMapper {
             f -> {
               Optional.ofNullable(f.getDecisionRequirementsKey())
                   .ifPresent(builder::decisionRequirementsKeys);
-              Optional.ofNullable(f.getDmnDecisionRequirementsName())
-                  .ifPresent(builder::dmnDecisionRequirementsNames);
+              Optional.ofNullable(f.getDecisionRequirementsName()).ifPresent(builder::names);
               Optional.ofNullable(f.getVersion()).ifPresent(builder::versions);
-              Optional.ofNullable(f.getDmnDecisionRequirementsId())
-                  .ifPresent(builder::dmnDecisionRequirementsIds);
+              Optional.ofNullable(f.getDecisionRequirementsId())
+                  .ifPresent(builder::decisionRequirementsIds);
               Optional.ofNullable(f.getTenantId()).ifPresent(builder::tenantIds);
             });
 
@@ -242,7 +588,7 @@ public final class SearchQueryRequestMapper {
 
   private static FlowNodeInstanceFilter toFlownodeInstanceFilter(
       final FlowNodeInstanceFilterRequest filter) {
-    final var builder = FilterBuilders.flownodeInstance();
+    final var builder = FilterBuilders.flowNodeInstance();
     Optional.ofNullable(filter)
         .ifPresent(
             f -> {
@@ -252,12 +598,15 @@ public final class SearchQueryRequestMapper {
                   .ifPresent(builder::processInstanceKeys);
               Optional.ofNullable(f.getProcessDefinitionKey())
                   .ifPresent(builder::processDefinitionKeys);
-              Optional.ofNullable(f.getState()).ifPresent(builder::states);
-              Optional.ofNullable(f.getType()).ifPresent(builder::types);
+              Optional.ofNullable(f.getProcessDefinitionId())
+                  .ifPresent(builder::processDefinitionIds);
+              Optional.ofNullable(f.getState())
+                  .ifPresent(s -> builder.states(FlowNodeState.valueOf(s.getValue())));
+              Optional.ofNullable(f.getType())
+                  .ifPresent(
+                      t -> builder.types(FlowNodeType.fromZeebeBpmnElementType(t.getValue())));
               Optional.ofNullable(f.getFlowNodeId()).ifPresent(builder::flowNodeIds);
-              Optional.ofNullable(f.getFlowNodeName()).ifPresent(builder::flowNodeNames);
-              Optional.ofNullable(f.getTreePath()).ifPresent(builder::treePaths);
-              Optional.ofNullable(f.getIncident()).ifPresent(builder::incident);
+              Optional.ofNullable(f.getHasIncident()).ifPresent(builder::hasIncident);
               Optional.ofNullable(f.getIncidentKey()).ifPresent(builder::incidentKeys);
               Optional.ofNullable(f.getTenantId()).ifPresent(builder::tenantIds);
             });
@@ -267,62 +616,54 @@ public final class SearchQueryRequestMapper {
   private static UserTaskFilter toUserTaskFilter(final UserTaskFilterRequest filter) {
     final var builder = FilterBuilders.userTask();
 
-    if (filter != null) {
-      // key
-      if (filter.getKey() != null) {
-        builder.keys(filter.getKey());
-      }
-
-      // state
-      if (filter.getState() != null && !filter.getState().isEmpty()) {
-        builder.states(filter.getState());
-      }
-
-      // bpmnProcessId
-      if (filter.getBpmnDefinitionId() != null && !filter.getBpmnDefinitionId().isEmpty()) {
-        builder.bpmnProcessIds(filter.getBpmnDefinitionId());
-      }
-
-      // elementId
-      if (filter.getElementId() != null && !filter.getElementId().isEmpty()) {
-        builder.elementIds(filter.getElementId());
-      }
-
-      // assignee
-      if (filter.getAssignee() != null && !filter.getAssignee().isEmpty()) {
-        builder.assignees(filter.getAssignee());
-      }
-
-      // candidateGroup
-      if (filter.getCandidateGroup() != null && !filter.getCandidateGroup().isEmpty()) {
-        builder.candidateGroups(filter.getCandidateGroup());
-      }
-
-      // candidateUser
-      if (filter.getCandidateUser() != null && !filter.getCandidateUser().isEmpty()) {
-        builder.candidateUsers(filter.getCandidateUser());
-      }
-
-      // processDefinitionKey
-      if (filter.getProcessDefinitionKey() != null) {
-        builder.processDefinitionKeys(filter.getProcessDefinitionKey());
-      }
-
-      // processInstanceKey
-      if (filter.getProcessInstanceKey() != null) {
-        builder.processInstanceKeys(filter.getProcessInstanceKey());
-      }
-
-      // tenantIds
-      if (filter.getTenantIds() != null) {
-        builder.tenantIds(filter.getTenantIds());
-      }
-
-      // priority
-      if (filter.getPriority() != null) {
-        builder.priority(mapPriorityFilter(filter.getPriority()));
-      }
-    }
+    Optional.ofNullable(filter)
+        .ifPresent(
+            f -> {
+              Optional.ofNullable(f.getUserTaskKey()).ifPresent(builder::userTaskKeys);
+              Optional.ofNullable(f.getState())
+                  .map(s -> String.valueOf(UserTaskState.valueOf(s.getValue())))
+                  .ifPresent(builder::states);
+              Optional.ofNullable(f.getProcessDefinitionId()).ifPresent(builder::bpmnProcessIds);
+              Optional.ofNullable(f.getElementId()).ifPresent(builder::elementIds);
+              Optional.ofNullable(f.getAssignee())
+                  .map(mapToOperations(String.class))
+                  .ifPresent(builder::assigneeOperations);
+              Optional.ofNullable(f.getPriority())
+                  .map(mapToOperations(Integer.class))
+                  .ifPresent(builder::priorityOperations);
+              Optional.ofNullable(f.getCandidateGroup())
+                  .map(mapToOperations(String.class))
+                  .ifPresent(builder::candidateGroupOperations);
+              Optional.ofNullable(f.getCandidateUser())
+                  .map(mapToOperations(String.class))
+                  .ifPresent(builder::candidateUserOperations);
+              Optional.ofNullable(f.getProcessDefinitionKey())
+                  .ifPresent(builder::processDefinitionKeys);
+              Optional.ofNullable(f.getProcessInstanceKey())
+                  .ifPresent(builder::processInstanceKeys);
+              Optional.ofNullable(f.getTenantId()).ifPresent(builder::tenantIds);
+              Optional.ofNullable(f.getElementInstanceKey())
+                  .ifPresent(builder::elementInstanceKeys);
+              Optional.ofNullable(f.getProcessInstanceVariables())
+                  .filter(variables -> !variables.isEmpty())
+                  .ifPresent(
+                      vars -> builder.processInstanceVariables(toVariableValueFilters(vars)));
+              Optional.ofNullable(f.getLocalVariables())
+                  .filter(variables -> !variables.isEmpty())
+                  .ifPresent(vars -> builder.localVariables(toVariableValueFilters(vars)));
+              Optional.ofNullable(f.getCreationDate())
+                  .map(mapToOperations(OffsetDateTime.class))
+                  .ifPresent(builder::creationDateOperations);
+              Optional.ofNullable(f.getCompletionDate())
+                  .map(mapToOperations(OffsetDateTime.class))
+                  .ifPresent(builder::completionDateOperations);
+              Optional.ofNullable(f.getDueDate())
+                  .map(mapToOperations(OffsetDateTime.class))
+                  .ifPresent(builder::dueDateOperations);
+              Optional.ofNullable(f.getFollowUpDate())
+                  .map(mapToOperations(OffsetDateTime.class))
+                  .ifPresent(builder::followUpDateOperations);
+            });
 
     return builder.build();
   }
@@ -343,42 +684,130 @@ public final class SearchQueryRequestMapper {
     final var builder = FilterBuilders.incident();
 
     if (filter != null) {
-      ofNullable(filter.getKey()).ifPresent(builder::keys);
-      ofNullable(filter.getState()).ifPresent(builder::states);
-      ofNullable(filter.getProcessInstanceKey()).ifPresent(builder::processInstanceKeys);
+      ofNullable(filter.getIncidentKey()).ifPresent(builder::incidentKeys);
       ofNullable(filter.getProcessDefinitionKey()).ifPresent(builder::processDefinitionKeys);
+      ofNullable(filter.getProcessDefinitionId()).ifPresent(builder::processDefinitionIds);
+      ofNullable(filter.getProcessInstanceKey()).ifPresent(builder::processInstanceKeys);
+      ofNullable(filter.getErrorType())
+          .ifPresent(t -> builder.errorTypes(IncidentEntity.ErrorType.valueOf(t.getValue())));
+      ofNullable(filter.getErrorMessage()).ifPresent(builder::errorMessages);
       ofNullable(filter.getFlowNodeId()).ifPresent(builder::flowNodeIds);
-      ofNullable(filter.getFlowNodeInstanceId()).ifPresent(builder::flowNodeInstanceIds);
-      ofNullable(filter.getTenantId()).ifPresent(builder::tenantIds);
+      ofNullable(filter.getFlowNodeInstanceKey()).ifPresent(builder::flowNodeInstanceKeys);
+      ofNullable(filter.getCreationTime())
+          .ifPresent(t -> builder.creationTime(toDateValueFilter(t)));
+      ofNullable(filter.getState())
+          .ifPresent(s -> builder.states(IncidentState.valueOf(s.getValue())));
       ofNullable(filter.getJobKey()).ifPresent(builder::jobKeys);
-      ofNullable(filter.getType()).ifPresent(builder::types);
-      ofNullable(filter.getHasActiveOperation())
-          .ifPresentOrElse(builder::hasActiveOperation, () -> {});
+      ofNullable(filter.getTenantId()).ifPresent(builder::tenantIds);
     }
     return builder.build();
   }
 
   private static List<String> applyProcessInstanceSortField(
-      final String field, final ProcessInstanceSort.Builder builder) {
+      final ProcessInstanceSearchQuerySortRequest.FieldEnum field,
+      final ProcessInstanceSort.Builder builder) {
     final List<String> validationErrors = new ArrayList<>();
     if (field == null) {
       validationErrors.add(ERROR_SORT_FIELD_MUST_NOT_BE_NULL);
     } else {
       switch (field) {
-        case "key" -> builder.key();
-        case "processName" -> builder.processName();
-        case "processVersion" -> builder.processVersion();
-        case "bpmnProcessId" -> builder.bpmnProcessId();
-        case "parentKey" -> builder.parentKey();
-        case "parentFlowNodeInstanceKey" -> builder.parentFlowNodeInstanceKey();
-        case "startDate" -> builder.startDate();
-        case "endDate" -> builder.endDate();
-        case "state" -> builder.state();
-        case "incident" -> builder.incident();
-        case "hasActiveOperation" -> builder.hasActiveOperation();
-        case "processDefinitionKey" -> builder.processDefinitionKey();
-        case "tenantId" -> builder.tenantId();
-        case "rootInstanceId" -> builder.rootInstanceId();
+        case PROCESS_INSTANCE_KEY -> builder.processInstanceKey();
+        case PROCESS_DEFINITION_ID -> builder.processDefinitionId();
+        case PROCESS_DEFINITION_NAME -> builder.processDefinitionName();
+        case PROCESS_DEFINITION_VERSION -> builder.processDefinitionVersion();
+        case PROCESS_DEFINITION_VERSION_TAG -> builder.processDefinitionVersionTag();
+        case PROCESS_DEFINITION_KEY -> builder.processDefinitionKey();
+        case PARENT_PROCESS_INSTANCE_KEY -> builder.parentProcessInstanceKey();
+        case PARENT_FLOW_NODE_INSTANCE_KEY -> builder.parentFlowNodeInstanceKey();
+        case START_DATE -> builder.startDate();
+        case END_DATE -> builder.endDate();
+        case STATE -> builder.state();
+        case HAS_INCIDENT -> builder.hasIncident();
+        case TENANT_ID -> builder.tenantId();
+        default -> validationErrors.add(ERROR_UNKNOWN_SORT_BY.formatted(field));
+      }
+    }
+    return validationErrors;
+  }
+
+  private static List<String> applyProcessDefinitionSortField(
+      final ProcessDefinitionSearchQuerySortRequest.FieldEnum field,
+      final ProcessDefinitionSort.Builder builder) {
+    final List<String> validationErrors = new ArrayList<>();
+    if (field == null) {
+      validationErrors.add(ERROR_SORT_FIELD_MUST_NOT_BE_NULL);
+    } else {
+      switch (field) {
+        case PROCESS_DEFINITION_KEY -> builder.processDefinitionKey();
+        case NAME -> builder.name();
+        case RESOURCE_NAME -> builder.resourceName();
+        case VERSION -> builder.version();
+        case VERSION_TAG -> builder.versionTag();
+        case PROCESS_DEFINITION_ID -> builder.processDefinitionId();
+        case TENANT_ID -> builder.tenantId();
+        default -> validationErrors.add(ERROR_UNKNOWN_SORT_BY.formatted(field));
+      }
+    }
+    return validationErrors;
+  }
+
+  private static List<String> applyRoleSortField(
+      final RoleSearchQuerySortRequest.FieldEnum field, final RoleSort.Builder builder) {
+    final List<String> validationErrors = new ArrayList<>();
+    if (field == null) {
+      validationErrors.add(ERROR_SORT_FIELD_MUST_NOT_BE_NULL);
+    } else {
+      switch (field) {
+        case ROLE_KEY -> builder.roleKey();
+        case NAME -> builder.name();
+        default -> validationErrors.add(ERROR_UNKNOWN_SORT_BY.formatted(field));
+      }
+    }
+    return validationErrors;
+  }
+
+  private static List<String> applyGroupSortField(
+      final GroupSearchQuerySortRequest.FieldEnum field, final GroupSort.Builder builder) {
+    final List<String> validationErrors = new ArrayList<>();
+    if (field == null) {
+      validationErrors.add(ERROR_SORT_FIELD_MUST_NOT_BE_NULL);
+    } else {
+      switch (field) {
+        case GROUP_KEY -> builder.groupKey();
+        case NAME -> builder.name();
+        default -> validationErrors.add(ERROR_UNKNOWN_SORT_BY.formatted(field));
+      }
+    }
+    return validationErrors;
+  }
+
+  private static List<String> applyTenantSortField(
+      final TenantSearchQuerySortRequest.FieldEnum field, final TenantSort.Builder builder) {
+    final List<String> validationErrors = new ArrayList<>();
+    if (field == null) {
+      validationErrors.add(ERROR_SORT_FIELD_MUST_NOT_BE_NULL);
+    } else {
+      switch (field) {
+        case KEY -> builder.tenantKey();
+        case NAME -> builder.name();
+        case TENANT_ID -> builder.tenantId();
+        default -> validationErrors.add(ERROR_UNKNOWN_SORT_BY.formatted(field));
+      }
+    }
+    return validationErrors;
+  }
+
+  private static List<String> applyMappingSortField(
+      final MappingSearchQuerySortRequest.FieldEnum field, final MappingSort.Builder builder) {
+    final List<String> validationErrors = new ArrayList<>();
+    if (field == null) {
+      validationErrors.add(ERROR_SORT_FIELD_MUST_NOT_BE_NULL);
+    } else {
+      switch (field) {
+        case MAPPING_KEY -> builder.mappingKey();
+        case CLAIM_NAME -> builder.claimName();
+        case CLAIM_VALUE -> builder.claimValue();
+        case NAME -> builder.name();
         default -> validationErrors.add(ERROR_UNKNOWN_SORT_BY.formatted(field));
       }
     }
@@ -386,19 +815,20 @@ public final class SearchQueryRequestMapper {
   }
 
   private static List<String> applyDecisionDefinitionSortField(
-      final String field, final DecisionDefinitionSort.Builder builder) {
+      final DecisionDefinitionSearchQuerySortRequest.FieldEnum field,
+      final DecisionDefinitionSort.Builder builder) {
     final List<String> validationErrors = new ArrayList<>();
     if (field == null) {
       validationErrors.add(ERROR_SORT_FIELD_MUST_NOT_BE_NULL);
     } else {
       switch (field) {
-        case "decisionKey" -> builder.decisionKey();
-        case "dmnDecisionId" -> builder.dmnDecisionId();
-        case "dmnDecisionName" -> builder.dmnDecisionName();
-        case "version" -> builder.version();
-        case "dmnDecisionRequirementsId" -> builder.dmnDecisionRequirementsId();
-        case "decisionRequirementsKey" -> builder.decisionRequirementsKey();
-        case "tenantId" -> builder.tenantId();
+        case DECISION_DEFINITION_KEY -> builder.decisionDefinitionKey();
+        case DECISION_DEFINITION_ID -> builder.decisionDefinitionId();
+        case NAME -> builder.name();
+        case VERSION -> builder.version();
+        case DECISION_REQUIREMENTS_ID -> builder.decisionRequirementsId();
+        case DECISION_REQUIREMENTS_KEY -> builder.decisionRequirementsKey();
+        case TENANT_ID -> builder.tenantId();
         default -> validationErrors.add(ERROR_UNKNOWN_SORT_BY.formatted(field));
       }
     }
@@ -406,17 +836,18 @@ public final class SearchQueryRequestMapper {
   }
 
   private static List<String> applyDecisionRequirementsSortField(
-      final String field, final DecisionRequirementsSort.Builder builder) {
+      final DecisionRequirementsSearchQuerySortRequest.FieldEnum field,
+      final DecisionRequirementsSort.Builder builder) {
     final List<String> validationErrors = new ArrayList<>();
     if (field == null) {
       validationErrors.add(ERROR_SORT_FIELD_MUST_NOT_BE_NULL);
     } else {
       switch (field) {
-        case "decisionRequirementsKey" -> builder.decisionRequirementsKey();
-        case "dmnDecisionRequirementsName" -> builder.dmnDecisionRequirementsName();
-        case "version" -> builder.version();
-        case "dmnDecisionRequirementsId" -> builder.dmnDecisionRequirementsId();
-        case "tenantId" -> builder.tenantId();
+        case DECISION_REQUIREMENTS_KEY -> builder.decisionRequirementsKey();
+        case DECISION_REQUIREMENTS_NAME -> builder.name();
+        case VERSION -> builder.version();
+        case DECISION_REQUIREMENTS_ID -> builder.decisionRequirementsId();
+        case TENANT_ID -> builder.tenantId();
         default -> validationErrors.add(ERROR_UNKNOWN_SORT_BY.formatted(field));
       }
     }
@@ -424,28 +855,49 @@ public final class SearchQueryRequestMapper {
   }
 
   private static List<String> applyFlownodeInstanceSortField(
-      final String field, final FlowNodeInstanceSort.Builder builder) {
-    final List<String> validationErrors = new ArrayList<>();
-    return validationErrors;
-  }
-
-  private static List<String> applyIncidentSortField(
-      final String field, final IncidentSort.Builder builder) {
+      final FlowNodeInstanceSearchQuerySortRequest.FieldEnum field,
+      final FlowNodeInstanceSort.Builder builder) {
     final List<String> validationErrors = new ArrayList<>();
     if (field == null) {
       validationErrors.add(ERROR_SORT_FIELD_MUST_NOT_BE_NULL);
     } else {
       switch (field) {
-        case "key" -> builder.key();
-        case "type" -> builder.type();
-        case "state" -> builder.state();
-        case "creationTime" -> builder.creationTime();
-        case "processInstanceKey" -> builder.processInstanceKey();
-        case "processDefinitionKey" -> builder.processDefinitionKey();
-        case "flowNodeInstanceId" -> builder.flowNodeInstanceId();
-        case "flowNodeId" -> builder.flowNodeId();
-        case "jobKey" -> builder.jobKey();
-        case "tenantId" -> builder.tenantId();
+        case FLOW_NODE_INSTANCE_KEY -> builder.flowNodeInstanceKey();
+        case PROCESS_INSTANCE_KEY -> builder.processInstanceKey();
+        case PROCESS_DEFINITION_KEY -> builder.processDefinitionKey();
+        case PROCESS_DEFINITION_ID -> builder.processDefinitionId();
+        case START_DATE -> builder.startDate();
+        case END_DATE -> builder.endDate();
+        case FLOW_NODE_ID -> builder.flowNodeId();
+        case TYPE -> builder.type();
+        case STATE -> builder.state();
+        case INCIDENT_KEY -> builder.incidentKey();
+        case TENANT_ID -> builder.tenantId();
+        default -> validationErrors.add(ERROR_UNKNOWN_SORT_BY.formatted(field));
+      }
+    }
+    return validationErrors;
+  }
+
+  private static List<String> applyIncidentSortField(
+      final IncidentSearchQuerySortRequest.FieldEnum field, final IncidentSort.Builder builder) {
+    final List<String> validationErrors = new ArrayList<>();
+    if (field == null) {
+      validationErrors.add(ERROR_SORT_FIELD_MUST_NOT_BE_NULL);
+    } else {
+      switch (field) {
+        case INCIDENT_KEY -> builder.incidentKey();
+        case PROCESS_DEFINITION_KEY -> builder.processDefinitionKey();
+        case PROCESS_DEFINITION_ID -> builder.processDefinitionId();
+        case PROCESS_INSTANCE_KEY -> builder.processInstanceKey();
+        case ERROR_TYPE -> builder.errorType();
+        case ERROR_MESSAGE -> builder.errorMessage();
+        case FLOW_NODE_ID -> builder.flowNodeId();
+        case FLOW_NODE_INSTANCE_KEY -> builder.flowNodeInstanceKey();
+        case CREATION_TIME -> builder.creationTime();
+        case STATE -> builder.state();
+        case JOB_KEY -> builder.jobKey();
+        case TENANT_ID -> builder.tenantId();
         default -> validationErrors.add(ERROR_UNKNOWN_SORT_BY.formatted(field));
       }
     }
@@ -453,15 +905,56 @@ public final class SearchQueryRequestMapper {
   }
 
   private static List<String> applyUserTaskSortField(
-      final String field, final UserTaskSort.Builder builder) {
+      final UserTaskSearchQuerySortRequest.FieldEnum field, final UserTaskSort.Builder builder) {
     final List<String> validationErrors = new ArrayList<>();
     if (field == null) {
       validationErrors.add(ERROR_SORT_FIELD_MUST_NOT_BE_NULL);
     } else {
       switch (field) {
-        case "creationDate" -> builder.creationDate();
-        case "completionDate" -> builder.completionDate();
-        case "priority" -> builder.priority();
+        case CREATION_DATE -> builder.creationDate();
+        case COMPLETION_DATE -> builder.completionDate();
+        case FOLLOW_UP_DATE -> builder.followUpDate();
+        case DUE_DATE -> builder.dueDate();
+        case PRIORITY -> builder.priority();
+        default -> validationErrors.add(ERROR_UNKNOWN_SORT_BY.formatted(field));
+      }
+    }
+    return validationErrors;
+  }
+
+  private static List<String> applyVariableSortField(
+      final VariableSearchQuerySortRequest.FieldEnum field, final VariableSort.Builder builder) {
+    final List<String> validationErrors = new ArrayList<>();
+    if (field == null) {
+      validationErrors.add(ERROR_SORT_FIELD_MUST_NOT_BE_NULL);
+    } else {
+      switch (field) {
+        case VALUE -> builder.value();
+        case NAME -> builder.name();
+        case TENANT_ID -> builder.tenantId();
+        case VARIABLE_KEY -> builder.variableKey();
+        case SCOPE_KEY -> builder.scopeKey();
+        case PROCESS_INSTANCE_KEY -> builder.processInstanceKey();
+        default -> validationErrors.add(ERROR_UNKNOWN_SORT_BY.formatted(field));
+      }
+    }
+    return validationErrors;
+  }
+
+  private static List<String> applyUserTaskVariableSortField(
+      final UserTaskVariableSearchQuerySortRequest.FieldEnum field,
+      final VariableSort.Builder builder) {
+    final List<String> validationErrors = new ArrayList<>();
+    if (field == null) {
+      validationErrors.add(ERROR_SORT_FIELD_MUST_NOT_BE_NULL);
+    } else {
+      switch (field) {
+        case VALUE -> builder.value();
+        case NAME -> builder.name();
+        case TENANT_ID -> builder.tenantId();
+        case VARIABLE_KEY -> builder.variableKey();
+        case SCOPE_KEY -> builder.scopeKey();
+        case PROCESS_INSTANCE_KEY -> builder.processInstanceKey();
         default -> validationErrors.add(ERROR_UNKNOWN_SORT_BY.formatted(field));
       }
     }
@@ -469,15 +962,15 @@ public final class SearchQueryRequestMapper {
   }
 
   private static List<String> applyUserSortField(
-      final String field, final UserSort.Builder builder) {
+      final UserSearchQuerySortRequest.FieldEnum field, final UserSort.Builder builder) {
     final List<String> validationErrors = new ArrayList<>();
     if (field == null) {
       validationErrors.add(ERROR_SORT_FIELD_MUST_NOT_BE_NULL);
     } else {
       switch (field) {
-        case "username" -> builder.username();
-        case "name" -> builder.name();
-        case "email" -> builder.email();
+        case USERNAME -> builder.username();
+        case NAME -> builder.name();
+        case EMAIL -> builder.email();
         default -> validationErrors.add(ERROR_UNKNOWN_SORT_BY.formatted(field));
       }
     }
@@ -485,28 +978,39 @@ public final class SearchQueryRequestMapper {
   }
 
   private static List<VariableValueFilter> toVariableValueFilters(
-      final List<VariableValueFilterRequest> filters) {
+      final List<UserTaskVariableFilterRequest> filters) {
+
     if (filters != null && !filters.isEmpty()) {
-      return filters.stream().map(SearchQueryRequestMapper::toVariableValueFilter).toList();
+      return filters.stream()
+          .map(
+              filter -> {
+                final var builder = new VariableValueFilter.Builder().name(filter.getName());
+                if (filter.getValue() != null) {
+                  builder.valueOperation(UntypedOperation.of(eq(filter.getValue())));
+                }
+                return builder.build();
+              })
+          .toList();
     }
+
     return null;
   }
 
-  private static VariableValueFilter toVariableValueFilter(
-      final VariableValueFilterRequest filter) {
-    return Optional.ofNullable(filter)
-        .map(
-            f ->
-                FilterBuilders.variableValue()
-                    .name(f.getName())
-                    .eq(f.getEq())
-                    .neq(f.getNeq())
-                    .gt(f.getGt())
-                    .gte(f.getGte())
-                    .lt(f.getLt())
-                    .lte(f.getLte())
-                    .build())
-        .orElse(null);
+  private static List<VariableValueFilter> toVariableValueFiltersForProcessInstance(
+      final List<ProcessInstanceVariableFilterRequest> filters) {
+
+    if (filters != null && !filters.isEmpty()) {
+      return filters.stream()
+          .map(
+              filter ->
+                  new VariableValueFilter.Builder()
+                      .name(filter.getName())
+                      .valueOperation(UntypedOperation.of(eq(filter.getValue())))
+                      .build())
+          .toList();
+    }
+
+    return null;
   }
 
   private static Either<List<String>, SearchQueryPage> toSearchQueryPage(
@@ -531,17 +1035,17 @@ public final class SearchQueryRequestMapper {
                     .searchBefore(searchBefore)));
   }
 
-  private static <T, B extends SortOption.AbstractBuilder<B> & ObjectBuilder<T>>
+  private static <T, B extends SortOption.AbstractBuilder<B> & ObjectBuilder<T>, F>
       Either<List<String>, T> toSearchQuerySort(
-          final List<SearchQuerySortRequest> sorting,
+          final List<SearchQuerySortRequest<F>> sorting,
           final Supplier<B> builderSupplier,
-          final BiFunction<String, B, List<String>> sortFieldMapper) {
+          final BiFunction<F, B, List<String>> sortFieldMapper) {
     if (sorting != null && !sorting.isEmpty()) {
       final List<String> validationErrors = new ArrayList<>();
       final var builder = builderSupplier.get();
-      for (final SearchQuerySortRequest sort : sorting) {
-        validationErrors.addAll(sortFieldMapper.apply(sort.getField(), builder));
-        validationErrors.addAll(applySortOrder(sort.getOrder(), builder));
+      for (final SearchQuerySortRequest<F> sort : sorting) {
+        validationErrors.addAll(sortFieldMapper.apply(sort.field(), builder));
+        applySortOrder(sort.order(), builder);
       }
 
       return validationErrors.isEmpty()
@@ -570,21 +1074,19 @@ public final class SearchQueryRequestMapper {
       validationErrors.addAll(page.getLeft());
     }
 
-    return RequestMapper.getResult(
+    return getResult(
         RequestValidator.createProblemDetail(validationErrors),
         () ->
             queryBuilderSupplier.get().page(page.get()).filter(filter).sort(sorting.get()).build());
   }
 
-  private static List<String> applySortOrder(
-      final String order, final SortOption.AbstractBuilder<?> builder) {
-    final List<String> validationErrors = new ArrayList<>();
-    switch (order.toLowerCase()) {
-      case "asc" -> builder.asc();
-      case "desc" -> builder.desc();
-      default -> validationErrors.add(ERROR_UNKNOWN_SORT_ORDER.formatted(order));
+  private static void applySortOrder(
+      final SortOrderEnum order, final SortOption.AbstractBuilder<?> builder) {
+    if (order == SortOrderEnum.DESC) {
+      builder.desc();
+    } else {
+      builder.asc();
     }
-    return validationErrors;
   }
 
   private static Object[] toArrayOrNull(final List<Object> values) {
@@ -603,12 +1105,61 @@ public final class SearchQueryRequestMapper {
     return new DateValueFilter.Builder().before(date).after(date).build();
   }
 
-  private static ComparableValueFilter mapPriorityFilter(final PriorityValueFilter priority) {
-    return new ComparableValueFilter.Builder()
-        .eq(priority.getEq())
-        .gt(priority.getGt())
-        .lt(priority.getLt())
-        .lte(priority.getLte())
+  private static DateValueFilter toDateValueFilter(final String after, final String before) {
+    final Optional<OffsetDateTime> beforeDateTime = ofNullable(before).map(OffsetDateTime::parse);
+    final Optional<OffsetDateTime> afterDateTime =
+        Optional.ofNullable(after).map(OffsetDateTime::parse);
+    if (beforeDateTime.isEmpty() && afterDateTime.isEmpty()) {
+      return null;
+    }
+    return new DateValueFilter.Builder()
+        .before(beforeDateTime.orElse(null))
+        .after(afterDateTime.orElse(null))
         .build();
+  }
+
+  public static Either<ProblemDetail, AuthorizationQuery> toAuthorizationQuery(
+      final AuthorizationSearchQueryRequest request) {
+    if (request == null) {
+      return Either.right(SearchQueryBuilders.authorizationSearchQuery().build());
+    }
+
+    final var page = toSearchQueryPage(request.getPage());
+    final var sort =
+        toSearchQuerySort(
+            SearchQuerySortRequestMapper.fromAuthorizationSearchQuerySortRequest(request.getSort()),
+            SortOptionBuilders::authorization,
+            SearchQueryRequestMapper::applyAuthorizationSortField);
+    final var filter = toAuthorizationFilter(request.getFilter());
+    return buildSearchQuery(filter, sort, page, SearchQueryBuilders::authorizationSearchQuery);
+  }
+
+  private static List<String> applyAuthorizationSortField(
+      final AuthorizationSearchQuerySortRequest.FieldEnum field,
+      final AuthorizationSort.Builder builder) {
+    final List<String> validationErrors = new ArrayList<>();
+    if (field == null) {
+      validationErrors.add(ERROR_SORT_FIELD_MUST_NOT_BE_NULL);
+    } else {
+      switch (field) {
+        case OWNER_TYPE -> builder.ownerType();
+        case OWNER_KEY -> builder.ownerKey();
+        case RESOURCE_TYPE -> builder.resourceType();
+        default -> validationErrors.add(ERROR_UNKNOWN_SORT_BY.formatted(field));
+      }
+    }
+    return validationErrors;
+  }
+
+  private static AuthorizationFilter toAuthorizationFilter(
+      final AuthorizationFilterRequest filter) {
+    return Optional.ofNullable(filter)
+        .map(
+            f ->
+                FilterBuilders.authorization()
+                    .ownerType(f.getOwnerType() == null ? null : f.getOwnerType().getValue())
+                    .ownerKeys(f.getOwnerKey())
+                    .build())
+        .orElse(null);
   }
 }

@@ -9,8 +9,8 @@
 import {useEffect, useRef, useState} from 'react';
 import {useTranslation} from 'react-i18next';
 import {observer} from 'mobx-react-lite';
-import {editor} from 'monaco-editor';
-import {isValidJSON} from 'modules/utils/isValidJSON';
+import type {editor} from 'monaco-editor';
+import {isValidJSON} from 'modules/utils/jsonUtils';
 import {Modal} from 'modules/components/Modal';
 import {themeStore} from 'modules/stores/theme';
 import Editor from '@monaco-editor/react';

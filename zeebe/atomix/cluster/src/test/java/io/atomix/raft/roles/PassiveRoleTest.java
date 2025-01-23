@@ -35,6 +35,7 @@ import io.atomix.raft.protocol.VersionedAppendRequest;
 import io.atomix.raft.storage.RaftStorage;
 import io.atomix.raft.storage.log.IndexedRaftLogEntry;
 import io.atomix.raft.storage.log.RaftLog;
+import io.camunda.zeebe.journal.CheckedJournalException;
 import io.camunda.zeebe.journal.JournalException;
 import io.camunda.zeebe.journal.JournalException.InvalidChecksum;
 import io.camunda.zeebe.snapshots.PersistedSnapshot;
@@ -106,7 +107,7 @@ public class PassiveRoleTest {
   }
 
   @Test
-  public void shouldFlushAfterAppendRequest() {
+  public void shouldFlushAfterAppendRequest() throws CheckedJournalException {
     // given
     final var entries =
         List.of(
@@ -136,7 +137,7 @@ public class PassiveRoleTest {
   }
 
   @Test
-  public void shouldFlushAfterPartiallyAppendedRequest() {
+  public void shouldFlushAfterPartiallyAppendedRequest() throws CheckedJournalException {
     // given
     final var entries =
         List.of(
@@ -166,7 +167,7 @@ public class PassiveRoleTest {
   }
 
   @Test
-  public void shouldNotFlushIfNoEntryIsAppended() {
+  public void shouldNotFlushIfNoEntryIsAppended() throws CheckedJournalException {
     // given
     final var entries = List.of(new ReplicatableJournalRecord(1, 1, 1, new byte[1]));
     final VersionedAppendRequest request =
@@ -192,7 +193,7 @@ public class PassiveRoleTest {
   }
 
   @Test
-  public void shouldFlushEventWithFailure() {
+  public void shouldFlushEventWithFailure() throws CheckedJournalException {
     // given
     final var entries =
         List.of(
@@ -223,7 +224,7 @@ public class PassiveRoleTest {
   }
 
   @Test
-  public void shouldAppendOldVersion() {
+  public void shouldAppendOldVersion() throws CheckedJournalException {
     // given
     final var entries = List.of(new PersistedRaftRecord(1, 1, 1, 1, new byte[1]));
     final var request = new AppendRequest(2, "a", 0, 0, entries, 1);
@@ -236,5 +237,19 @@ public class PassiveRoleTest {
 
     // then
     assertThat(response.succeeded()).isTrue();
+  }
+
+  @Test
+  public void shouldCompleteFutureWithErrorIfAppendFails() throws CheckedJournalException {
+    // given
+    final var entries = List.of(new PersistedRaftRecord(1, 1, 1, 1, new byte[1]));
+    final var request = new AppendRequest(2, "a", 0, 0, entries, 1);
+    when(log.append(any(PersistedRaftRecord.class))).thenThrow(new IllegalStateException("error"));
+
+    // when
+    final var result =
+        role.handleAppend(ProtocolVersionHandler.transform(request)).toCompletableFuture().join();
+    // then
+    assertThat(result.succeeded()).isFalse();
   }
 }

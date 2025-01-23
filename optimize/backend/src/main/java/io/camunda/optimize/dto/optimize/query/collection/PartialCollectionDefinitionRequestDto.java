@@ -8,19 +8,57 @@
 package io.camunda.optimize.dto.optimize.query.collection;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
-import lombok.AllArgsConstructor;
-import lombok.Data;
-import lombok.NoArgsConstructor;
 
-@NoArgsConstructor
-@AllArgsConstructor
 @JsonInclude(JsonInclude.Include.NON_NULL)
-@Data
 public class PartialCollectionDefinitionRequestDto {
+
   protected String name;
   protected PartialCollectionDataDto data;
 
   public PartialCollectionDefinitionRequestDto(final String name) {
     this.name = name;
+  }
+
+  public PartialCollectionDefinitionRequestDto(
+      final String name, final PartialCollectionDataDto data) {
+    this.name = name;
+    this.data = data;
+  }
+
+  public PartialCollectionDefinitionRequestDto() {}
+
+  public String getName() {
+    return name;
+  }
+
+  public void setName(final String name) {
+    this.name = name;
+  }
+
+  public PartialCollectionDataDto getData() {
+    return data;
+  }
+
+  public void setData(final PartialCollectionDataDto data) {
+    this.data = data;
+  }
+
+  protected boolean canEqual(final Object other) {
+    return other instanceof PartialCollectionDefinitionRequestDto;
+  }
+
+  @Override
+  public int hashCode() {
+    return org.apache.commons.lang3.builder.HashCodeBuilder.reflectionHashCode(this);
+  }
+
+  @Override
+  public boolean equals(final Object o) {
+    return org.apache.commons.lang3.builder.EqualsBuilder.reflectionEquals(this, o);
+  }
+
+  @Override
+  public String toString() {
+    return "PartialCollectionDefinitionRequestDto(name=" + getName() + ", data=" + getData() + ")";
   }
 }

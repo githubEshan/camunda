@@ -11,7 +11,7 @@ import React, {useState} from 'react';
 import {
   BPMNDiagram,
   TargetValueBadge,
-  LoadingIndicator,
+  Loading,
   HeatmapOverlay,
   Select,
   DownloadButton,
@@ -46,7 +46,7 @@ export default function Heatmap({report, context}) {
   const alwaysShow = isDuration ? alwaysShowAbsolute : alwaysShowAbsolute || alwaysShowRelative;
 
   if (!xml || !result) {
-    return <LoadingIndicator />;
+    return <Loading />;
   }
 
   const resultObj = formatters.objectifyResult(
@@ -131,7 +131,7 @@ export default function Heatmap({report, context}) {
       <HeatmapOverlay
         data={resultObj}
         tooltipOptions={{alwaysShow}}
-        formatter={(data, id) => {
+        formatter={(_data, id) => {
           if (
             result.measures.every(
               (measure) => measure.data.find((entry) => entry.key === id)?.value === null

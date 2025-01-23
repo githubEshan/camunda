@@ -19,7 +19,7 @@ import io.camunda.operate.webapp.rest.exception.InvalidRequestException;
 import io.camunda.operate.webapp.rest.exception.NotAuthorizedException;
 import io.camunda.operate.webapp.rest.exception.NotFoundException;
 import io.camunda.operate.webapp.security.identity.IdentityPermission;
-import io.camunda.operate.webapp.security.identity.PermissionsService;
+import io.camunda.operate.webapp.security.permission.PermissionsService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import java.util.List;
@@ -41,15 +41,13 @@ public class DecisionInstanceRestService extends InternalAPIErrorController {
 
   public static final String DECISION_INSTANCE_URL = "/api/decision-instances";
 
-  @Autowired(required = false)
-  protected PermissionsService permissionsService;
-
+  @Autowired private PermissionsService permissionsService;
   @Autowired private DecisionInstanceReader decisionInstanceReader;
 
   @Operation(summary = "Query decision instances by different parameters")
   @PostMapping
   public DecisionInstanceListResponseDto queryDecisionInstances(
-      @RequestBody DecisionInstanceListRequestDto decisionInstanceRequest) {
+      @RequestBody final DecisionInstanceListRequestDto decisionInstanceRequest) {
     if (decisionInstanceRequest.getQuery() == null) {
       throw new InvalidRequestException("Query must be provided.");
     }
@@ -58,7 +56,8 @@ public class DecisionInstanceRestService extends InternalAPIErrorController {
 
   @Operation(summary = "Get decision instance by id")
   @GetMapping("/{decisionInstanceId}")
-  public DecisionInstanceDto queryDecisionInstanceById(@PathVariable String decisionInstanceId) {
+  public DecisionInstanceDto queryDecisionInstanceById(
+      @PathVariable final String decisionInstanceId) {
     final DecisionInstanceDto decisionInstanceDto =
         decisionInstanceReader.getDecisionInstance(decisionInstanceId);
     checkIdentityReadPermission(decisionInstanceDto);
@@ -68,7 +67,7 @@ public class DecisionInstanceRestService extends InternalAPIErrorController {
   @Operation(summary = "Get DRD data for decision instance")
   @GetMapping("/{decisionInstanceId}/drd-data")
   public Map<String, List<DRDDataEntryDto>> queryDecisionInstanceDRDData(
-      @PathVariable String decisionInstanceId) {
+      @PathVariable final String decisionInstanceId) {
     checkIdentityReadPermission(decisionInstanceId);
     final Map<String, List<DRDDataEntryDto>> result =
         decisionInstanceReader.getDecisionInstanceDRDData(decisionInstanceId);
@@ -78,16 +77,16 @@ public class DecisionInstanceRestService extends InternalAPIErrorController {
     return result;
   }
 
-  private void checkIdentityReadPermission(String decisionInstanceId) {
-    if (permissionsService != null) {
+  private void checkIdentityReadPermission(final String decisionInstanceId) {
+    if (permissionsService.permissionsEnabled()) {
       checkIdentityReadPermission(decisionInstanceReader.getDecisionInstance(decisionInstanceId));
     }
   }
 
-  private void checkIdentityReadPermission(DecisionInstanceDto decisionInstance) {
-    if (permissionsService != null
+  private void checkIdentityReadPermission(final DecisionInstanceDto decisionInstance) {
+    if (permissionsService.permissionsEnabled()
         && !permissionsService.hasPermissionForDecision(
-            decisionInstance.getDecisionId(), IdentityPermission.READ)) {
+            decisionInstance.getDecisionId(), IdentityPermission.READ_DECISION_INSTANCE)) {
       throw new NotAuthorizedException(
           String.format(
               "No read permission for decision instance %s", decisionInstance.getDecisionId()));

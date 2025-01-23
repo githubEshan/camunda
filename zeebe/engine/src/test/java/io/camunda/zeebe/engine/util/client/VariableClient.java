@@ -91,4 +91,11 @@ public final class VariableClient {
             VariableDocumentIntent.UPDATE, variableDocumentRecord, authorizedTenants);
     return expectation.apply(position);
   }
+
+  public Record<VariableDocumentRecordValue> update(final String username) {
+    final long position =
+        writer.writeCommand(
+            VariableDocumentIntent.UPDATE, username, variableDocumentRecord, authorizedTenants);
+    return expectation.apply(position);
+  }
 }

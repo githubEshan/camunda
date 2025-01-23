@@ -7,6 +7,9 @@
  */
 package io.camunda.operate.schema.elasticsearch;
 
+import static io.camunda.webapps.schema.descriptors.AbstractIndexDescriptor.formatIndexPrefix;
+import static io.camunda.webapps.schema.descriptors.ComponentNames.OPERATE;
+
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.camunda.operate.conditions.ElasticsearchCondition;
@@ -16,26 +19,20 @@ import io.camunda.operate.property.OperateProperties;
 import io.camunda.operate.schema.IndexMapping;
 import io.camunda.operate.schema.IndexMapping.IndexMappingProperty;
 import io.camunda.operate.schema.SchemaManager;
-import io.camunda.operate.schema.indices.AbstractIndexDescriptor;
-import io.camunda.operate.schema.indices.IndexDescriptor;
-import io.camunda.operate.schema.templates.TemplateDescriptor;
 import io.camunda.operate.store.elasticsearch.RetryElasticsearchClient;
 import io.camunda.operate.util.ElasticsearchJSONUtil;
+import io.camunda.webapps.schema.descriptors.AbstractIndexDescriptor;
+import io.camunda.webapps.schema.descriptors.IndexDescriptor;
+import io.camunda.webapps.schema.descriptors.IndexTemplateDescriptor;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
 import org.elasticsearch.action.admin.indices.alias.Alias;
-import org.elasticsearch.client.indexlifecycle.DeleteAction;
-import org.elasticsearch.client.indexlifecycle.LifecycleAction;
-import org.elasticsearch.client.indexlifecycle.LifecyclePolicy;
-import org.elasticsearch.client.indexlifecycle.Phase;
-import org.elasticsearch.client.indexlifecycle.PutLifecyclePolicyRequest;
 import org.elasticsearch.client.indices.CreateIndexRequest;
 import org.elasticsearch.client.indices.PutComponentTemplateRequest;
 import org.elasticsearch.client.indices.PutComposableIndexTemplateRequest;
@@ -47,7 +44,6 @@ import org.elasticsearch.cluster.metadata.ComposableIndexTemplate;
 import org.elasticsearch.cluster.metadata.Template;
 import org.elasticsearch.common.compress.CompressedXContent;
 import org.elasticsearch.common.settings.Settings;
-import org.elasticsearch.core.TimeValue;
 import org.elasticsearch.xcontent.XContentType;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -71,7 +67,7 @@ public class ElasticsearchSchemaManager implements SchemaManager {
   @Autowired protected RetryElasticsearchClient retryElasticsearchClient;
   @Autowired protected OperateProperties operateProperties;
   @Autowired private List<AbstractIndexDescriptor> indexDescriptors;
-  @Autowired private List<TemplateDescriptor> templateDescriptors;
+  @Autowired private List<IndexTemplateDescriptor> templateDescriptors;
 
   @Autowired
   @Qualifier("operateObjectMapper")
@@ -79,9 +75,6 @@ public class ElasticsearchSchemaManager implements SchemaManager {
 
   @Override
   public void createSchema() {
-    if (operateProperties.getArchiver().isIlmEnabled()) {
-      createIndexLifeCycles();
-    }
     createDefaults();
     createTemplates();
     createIndices();
@@ -123,7 +116,7 @@ public class ElasticsearchSchemaManager implements SchemaManager {
 
   @Override
   public void createTemplate(
-      final TemplateDescriptor templateDescriptor, final String templateClasspathResource) {
+      final IndexTemplateDescriptor templateDescriptor, final String templateClasspathResource) {
     final PutComposableIndexTemplateRequest request =
         prepareComposableTemplateRequest(templateDescriptor, templateClasspathResource);
     putIndexTemplate(request);
@@ -160,7 +153,12 @@ public class ElasticsearchSchemaManager implements SchemaManager {
 
   @Override
   public boolean isHealthy() {
-    return retryElasticsearchClient.isHealthy();
+    if (operateProperties.getElasticsearch().isHealthCheckEnabled()) {
+      return retryElasticsearchClient.isHealthy();
+    } else {
+      LOGGER.warn("Elasticsearch cluster health check is disabled.");
+      return true;
+    }
   }
 
   @Override
@@ -213,14 +211,20 @@ public class ElasticsearchSchemaManager implements SchemaManager {
     return retryElasticsearchClient.getIndexMappings(indexName);
   }
 
+  /**
+   * @deprecated schema manager is happening in Zeebe exporter now
+   */
+  @Deprecated
   @Override
   public void updateSchema(final Map<IndexDescriptor, Set<IndexMappingProperty>> newFields) {
     for (final Map.Entry<IndexDescriptor, Set<IndexMappingProperty>> indexNewFields :
         newFields.entrySet()) {
-      if (indexNewFields.getKey() instanceof TemplateDescriptor) {
+      if (indexNewFields.getKey() instanceof IndexTemplateDescriptor) {
         LOGGER.info(
-            "Update template: " + ((TemplateDescriptor) indexNewFields.getKey()).getTemplateName());
-        final TemplateDescriptor templateDescriptor = (TemplateDescriptor) indexNewFields.getKey();
+            "Update template: "
+                + ((IndexTemplateDescriptor) indexNewFields.getKey()).getTemplateName());
+        final IndexTemplateDescriptor templateDescriptor =
+            (IndexTemplateDescriptor) indexNewFields.getKey();
         final PutComposableIndexTemplateRequest request =
             prepareComposableTemplateRequest(templateDescriptor, null);
         putIndexTemplate(request, true);
@@ -269,8 +273,7 @@ public class ElasticsearchSchemaManager implements SchemaManager {
   }
 
   private String settingsTemplateName() {
-    final OperateElasticsearchProperties elsConfig = operateProperties.getElasticsearch();
-    return String.format("%s_template", elsConfig.getIndexPrefix());
+    return String.format("%s%s_template", formatIndexPrefix(getIndexPrefix()), OPERATE);
   }
 
   private Settings getDefaultIndexSettings() {
@@ -297,25 +300,6 @@ public class ElasticsearchSchemaManager implements SchemaManager {
         .build();
   }
 
-  private void createIndexLifeCycles() {
-    final TimeValue timeValue =
-        TimeValue.parseTimeValue(
-            operateProperties.getArchiver().getIlmMinAgeForDeleteArchivedIndices(),
-            "IndexLifeCycle " + INDEX_LIFECYCLE_NAME);
-    LOGGER.info(
-        "Create Index Lifecycle {} for min age of {} ",
-        OPERATE_DELETE_ARCHIVED_INDICES,
-        timeValue.getStringRep());
-    final Map<String, Phase> phases = new HashMap<>();
-    final Map<String, LifecycleAction> deleteActions =
-        Collections.singletonMap(DeleteAction.NAME, new DeleteAction());
-    phases.put(DELETE_PHASE, new Phase(DELETE_PHASE, timeValue, deleteActions));
-
-    final LifecyclePolicy policy = new LifecyclePolicy(OPERATE_DELETE_ARCHIVED_INDICES, phases);
-    final PutLifecyclePolicyRequest request = new PutLifecyclePolicyRequest(policy);
-    retryElasticsearchClient.putLifeCyclePolicy(request);
-  }
-
   private void createIndices() {
     indexDescriptors.forEach(this::createIndex);
   }
@@ -328,12 +312,12 @@ public class ElasticsearchSchemaManager implements SchemaManager {
     createIndex(indexDescriptor, indexDescriptor.getSchemaClasspathFilename());
   }
 
-  private void createTemplate(final TemplateDescriptor templateDescriptor) {
+  private void createTemplate(final IndexTemplateDescriptor templateDescriptor) {
     createTemplate(templateDescriptor, null);
   }
 
   private PutComposableIndexTemplateRequest prepareComposableTemplateRequest(
-      final TemplateDescriptor templateDescriptor, final String templateClasspathResource) {
+      final IndexTemplateDescriptor templateDescriptor, final String templateClasspathResource) {
     final String templateResourceName =
         templateClasspathResource != null
             ? templateClasspathResource
@@ -354,7 +338,7 @@ public class ElasticsearchSchemaManager implements SchemaManager {
   }
 
   private void overrideTemplateSettings(
-      final Map<String, Object> templateConfig, final TemplateDescriptor templateDescriptor) {
+      final Map<String, Object> templateConfig, final IndexTemplateDescriptor templateDescriptor) {
     final Settings indexSettings = getIndexSettings(templateDescriptor.getIndexName());
     final Map<String, Object> settings =
         (Map<String, Object>) templateConfig.getOrDefault("settings", new HashMap<>());
@@ -367,7 +351,7 @@ public class ElasticsearchSchemaManager implements SchemaManager {
   }
 
   private Template getTemplateFrom(
-      final TemplateDescriptor templateDescriptor, final String templateFilename) {
+      final IndexTemplateDescriptor templateDescriptor, final String templateFilename) {
     // Easiest way to create Template from json file: create 'old' request ang retrieve needed info
     final Map<String, Object> templateConfig =
         ElasticsearchJSONUtil.readJSONFileToMap(templateFilename);

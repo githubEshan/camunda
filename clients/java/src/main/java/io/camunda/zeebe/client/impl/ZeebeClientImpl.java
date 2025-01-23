@@ -13,11 +13,11 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package io.camunda.zeebe.client.impl;
 
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import io.camunda.client.CamundaClient;
 import io.camunda.zeebe.client.CredentialsProvider;
 import io.camunda.zeebe.client.ZeebeClient;
 import io.camunda.zeebe.client.ZeebeClientConfiguration;
@@ -89,15 +89,8 @@ import io.camunda.zeebe.client.impl.command.StreamJobsCommandImpl;
 import io.camunda.zeebe.client.impl.command.TopologyRequestImpl;
 import io.camunda.zeebe.client.impl.command.UnassignUserTaskCommandImpl;
 import io.camunda.zeebe.client.impl.command.UpdateUserTaskCommandImpl;
-import io.camunda.zeebe.client.impl.fetch.DecisionDefinitionGetXmlRequestImpl;
 import io.camunda.zeebe.client.impl.http.HttpClient;
 import io.camunda.zeebe.client.impl.http.HttpClientFactory;
-import io.camunda.zeebe.client.impl.search.query.DecisionDefinitionQueryImpl;
-import io.camunda.zeebe.client.impl.search.query.DecisionRequirementsQueryImpl;
-import io.camunda.zeebe.client.impl.search.query.FlowNodeInstanceQueryImpl;
-import io.camunda.zeebe.client.impl.search.query.IncidentQueryImpl;
-import io.camunda.zeebe.client.impl.search.query.ProcessInstanceQueryImpl;
-import io.camunda.zeebe.client.impl.search.query.UserTaskQueryImpl;
 import io.camunda.zeebe.client.impl.util.ExecutorResource;
 import io.camunda.zeebe.client.impl.util.VersionUtil;
 import io.camunda.zeebe.client.impl.worker.JobClientImpl;
@@ -124,6 +117,11 @@ import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 
 public final class ZeebeClientImpl implements ZeebeClient {
+
+  private static final String UNSUPPORTED_OPERATION_MSG =
+      String.format(
+          "Not supported with %s. Please use %s.",
+          ZeebeClient.class.getName(), CamundaClient.class.getName());
   private final ZeebeClientConfiguration config;
   private final JsonMapper jsonMapper;
   private final GatewayStub asyncStub;
@@ -357,13 +355,23 @@ public final class ZeebeClientImpl implements ZeebeClient {
   @Override
   public DeployResourceCommandStep1 newDeployResourceCommand() {
     return new DeployResourceCommandImpl(
-        asyncStub, config, credentialsProvider::shouldRetryRequest);
+        asyncStub,
+        config,
+        credentialsProvider::shouldRetryRequest,
+        httpClient,
+        config.preferRestOverGrpc(),
+        jsonMapper);
   }
 
   @Override
   public CreateProcessInstanceCommandStep1 newCreateInstanceCommand() {
     return new CreateProcessInstanceCommandImpl(
-        asyncStub, jsonMapper, config, credentialsProvider::shouldRetryRequest);
+        asyncStub,
+        jsonMapper,
+        config,
+        credentialsProvider::shouldRetryRequest,
+        httpClient,
+        config.preferRestOverGrpc());
   }
 
   @Override
@@ -373,8 +381,9 @@ public final class ZeebeClientImpl implements ZeebeClient {
         processInstanceKey,
         jsonMapper,
         asyncStub,
-        config.getDefaultRequestTimeout(),
-        credentialsProvider::shouldRetryRequest);
+        credentialsProvider::shouldRetryRequest,
+        httpClient,
+        config);
   }
 
   @Override
@@ -383,8 +392,10 @@ public final class ZeebeClientImpl implements ZeebeClient {
     return new MigrateProcessInstanceCommandImpl(
         processInstanceKey,
         asyncStub,
-        config.getDefaultRequestTimeout(),
-        credentialsProvider::shouldRetryRequest);
+        credentialsProvider::shouldRetryRequest,
+        httpClient,
+        config,
+        jsonMapper);
   }
 
   @Override
@@ -392,8 +403,10 @@ public final class ZeebeClientImpl implements ZeebeClient {
     return new CancelProcessInstanceCommandImpl(
         asyncStub,
         processInstanceKey,
-        config.getDefaultRequestTimeout(),
-        credentialsProvider::shouldRetryRequest);
+        credentialsProvider::shouldRetryRequest,
+        httpClient,
+        config,
+        jsonMapper);
   }
 
   @Override
@@ -403,19 +416,26 @@ public final class ZeebeClientImpl implements ZeebeClient {
         jsonMapper,
         elementInstanceKey,
         config.getDefaultRequestTimeout(),
-        credentialsProvider::shouldRetryRequest);
+        credentialsProvider::shouldRetryRequest,
+        httpClient,
+        config.preferRestOverGrpc());
   }
 
   @Override
   public EvaluateDecisionCommandStep1 newEvaluateDecisionCommand() {
     return new EvaluateDecisionCommandImpl(
-        asyncStub, jsonMapper, config, credentialsProvider::shouldRetryRequest);
+        asyncStub, jsonMapper, config, credentialsProvider::shouldRetryRequest, httpClient);
   }
 
   @Override
   public PublishMessageCommandStep1 newPublishMessageCommand() {
     return new PublishMessageCommandImpl(
-        asyncStub, config, jsonMapper, credentialsProvider::shouldRetryRequest);
+        asyncStub,
+        config,
+        jsonMapper,
+        credentialsProvider::shouldRetryRequest,
+        httpClient,
+        config.preferRestOverGrpc());
   }
 
   @Override
@@ -426,7 +446,7 @@ public final class ZeebeClientImpl implements ZeebeClient {
   @Override
   public BroadcastSignalCommandStep1 newBroadcastSignalCommand() {
     return new BroadcastSignalCommandImpl(
-        asyncStub, config, jsonMapper, credentialsProvider::shouldRetryRequest);
+        asyncStub, config, jsonMapper, credentialsProvider::shouldRetryRequest, httpClient);
   }
 
   @Override
@@ -485,7 +505,9 @@ public final class ZeebeClientImpl implements ZeebeClient {
         resourceKey,
         asyncStub,
         credentialsProvider::shouldRetryRequest,
-        config.getDefaultRequestTimeout());
+        httpClient,
+        config,
+        jsonMapper);
   }
 
   @Override
@@ -530,38 +552,38 @@ public final class ZeebeClientImpl implements ZeebeClient {
 
   @Override
   public ProcessInstanceQuery newProcessInstanceQuery() {
-    return new ProcessInstanceQueryImpl(httpClient, jsonMapper);
+    throw new UnsupportedOperationException(UNSUPPORTED_OPERATION_MSG);
   }
 
   @Override
   public FlownodeInstanceQuery newFlownodeInstanceQuery() {
-    return new FlowNodeInstanceQueryImpl(httpClient, jsonMapper);
+    throw new UnsupportedOperationException(UNSUPPORTED_OPERATION_MSG);
   }
 
   @Override
   public UserTaskQuery newUserTaskQuery() {
-    return new UserTaskQueryImpl(httpClient, jsonMapper);
+    throw new UnsupportedOperationException(UNSUPPORTED_OPERATION_MSG);
   }
 
   @Override
   public DecisionRequirementsQuery newDecisionRequirementsQuery() {
-    return new DecisionRequirementsQueryImpl(httpClient, jsonMapper);
+    throw new UnsupportedOperationException(UNSUPPORTED_OPERATION_MSG);
   }
 
   @Override
   public DecisionDefinitionQuery newDecisionDefinitionQuery() {
-    return new DecisionDefinitionQueryImpl(httpClient, jsonMapper);
+    throw new UnsupportedOperationException(UNSUPPORTED_OPERATION_MSG);
   }
 
   @Override
   public DecisionDefinitionGetXmlRequest newDecisionDefinitionGetXmlRequest(
       final long decisionKey) {
-    return new DecisionDefinitionGetXmlRequestImpl(httpClient, decisionKey);
+    throw new UnsupportedOperationException(UNSUPPORTED_OPERATION_MSG);
   }
 
   @Override
   public IncidentQuery newIncidentQuery() {
-    return new IncidentQueryImpl(httpClient, jsonMapper);
+    throw new UnsupportedOperationException(UNSUPPORTED_OPERATION_MSG);
   }
 
   @Override

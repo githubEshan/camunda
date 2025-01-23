@@ -11,24 +11,23 @@ import java.time.LocalDateTime;
 import java.time.OffsetDateTime;
 import java.time.ZoneId;
 import java.time.temporal.ChronoUnit;
-import lombok.AccessLevel;
-import lombok.NoArgsConstructor;
 
-@NoArgsConstructor(access = AccessLevel.PRIVATE)
-public class LocalDateUtil {
+public final class LocalDateUtil {
 
-  private static volatile OffsetDateTime CURRENT_TIME = null;
+  private static volatile OffsetDateTime currentTime = null;
 
-  public static void setCurrentTime(OffsetDateTime currentTime) {
-    LocalDateUtil.CURRENT_TIME = normalize(currentTime);
+  private LocalDateUtil() {}
+
+  public static void setCurrentTime(final OffsetDateTime currentTime) {
+    LocalDateUtil.currentTime = normalize(currentTime);
   }
 
   public static void reset() {
-    LocalDateUtil.CURRENT_TIME = null;
+    LocalDateUtil.currentTime = null;
   }
 
   public static OffsetDateTime getCurrentDateTime() {
-    OffsetDateTime value = CURRENT_TIME;
+    OffsetDateTime value = currentTime;
     if (value == null) {
       value = normalize(OffsetDateTime.now());
     }

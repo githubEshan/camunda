@@ -22,19 +22,17 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import lombok.AllArgsConstructor;
-import lombok.Data;
-import lombok.EqualsAndHashCode;
-import lombok.NoArgsConstructor;
 
-@Data
-@EqualsAndHashCode(callSuper = true)
-@NoArgsConstructor
-@AllArgsConstructor
 public class DashboardDefinitionRestDto extends BaseDashboardDefinitionDto
     implements CollectionEntity {
 
   @Valid protected List<DashboardReportTileDto> tiles = new ArrayList<>();
+
+  public DashboardDefinitionRestDto(@Valid final List<DashboardReportTileDto> tiles) {
+    this.tiles = tiles;
+  }
+
+  public DashboardDefinitionRestDto() {}
 
   @JsonIgnore
   public Set<String> getTileIds() {
@@ -59,6 +57,35 @@ public class DashboardDefinitionRestDto extends BaseDashboardDefinitionDto
         roleType);
   }
 
+  public @Valid List<DashboardReportTileDto> getTiles() {
+    return tiles;
+  }
+
+  public void setTiles(@Valid final List<DashboardReportTileDto> tiles) {
+    this.tiles = tiles;
+  }
+
+  @Override
+  public String toString() {
+    return "DashboardDefinitionRestDto(tiles=" + getTiles() + ")";
+  }
+
+  @Override
+  public boolean equals(final Object o) {
+    return org.apache.commons.lang3.builder.EqualsBuilder.reflectionEquals(this, o);
+  }
+
+  @Override
+  protected boolean canEqual(final Object other) {
+    return other instanceof DashboardDefinitionRestDto;
+  }
+
+  @Override
+  public int hashCode() {
+    return org.apache.commons.lang3.builder.HashCodeBuilder.reflectionHashCode(this);
+  }
+
+  @SuppressWarnings("checkstyle:ConstantName")
   public static final class Fields {
 
     public static final String tiles = "tiles";

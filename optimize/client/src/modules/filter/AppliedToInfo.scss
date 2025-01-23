@@ -1,13 +1,12 @@
-.Tooltip .appliesTo {
-  font-size: 0.75rem;
+.cds--tooltip .appliesTo {
   ul {
     padding-left: 1rem;
+    list-style: initial;
   }
 }
 
 .appliedTo {
   margin-top: 6px;
-  margin-bottom: 0;
   color: var(--blue-darken-55);
   display: inline-block;
 }

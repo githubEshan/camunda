@@ -7,14 +7,6 @@
  */
 package io.camunda.optimize.dto.optimize.query.report.single.configuration.target_value;
 
-import java.util.Objects;
-import lombok.Getter;
-import lombok.Setter;
-import lombok.ToString;
-
-@Getter
-@Setter
-@ToString
 public class DurationProgressDto {
 
   private BaseLineDto baseline = new BaseLineDto();
@@ -22,20 +14,36 @@ public class DurationProgressDto {
 
   @Override
   public int hashCode() {
-    return Objects.hash(baseline, target);
+    return org.apache.commons.lang3.builder.HashCodeBuilder.reflectionHashCode(this);
   }
 
   @Override
   public boolean equals(final Object o) {
-    if (this == o) {
-      return true;
-    }
-    if (!(o instanceof final DurationProgressDto that)) {
-      return false;
-    }
-    return Objects.equals(baseline, that.baseline) && Objects.equals(target, that.target);
+    return org.apache.commons.lang3.builder.EqualsBuilder.reflectionEquals(this, o);
   }
 
+  @Override
+  public String toString() {
+    return "DurationProgressDto(baseline=" + getBaseline() + ", target=" + getTarget() + ")";
+  }
+
+  public BaseLineDto getBaseline() {
+    return baseline;
+  }
+
+  public void setBaseline(final BaseLineDto baseline) {
+    this.baseline = baseline;
+  }
+
+  public TargetDto getTarget() {
+    return target;
+  }
+
+  public void setTarget(final TargetDto target) {
+    this.target = target;
+  }
+
+  @SuppressWarnings("checkstyle:ConstantName")
   public static final class Fields {
 
     public static final String baseline = "baseline";

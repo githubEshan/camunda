@@ -19,14 +19,14 @@ import io.camunda.optimize.dto.optimize.query.processoverview.ProcessOverviewDto
 import io.camunda.optimize.dto.optimize.query.processoverview.ProcessOverviewResponseDto;
 import io.camunda.optimize.dto.optimize.query.processoverview.ProcessOwnerResponseDto;
 import io.camunda.optimize.dto.optimize.query.processoverview.ProcessUpdateDto;
+import io.camunda.optimize.rest.exceptions.BadRequestException;
+import io.camunda.optimize.rest.exceptions.ForbiddenException;
+import io.camunda.optimize.rest.exceptions.NotFoundException;
 import io.camunda.optimize.service.db.reader.ProcessOverviewReader;
 import io.camunda.optimize.service.db.writer.ProcessOverviewWriter;
 import io.camunda.optimize.service.digest.DigestService;
 import io.camunda.optimize.service.identity.AbstractIdentityService;
 import io.camunda.optimize.service.security.util.definition.DataSourceDefinitionAuthorizationService;
-import jakarta.ws.rs.BadRequestException;
-import jakarta.ws.rs.ForbiddenException;
-import jakarta.ws.rs.NotFoundException;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
@@ -36,17 +36,15 @@ import java.util.Optional;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
-import lombok.AllArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
+import org.slf4j.Logger;
 import org.springframework.stereotype.Component;
 
-@AllArgsConstructor
 @Component
-@Slf4j
 public class ProcessOverviewService {
 
   private static final String PENDING_OWNER_UPDATE_TEMPLATE = "pendingauthcheck#%s#%s";
+  private static final Logger LOG = org.slf4j.LoggerFactory.getLogger(ProcessOverviewService.class);
 
   private final DefinitionService definitionService;
   private final DataSourceDefinitionAuthorizationService definitionAuthorizationService;
@@ -55,6 +53,23 @@ public class ProcessOverviewService {
   private final AbstractIdentityService identityService;
   private final KpiService kpiService;
   private final DigestService digestService;
+
+  public ProcessOverviewService(
+      final DefinitionService definitionService,
+      final DataSourceDefinitionAuthorizationService definitionAuthorizationService,
+      final ProcessOverviewWriter processOverviewWriter,
+      final ProcessOverviewReader processOverviewReader,
+      final AbstractIdentityService identityService,
+      final KpiService kpiService,
+      final DigestService digestService) {
+    this.definitionService = definitionService;
+    this.definitionAuthorizationService = definitionAuthorizationService;
+    this.processOverviewWriter = processOverviewWriter;
+    this.processOverviewReader = processOverviewReader;
+    this.identityService = identityService;
+    this.kpiService = kpiService;
+    this.digestService = digestService;
+  }
 
   public List<ProcessOverviewResponseDto> getAllProcessOverviews(
       final String userId, final String locale) {
@@ -138,14 +153,14 @@ public class ProcessOverviewService {
       throw new BadRequestException("Owner ID cannot be empty!");
     }
     if (definitionHasBeenImported(processDefinitionKey)) {
-      log.info("Updating owner of process " + processDefinitionKey + " to " + ownerIdToSave);
+      LOG.info("Updating owner of process " + processDefinitionKey + " to " + ownerIdToSave);
       validateProcessDefinitionAuthorization(userId, processDefinitionKey);
       processOverviewWriter.updateProcessOwnerIfNotSet(processDefinitionKey, ownerIdToSave);
     } else {
       // If this happens, it means that Optimize did not import the process definition yet. So we
       // save the
       // information but mark it as pending authorization check
-      log.info(
+      LOG.info(
           String.format(
               "Process definition %s has not been imported to optimize yet, so saving the "
                   + "prospective owner %s as pending",
@@ -180,7 +195,7 @@ public class ProcessOverviewService {
     try {
       return definitionService.getLatestVersionToKey(PROCESS, processDefinitionKey) != null;
     } catch (final NotFoundException exception) {
-      log.info("Process with definition key {} has not yet been imported", processDefinitionKey);
+      LOG.info("Process with definition key {} has not yet been imported", processDefinitionKey);
       return false;
     }
   }
@@ -206,7 +221,7 @@ public class ProcessOverviewService {
                 updateProcessOwnerIfNotSet(userIdFromRequester, processToBeOnboarded, ownerId);
                 processOverviewWriter.deleteProcessOwnerEntry(completeDefKey);
               } catch (final Exception exc) {
-                log.warn(exc.getMessage(), exc);
+                LOG.warn(exc.getMessage(), exc);
               }
             });
   }

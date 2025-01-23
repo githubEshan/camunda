@@ -8,25 +8,34 @@
 package io.camunda.optimize.service;
 
 import io.camunda.optimize.dto.optimize.SettingsDto;
+import io.camunda.optimize.rest.exceptions.ForbiddenException;
 import io.camunda.optimize.service.db.reader.SettingsReader;
 import io.camunda.optimize.service.db.writer.SettingsWriter;
 import io.camunda.optimize.service.identity.AbstractIdentityService;
 import io.camunda.optimize.service.security.util.LocalDateUtil;
 import io.camunda.optimize.service.util.configuration.ConfigurationService;
-import jakarta.ws.rs.ForbiddenException;
-import lombok.AllArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
+import org.slf4j.Logger;
 import org.springframework.stereotype.Component;
 
-@AllArgsConstructor
 @Component
-@Slf4j
 public class SettingsService {
 
+  private static final Logger LOG = org.slf4j.LoggerFactory.getLogger(SettingsService.class);
   private final SettingsReader settingsReader;
   private final SettingsWriter settingsWriter;
   private final AbstractIdentityService identityService;
   private final ConfigurationService configurationService;
+
+  public SettingsService(
+      final SettingsReader settingsReader,
+      final SettingsWriter settingsWriter,
+      final AbstractIdentityService identityService,
+      final ConfigurationService configurationService) {
+    this.settingsReader = settingsReader;
+    this.settingsWriter = settingsWriter;
+    this.identityService = identityService;
+    this.configurationService = configurationService;
+  }
 
   public SettingsDto getSettings() {
     return settingsReader

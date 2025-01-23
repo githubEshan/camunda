@@ -10,14 +10,7 @@ package io.camunda.optimize.dto.optimize.query.dashboard.filter.data;
 import io.camunda.optimize.dto.optimize.query.report.single.filter.data.operator.MembershipFilterOperator;
 import io.camunda.optimize.dto.optimize.query.report.single.process.filter.data.IdentityLinkFilterDataDto;
 import java.util.List;
-import lombok.AccessLevel;
-import lombok.Data;
-import lombok.EqualsAndHashCode;
-import lombok.NoArgsConstructor;
 
-@NoArgsConstructor(access = AccessLevel.PROTECTED)
-@Data
-@EqualsAndHashCode(callSuper = true)
 public class DashboardIdentityFilterDataDto extends IdentityLinkFilterDataDto {
 
   protected boolean allowCustomValues;
@@ -41,6 +34,49 @@ public class DashboardIdentityFilterDataDto extends IdentityLinkFilterDataDto {
     this.defaultValues = defaultValues;
   }
 
+  protected DashboardIdentityFilterDataDto() {}
+
+  public boolean isAllowCustomValues() {
+    return allowCustomValues;
+  }
+
+  public void setAllowCustomValues(final boolean allowCustomValues) {
+    this.allowCustomValues = allowCustomValues;
+  }
+
+  public List<String> getDefaultValues() {
+    return defaultValues;
+  }
+
+  public void setDefaultValues(final List<String> defaultValues) {
+    this.defaultValues = defaultValues;
+  }
+
+  @Override
+  protected boolean canEqual(final Object other) {
+    return other instanceof DashboardIdentityFilterDataDto;
+  }
+
+  @Override
+  public int hashCode() {
+    return org.apache.commons.lang3.builder.HashCodeBuilder.reflectionHashCode(this);
+  }
+
+  @Override
+  public boolean equals(final Object o) {
+    return org.apache.commons.lang3.builder.EqualsBuilder.reflectionEquals(this, o);
+  }
+
+  @Override
+  public String toString() {
+    return "DashboardIdentityFilterDataDto(allowCustomValues="
+        + isAllowCustomValues()
+        + ", defaultValues="
+        + getDefaultValues()
+        + ")";
+  }
+
+  @SuppressWarnings("checkstyle:ConstantName")
   public static final class Fields {
 
     public static final String allowCustomValues = "allowCustomValues";

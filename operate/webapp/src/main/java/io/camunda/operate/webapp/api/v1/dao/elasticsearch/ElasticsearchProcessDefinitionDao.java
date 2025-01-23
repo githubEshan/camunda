@@ -7,11 +7,10 @@
  */
 package io.camunda.operate.webapp.api.v1.dao.elasticsearch;
 
-import static io.camunda.operate.schema.indices.ProcessIndex.BPMN_XML;
+import static io.camunda.webapps.schema.descriptors.operate.index.ProcessIndex.BPMN_XML;
 import static org.elasticsearch.index.query.QueryBuilders.termQuery;
 
 import io.camunda.operate.conditions.ElasticsearchCondition;
-import io.camunda.operate.schema.indices.ProcessIndex;
 import io.camunda.operate.util.ElasticsearchUtil;
 import io.camunda.operate.webapp.api.v1.dao.ProcessDefinitionDao;
 import io.camunda.operate.webapp.api.v1.entities.ProcessDefinition;
@@ -20,6 +19,7 @@ import io.camunda.operate.webapp.api.v1.entities.Results;
 import io.camunda.operate.webapp.api.v1.exceptions.APIException;
 import io.camunda.operate.webapp.api.v1.exceptions.ResourceNotFoundException;
 import io.camunda.operate.webapp.api.v1.exceptions.ServerException;
+import io.camunda.webapps.schema.descriptors.operate.index.ProcessIndex;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
@@ -31,6 +31,7 @@ import org.elasticsearch.search.SearchHit;
 import org.elasticsearch.search.SearchHits;
 import org.elasticsearch.search.builder.SearchSourceBuilder;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.context.annotation.Conditional;
 import org.springframework.stereotype.Component;
 
@@ -39,7 +40,9 @@ import org.springframework.stereotype.Component;
 public class ElasticsearchProcessDefinitionDao extends ElasticsearchDao<ProcessDefinition>
     implements ProcessDefinitionDao {
 
-  @Autowired private ProcessIndex processIndex;
+  @Autowired
+  @Qualifier("operateProcessIndex")
+  private ProcessIndex processIndex;
 
   @Override
   public Results<ProcessDefinition> search(final Query<ProcessDefinition> query)
@@ -64,7 +67,7 @@ public class ElasticsearchProcessDefinitionDao extends ElasticsearchDao<ProcessD
       } else {
         return new Results<ProcessDefinition>().setTotal(searchHits.getTotalHits().value);
       }
-    } catch (Exception e) {
+    } catch (final Exception e) {
       throw new ServerException("Error in reading process definitions", e);
     }
   }
@@ -76,7 +79,7 @@ public class ElasticsearchProcessDefinitionDao extends ElasticsearchDao<ProcessD
     try {
       processDefinitions =
           searchFor(new SearchSourceBuilder().query(termQuery(ProcessIndex.KEY, key)));
-    } catch (Exception e) {
+    } catch (final Exception e) {
       throw new ServerException(
           String.format("Error in reading process definition for key %s", key), e);
     }
@@ -105,7 +108,7 @@ public class ElasticsearchProcessDefinitionDao extends ElasticsearchDao<ProcessD
         final Map<String, Object> result = response.getHits().getHits()[0].getSourceAsMap();
         return (String) result.get(BPMN_XML);
       }
-    } catch (IOException e) {
+    } catch (final IOException e) {
       throw new ServerException(
           String.format("Error in reading process definition as xml for key %s", key), e);
     }
@@ -113,6 +116,7 @@ public class ElasticsearchProcessDefinitionDao extends ElasticsearchDao<ProcessD
         String.format("Process definition for key %s not found.", key));
   }
 
+  @Override
   protected void buildFiltering(
       final Query<ProcessDefinition> query, final SearchSourceBuilder searchSourceBuilder) {
     final ProcessDefinition filter = query.getFilter();

@@ -7,29 +7,18 @@
  */
 package io.camunda.operate.webapp.elasticsearch.writer;
 
-import static io.camunda.operate.entities.OperationType.ADD_VARIABLE;
-import static io.camunda.operate.entities.OperationType.UPDATE_VARIABLE;
 import static io.camunda.operate.util.CollectionUtil.getOrDefaultForNullValue;
 import static io.camunda.operate.util.ConversionUtils.toLongOrNull;
 import static io.camunda.operate.util.ElasticsearchUtil.joinWithAnd;
+import static io.camunda.webapps.schema.entities.operation.OperationType.ADD_VARIABLE;
+import static io.camunda.webapps.schema.entities.operation.OperationType.UPDATE_VARIABLE;
 import static org.elasticsearch.index.query.QueryBuilders.constantScoreQuery;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.camunda.operate.conditions.ElasticsearchCondition;
-import io.camunda.operate.entities.BatchOperationEntity;
-import io.camunda.operate.entities.IncidentEntity;
-import io.camunda.operate.entities.OperationEntity;
-import io.camunda.operate.entities.OperationState;
-import io.camunda.operate.entities.OperationType;
-import io.camunda.operate.entities.ProcessEntity;
-import io.camunda.operate.entities.dmn.definition.DecisionDefinitionEntity;
-import io.camunda.operate.entities.listview.ProcessInstanceForListViewEntity;
 import io.camunda.operate.exceptions.OperateRuntimeException;
 import io.camunda.operate.exceptions.PersistenceException;
 import io.camunda.operate.property.OperateProperties;
-import io.camunda.operate.schema.templates.BatchOperationTemplate;
-import io.camunda.operate.schema.templates.ListViewTemplate;
-import io.camunda.operate.schema.templates.OperationTemplate;
 import io.camunda.operate.store.BatchRequest;
 import io.camunda.operate.store.ListViewStore;
 import io.camunda.operate.store.OperationStore;
@@ -46,9 +35,20 @@ import io.camunda.operate.webapp.rest.exception.InvalidRequestException;
 import io.camunda.operate.webapp.rest.exception.NotFoundException;
 import io.camunda.operate.webapp.security.UserService;
 import io.camunda.operate.webapp.security.identity.IdentityPermission;
-import io.camunda.operate.webapp.security.identity.PermissionsService;
+import io.camunda.operate.webapp.security.permission.PermissionsService;
 import io.camunda.operate.webapp.writer.PersistOperationHelper;
 import io.camunda.operate.webapp.writer.ProcessInstanceSource;
+import io.camunda.webapps.schema.descriptors.operate.template.BatchOperationTemplate;
+import io.camunda.webapps.schema.descriptors.operate.template.ListViewTemplate;
+import io.camunda.webapps.schema.descriptors.operate.template.OperationTemplate;
+import io.camunda.webapps.schema.entities.operate.IncidentEntity;
+import io.camunda.webapps.schema.entities.operate.ProcessEntity;
+import io.camunda.webapps.schema.entities.operate.dmn.definition.DecisionDefinitionEntity;
+import io.camunda.webapps.schema.entities.operate.listview.ProcessInstanceForListViewEntity;
+import io.camunda.webapps.schema.entities.operation.BatchOperationEntity;
+import io.camunda.webapps.schema.entities.operation.OperationEntity;
+import io.camunda.webapps.schema.entities.operation.OperationState;
+import io.camunda.webapps.schema.entities.operation.OperationType;
 import java.io.IOException;
 import java.time.OffsetDateTime;
 import java.time.temporal.ChronoUnit;
@@ -102,8 +102,7 @@ public class BatchOperationWriter implements io.camunda.operate.webapp.writer.Ba
 
   @Autowired private ProcessReader processReader;
 
-  @Autowired(required = false)
-  private PermissionsService permissionsService;
+  @Autowired private PermissionsService permissionsService;
 
   @Autowired private OperationStore operationStore;
 
@@ -376,13 +375,14 @@ public class BatchOperationWriter implements io.camunda.operate.webapp.writer.Ba
             .setInstancesCount(0);
 
     // Create operation
-    final OperationEntity operationEntity = new OperationEntity();
-    operationEntity.generateId();
-    operationEntity.setDecisionDefinitionKey(decisionDefinitionKey);
-    operationEntity.setType(operationType);
-    operationEntity.setState(OperationState.SCHEDULED);
-    operationEntity.setBatchOperationId(batchOperation.getId());
-    operationEntity.setUsername(userService.getCurrentUser().getUsername());
+    final OperationEntity operationEntity =
+        new OperationEntity()
+            .withGeneratedId()
+            .setDecisionDefinitionKey(decisionDefinitionKey)
+            .setType(operationType)
+            .setState(OperationState.SCHEDULED)
+            .setBatchOperationId(batchOperation.getId())
+            .setUsername(userService.getCurrentUser().getUsername());
 
     // Create request
     try {
@@ -425,13 +425,14 @@ public class BatchOperationWriter implements io.camunda.operate.webapp.writer.Ba
             .setInstancesCount(0);
 
     // Create operation
-    final OperationEntity operationEntity = new OperationEntity();
-    operationEntity.generateId();
-    operationEntity.setProcessDefinitionKey(processDefinitionKey);
-    operationEntity.setType(operationType);
-    operationEntity.setState(OperationState.SCHEDULED);
-    operationEntity.setBatchOperationId(batchOperation.getId());
-    operationEntity.setUsername(userService.getCurrentUser().getUsername());
+    final OperationEntity operationEntity =
+        new OperationEntity()
+            .withGeneratedId()
+            .setProcessDefinitionKey(processDefinitionKey)
+            .setType(operationType)
+            .setState(OperationState.SCHEDULED)
+            .setBatchOperationId(batchOperation.getId())
+            .setUsername(userService.getCurrentUser().getUsername());
 
     // Create request
     try {
@@ -458,7 +459,7 @@ public class BatchOperationWriter implements io.camunda.operate.webapp.writer.Ba
     final int batchSize = operateProperties.getElasticsearch().getBatchSize();
     ConstantScoreQueryBuilder query =
         queryHelper.createProcessInstancesQuery(batchOperationRequest.getQuery());
-    if (permissionsService != null) {
+    if (permissionsService.permissionsEnabled()) {
       final IdentityPermission permission =
           batchOperationRequest.getOperationType().equals(OperationType.DELETE_PROCESS_INSTANCE)
               ? IdentityPermission.DELETE_PROCESS_INSTANCE
@@ -526,13 +527,12 @@ public class BatchOperationWriter implements io.camunda.operate.webapp.writer.Ba
 
   private BatchOperationEntity createBatchOperationEntity(
       final OperationType operationType, final String name) {
-    final BatchOperationEntity batchOperationEntity = new BatchOperationEntity();
-    batchOperationEntity.generateId();
-    batchOperationEntity.setType(operationType);
-    batchOperationEntity.setName(name);
-    batchOperationEntity.setStartDate(OffsetDateTime.now());
-    batchOperationEntity.setUsername(userService.getCurrentUser().getUsername());
-    return batchOperationEntity;
+    return new BatchOperationEntity()
+        .withGeneratedId()
+        .setType(operationType)
+        .setName(name)
+        .setStartDate(OffsetDateTime.now())
+        .setUsername(userService.getCurrentUser().getUsername());
   }
 
   private OperationEntity createOperationEntity(
@@ -557,17 +557,15 @@ public class BatchOperationWriter implements io.camunda.operate.webapp.writer.Ba
       final OperationType operationType,
       final String batchOperationId) {
 
-    final OperationEntity operationEntity = new OperationEntity();
-    operationEntity.generateId();
-    operationEntity.setProcessInstanceKey(processInstanceSource.getProcessInstanceKey());
-    operationEntity.setProcessDefinitionKey(processInstanceSource.getProcessDefinitionKey());
-    operationEntity.setBpmnProcessId(processInstanceSource.getBpmnProcessId());
-    operationEntity.setType(operationType);
-    operationEntity.setState(OperationState.SCHEDULED);
-    operationEntity.setBatchOperationId(batchOperationId);
-    operationEntity.setUsername(userService.getCurrentUser().getUsername());
-
-    return operationEntity;
+    return new OperationEntity()
+        .withGeneratedId()
+        .setProcessInstanceKey(processInstanceSource.getProcessInstanceKey())
+        .setProcessDefinitionKey(processInstanceSource.getProcessDefinitionKey())
+        .setBpmnProcessId(processInstanceSource.getBpmnProcessId())
+        .setType(operationType)
+        .setState(OperationState.SCHEDULED)
+        .setBatchOperationId(batchOperationId)
+        .setUsername(userService.getCurrentUser().getUsername());
   }
 
   private void validateTotalHits(final SearchHits hits) {

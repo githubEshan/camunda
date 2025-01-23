@@ -5,7 +5,7 @@
   <parent>
     <groupId>io.camunda</groupId>
     <artifactId>tasklist-parent</artifactId>
-    <version>8.6.0-SNAPSHOT</version>
+    <version>8.8.0-SNAPSHOT</version>
     <relativePath>../pom.xml</relativePath>
   </parent>
   <artifactId>tasklist-webapp</artifactId>
@@ -13,6 +13,15 @@
   <name>Tasklist Webapp</name>
 
   <dependencies>
+    <dependency>
+      <groupId>io.camunda</groupId>
+      <artifactId>webapps-schema</artifactId>
+    </dependency>
+
+    <dependency>
+      <groupId>io.camunda</groupId>
+      <artifactId>webapps-common</artifactId>
+    </dependency>
 
     <dependency>
       <groupId>io.camunda</groupId>
@@ -27,12 +36,6 @@
 
     <dependency>
       <groupId>io.camunda</groupId>
-      <artifactId>tasklist-archiver</artifactId>
-      <scope>runtime</scope>
-    </dependency>
-
-    <dependency>
-      <groupId>io.camunda</groupId>
       <artifactId>tasklist-webjar</artifactId>
     </dependency>
 
@@ -41,10 +44,55 @@
       <artifactId>tasklist-els-schema</artifactId>
     </dependency>
 
+    <dependency>
+      <groupId>io.camunda</groupId>
+      <artifactId>camunda-security-core</artifactId>
+    </dependency>
+
+    <dependency>
+      <groupId>io.camunda</groupId>
+      <artifactId>zeebe-gateway-rest</artifactId>
+    </dependency>
+
+    <dependency>
+      <groupId>io.grpc</groupId>
+      <artifactId>grpc-api</artifactId>
+    </dependency>
+
+    <dependency>
+      <groupId>io.camunda</groupId>
+      <artifactId>zeebe-broker-client</artifactId>
+    </dependency>
+
+    <dependency>
+      <groupId>io.camunda</groupId>
+      <artifactId>zeebe-util</artifactId>
+    </dependency>
+
+    <dependency>
+      <groupId>io.camunda</groupId>
+      <artifactId>zeebe-protocol</artifactId>
+    </dependency>
+
+    <dependency>
+      <groupId>io.camunda</groupId>
+      <artifactId>camunda-service</artifactId>
+    </dependency>
+
+    <dependency>
+      <groupId>io.camunda</groupId>
+      <artifactId>zeebe-protocol-impl</artifactId>
+    </dependency>
+
+    <dependency>
+      <groupId>io.camunda</groupId>
+      <artifactId>camunda-security-services</artifactId>
+    </dependency>
+
     <!-- ZEEBE -->
     <dependency>
       <groupId>io.camunda</groupId>
-      <artifactId>zeebe-client-java</artifactId>
+      <artifactId>camunda-client-java</artifactId>
     </dependency>
 
     <!-- SPRING BOOT -->
@@ -81,11 +129,6 @@
     <dependency>
       <groupId>org.springframework.boot</groupId>
       <artifactId>spring-boot-starter-security</artifactId>
-    </dependency>
-
-    <dependency>
-      <groupId>org.springframework.session</groupId>
-      <artifactId>spring-session-data-redis</artifactId>
     </dependency>
 
     <dependency>
@@ -164,17 +207,6 @@
       <artifactId>springdoc-openapi-starter-webmvc-ui</artifactId>
     </dependency>
 
-    <!-- GraphQL -->
-    <dependency>
-      <groupId>com.graphql-java-kickstart</groupId>
-      <artifactId>graphql-spring-boot-starter</artifactId>
-    </dependency>
-
-    <dependency>
-      <groupId>com.graphql-java-kickstart</groupId>
-      <artifactId>graphql-spring-boot-autoconfigure</artifactId>
-    </dependency>
-
     <dependency>
       <groupId>software.amazon.awssdk</groupId>
       <artifactId>sts</artifactId>
@@ -201,21 +233,6 @@
     </dependency>
 
     <dependency>
-      <groupId>org.apache.tomcat.embed</groupId>
-      <artifactId>tomcat-embed-websocket</artifactId>
-    </dependency>
-
-    <dependency>
-      <groupId>com.graphql-java</groupId>
-      <artifactId>graphql-java</artifactId>
-    </dependency>
-
-    <dependency>
-      <groupId>io.github.graphql-java</groupId>
-      <artifactId>graphql-java-annotations</artifactId>
-    </dependency>
-
-    <dependency>
       <groupId>org.opensearch.client</groupId>
       <artifactId>opensearch-java</artifactId>
     </dependency>
@@ -231,11 +248,6 @@
     </dependency>
 
     <dependency>
-      <groupId>org.springframework.session</groupId>
-      <artifactId>spring-session-core</artifactId>
-    </dependency>
-
-    <dependency>
       <groupId>org.elasticsearch</groupId>
       <artifactId>elasticsearch-x-content</artifactId>
     </dependency>
@@ -243,11 +255,6 @@
     <dependency>
       <groupId>com.fasterxml.jackson.core</groupId>
       <artifactId>jackson-core</artifactId>
-    </dependency>
-
-    <dependency>
-      <groupId>com.graphql-java</groupId>
-      <artifactId>java-dataloader</artifactId>
     </dependency>
 
     <dependency>
@@ -283,11 +290,6 @@
     </dependency>
 
     <dependency>
-      <groupId>com.graphql-java-kickstart</groupId>
-      <artifactId>graphql-java-servlet</artifactId>
-    </dependency>
-
-    <dependency>
       <groupId>org.springframework</groupId>
       <artifactId>spring-web</artifactId>
     </dependency>
@@ -300,11 +302,6 @@
     <dependency>
       <groupId>com.auth0</groupId>
       <artifactId>java-jwt</artifactId>
-    </dependency>
-
-    <dependency>
-      <groupId>com.graphql-java-kickstart</groupId>
-      <artifactId>graphql-java-kickstart</artifactId>
     </dependency>
 
     <dependency>
@@ -335,16 +332,6 @@
     <dependency>
       <groupId>org.springframework</groupId>
       <artifactId>spring-core</artifactId>
-    </dependency>
-
-    <dependency>
-      <groupId>io.grpc</groupId>
-      <artifactId>grpc-api</artifactId>
-    </dependency>
-
-    <dependency>
-      <groupId>com.google.code.findbugs</groupId>
-      <artifactId>jsr305</artifactId>
     </dependency>
 
     <dependency>
@@ -464,16 +451,6 @@
     </dependency>
 
     <dependency>
-      <groupId>org.springframework</groupId>
-      <artifactId>spring-aop</artifactId>
-    </dependency>
-
-    <dependency>
-      <groupId>org.springframework</groupId>
-      <artifactId>spring-expression</artifactId>
-    </dependency>
-
-    <dependency>
       <groupId>org.springframework.security</groupId>
       <artifactId>spring-security-config</artifactId>
     </dependency>
@@ -515,6 +492,10 @@
       <artifactId>annotations</artifactId>
       <scope>compile</scope>
     </dependency>
+    <dependency>
+      <groupId>io.camunda</groupId>
+      <artifactId>camunda-authentication</artifactId>
+    </dependency>
 
   </dependencies>
 
@@ -527,7 +508,6 @@
         <configuration>
           <usedDependencies>
             <dependency>io.camunda:tasklist-importer</dependency>
-            <dependency>io.camunda:tasklist-archiver</dependency>
             <dependency>io.camunda:tasklist-webjar</dependency>
             <dependency>io.camunda:identity-spring-boot-starter</dependency>
             <dependency>org.springframework.boot:spring-boot-starter-web</dependency>
@@ -538,8 +518,6 @@
             <dependency>org.springframework.boot:spring-boot-starter-thymeleaf</dependency>
             <dependency>org.springframework.boot:spring-boot-starter-actuator</dependency>
             <dependency>org.springdoc:springdoc-openapi-starter-webmvc-ui</dependency>
-            <dependency>org.springframework.session:spring-session-data-redis</dependency>
-            <dependency>com.graphql-java-kickstart:graphql-spring-boot-starter</dependency>
             <dependency>org.thymeleaf:thymeleaf</dependency>
             <dependency>jakarta.json:jakarta.json-api</dependency>
             <dependency>io.micrometer:micrometer-registry-prometheus-simpleclient</dependency>
@@ -582,10 +560,7 @@
             <exclude>io/camunda/tasklist/webapp/StartupBean.class</exclude>
             <exclude>io/camunda/tasklist/webapp/IndexController.class</exclude>
             <exclude>io/camunda/tasklist/WebappModuleConfiguration.class</exclude>
-            <exclude>io/camunda/tasklist/webapp/graphql/*</exclude>
-            <exclude>io/camunda/tasklist/webapp/graphql/mutation/*</exclude>
-            <exclude>io/camunda/tasklist/webapp/graphql/query/*</exclude>
-            <exclude>io/camunda/tasklist/webapp/graphql/entity/*</exclude>
+            <exclude>io/camunda/tasklist/webapp/dto/*</exclude>
             <exclude>io/camunda/tasklist/webapp/management/dto/*</exclude>
             <exclude>io/camunda/tasklist/webapp/es/dao/*</exclude>
             <exclude>io/camunda/tasklist/webapp/es/dao/response/*</exclude>

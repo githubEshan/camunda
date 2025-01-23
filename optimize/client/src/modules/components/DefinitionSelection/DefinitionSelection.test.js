@@ -10,9 +10,8 @@ import React from 'react';
 import {shallow} from 'enzyme';
 import {ComboBox} from '@carbon/react';
 
-import {LoadingIndicator, TenantInfo} from 'components';
+import {TenantInfo} from 'components';
 import {getCollection, loadDefinitions} from 'services';
-import {getOptimizeProfile} from 'config';
 
 import {DefinitionSelection} from './DefinitionSelection';
 import VersionPopover from './VersionPopover';
@@ -111,7 +110,7 @@ it('should render without crashing', () => {
 it('should display a loading indicator', () => {
   const node = shallow(<DefinitionSelection {...props} />);
 
-  expect(node.find(LoadingIndicator)).toExist();
+  expect(node.find('.LoadingDefinitions')).toExist();
 });
 
 it('should initially load all definitions', () => {

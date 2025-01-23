@@ -8,23 +8,7 @@ on:
     branches:
       - "main"
       - "stable/**"
-    paths:
-      - ".github/actions/**"
-      - ".github/workflows/tasklist-*"
-      - "bom/*"
-      - "parent/*"
-      - "pom.xml"
-      - "tasklist/**"
-      - "tasklist.Dockerfile"
   pull_request:
-    paths:
-      - ".github/actions/**"
-      - ".github/workflows/tasklist-*"
-      - "bom/*"
-      - "parent/*"
-      - "pom.xml"
-      - "tasklist/**"
-      - "tasklist.Dockerfile"
 
 # Limit workflow to 1 concurrent run per ref (branch): new commit -> old runs are canceled to save costs
 # Exception for main branch: complete builds for every commit needed for confidenence
@@ -33,47 +17,34 @@ concurrency:
   group: ${{ format('{0}-{1}', github.workflow, github.ref == 'refs/heads/main' && github.sha || github.ref) }}
 
 jobs:
-  check_changes:
-    name: Check for changes in the client folder
-    runs-on: ubuntu-latest
+  detect-changes:
     outputs:
-      has_changed_frontend: ${{ steps.filter.outputs.src_changed }}
+      tasklist-backend-changes: ${{ steps.filter.outputs.tasklist-backend-changes }}
+      tasklist-frontend-changes: ${{ steps.filter.outputs.tasklist-frontend-changes }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      pull-requests: read
     steps:
-      - uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 # v4
-        with:
-          fetch-depth: 0
-      - id: filter
-        run: |
-          echo "src_changed=false" >> $GITHUB_OUTPUT
-          if [ "${{ github.event_name }}" = "pull_request" ]; then
-            # For pull requests, compare the PR base and head commits
-            git fetch origin ${{ github.base_ref }}
-
-            if git diff --name-only ${{ github.event.pull_request.base.sha }} ${{ github.event.pull_request.head.sha }} | grep -q 'tasklist/client/'; then
-              echo 'src_changed=true' >> $GITHUB_OUTPUT
-            fi
-          elif [ "${{ github.event_name }}" = "push" ]; then
-            # For pushes, compare the current commit with the previous one
-            if git diff --name-only ${{ github.event.before }} ${{ github.event.after }} | grep -q 'tasklist/client/'; then
-              echo 'src_changed=true' >> $GITHUB_OUTPUT
-            fi
-          fi
+      - uses: actions/checkout@v4
+      # Detect changes against the base branch
+      - name: Detect changes
+        uses: ./.github/actions/paths-filter
+        id: filter
   run-build:
     name: run-build
+    needs: [detect-changes]
     uses: ./.github/workflows/tasklist-ci-build-reusable.yml
     secrets: inherit
     with:
       branch: ${{ github.head_ref || github.ref_name }} # head_ref = branch name on PR, ref_name = `main` or `stable/**`
+    if: ${{ needs.detect-changes.outputs.tasklist-backend-changes == 'true' || needs.detect-changes.outputs.tasklist-frontend-changes == 'true' }}
 
   run-tests:
     name: run-tests
+    needs: [detect-changes]
     uses: ./.github/workflows/tasklist-ci-test-reusable.yml
     secrets: inherit
     with:
       branch: ${{ github.head_ref || github.ref_name }}
-
-  run-fe-ci:
-    name: run-frontend-tests
-    needs: check_changes
-    if: ${{ needs.check_changes.outputs.has_changed_frontend == 'true' }}
-    uses: ./.github/workflows/tasklist-ci-fe-reusable.yml
+    if: ${{ needs.detect-changes.outputs.tasklist-backend-changes == 'true' }}

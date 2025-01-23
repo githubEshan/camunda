@@ -28,29 +28,21 @@ import io.camunda.zeebe.client.api.search.sort.FlownodeInstanceSort;
 import io.camunda.zeebe.client.api.search.sort.IncidentSort;
 import io.camunda.zeebe.client.api.search.sort.ProcessInstanceSort;
 import io.camunda.zeebe.client.api.search.sort.UserTaskSort;
-import io.camunda.zeebe.client.impl.search.SearchRequestPageImpl;
-import io.camunda.zeebe.client.impl.search.filter.DecisionDefinitionFilterImpl;
-import io.camunda.zeebe.client.impl.search.filter.DecisionRequirementsFilterImpl;
-import io.camunda.zeebe.client.impl.search.filter.FlownodeInstanceFilterImpl;
-import io.camunda.zeebe.client.impl.search.filter.IncidentFilterImpl;
-import io.camunda.zeebe.client.impl.search.filter.ProcessInstanceFilterImpl;
-import io.camunda.zeebe.client.impl.search.filter.UserTaskFilterImpl;
-import io.camunda.zeebe.client.impl.search.filter.VariableValueFilterImpl;
-import io.camunda.zeebe.client.impl.search.sort.DecisionDefinitionSortImpl;
-import io.camunda.zeebe.client.impl.search.sort.DecisionRequirementsSortImpl;
-import io.camunda.zeebe.client.impl.search.sort.FlownodeInstanceSortImpl;
-import io.camunda.zeebe.client.impl.search.sort.IncidentSortImpl;
-import io.camunda.zeebe.client.impl.search.sort.ProcessInstanceSortImpl;
-import io.camunda.zeebe.client.impl.search.sort.UserTaskSortImpl;
 import java.util.function.Consumer;
 
+/**
+ * @deprecated since 8.7 for removal in 8.8, replaced by {@link
+ *     io.camunda.client.api.search.SearchRequestBuilders}
+ */
+@Deprecated
 public final class SearchRequestBuilders {
 
   private SearchRequestBuilders() {}
 
   /** Create a process instance filter. */
   public static ProcessInstanceFilter processInstanceFilter() {
-    return new ProcessInstanceFilterImpl();
+    throw new UnsupportedOperationException(
+        "Not supported with ZeebeClient. Please use CamundaClient.");
   }
 
   /** Create a process instance filter by using a fluent builder. */
@@ -63,7 +55,8 @@ public final class SearchRequestBuilders {
 
   /** Create a variable value filter. */
   public static VariableValueFilter variableValueFilter() {
-    return new VariableValueFilterImpl();
+    throw new UnsupportedOperationException(
+        "Not supported with ZeebeClient. Please use CamundaClient.");
   }
 
   /** Create a variable value filter by using a fluent builder. */
@@ -75,7 +68,8 @@ public final class SearchRequestBuilders {
 
   /** Create a decision definition filter. */
   public static DecisionDefinitionFilter decisionDefinitionFilter() {
-    return new DecisionDefinitionFilterImpl() {};
+    throw new UnsupportedOperationException(
+        "Not supported with ZeebeClient. Please use CamundaClient.");
   }
 
   /** Create a decision definition filter by using a fluent builder. */
@@ -88,7 +82,8 @@ public final class SearchRequestBuilders {
 
   /** Create an incident filter. */
   public static IncidentFilter incidentFilter() {
-    return new IncidentFilterImpl() {};
+    throw new UnsupportedOperationException(
+        "Not supported with ZeebeClient. Please use CamundaClient.");
   }
 
   /** Create an incident filter by using a fluent builder. */
@@ -100,7 +95,8 @@ public final class SearchRequestBuilders {
 
   /** Create a process instance sort option. */
   public static ProcessInstanceSort processInstanceSort() {
-    return new ProcessInstanceSortImpl();
+    throw new UnsupportedOperationException(
+        "Not supported with ZeebeClient. Please use CamundaClient.");
   }
 
   /** Create a process instance sort option by using a fluent builder. */
@@ -112,7 +108,8 @@ public final class SearchRequestBuilders {
 
   /** Create a decision definition sort option. */
   public static DecisionDefinitionSort decisionDefinitionSort() {
-    return new DecisionDefinitionSortImpl() {};
+    throw new UnsupportedOperationException(
+        "Not supported with ZeebeClient. Please use CamundaClient.");
   }
 
   /** Create a decision definition sort option by using a fluent builder. */
@@ -124,7 +121,8 @@ public final class SearchRequestBuilders {
   }
 
   public static IncidentSort incidentSort() {
-    return new IncidentSortImpl() {};
+    throw new UnsupportedOperationException(
+        "Not supported with ZeebeClient. Please use CamundaClient.");
   }
 
   public static IncidentSort incidentSort(final Consumer<IncidentSort> fn) {
@@ -135,7 +133,8 @@ public final class SearchRequestBuilders {
 
   /** Create a search page. */
   public static SearchRequestPage searchRequestPage() {
-    return new SearchRequestPageImpl();
+    throw new UnsupportedOperationException(
+        "Not supported with ZeebeClient. Please use CamundaClient.");
   }
 
   /** Create a search page by using a fluent builder. */
@@ -146,7 +145,8 @@ public final class SearchRequestBuilders {
   }
 
   public static UserTaskFilter userTaskFilter() {
-    return new UserTaskFilterImpl();
+    throw new UnsupportedOperationException(
+        "Not supported with ZeebeClient. Please use CamundaClient.");
   }
 
   public static UserTaskFilter userTaskFilter(final Consumer<UserTaskFilter> fn) {
@@ -156,7 +156,8 @@ public final class SearchRequestBuilders {
   }
 
   public static UserTaskSort userTaskSort() {
-    return new UserTaskSortImpl();
+    throw new UnsupportedOperationException(
+        "Not supported with ZeebeClient. Please use CamundaClient.");
   }
 
   public static UserTaskSort userTaskSort(final Consumer<UserTaskSort> fn) {
@@ -166,7 +167,8 @@ public final class SearchRequestBuilders {
   }
 
   public static DecisionRequirementsFilter decisionRequirementsFilter() {
-    return new DecisionRequirementsFilterImpl();
+    throw new UnsupportedOperationException(
+        "Not supported with ZeebeClient. Please use CamundaClient.");
   }
 
   public static DecisionRequirementsFilter decisionRequirementsFilter(
@@ -177,7 +179,8 @@ public final class SearchRequestBuilders {
   }
 
   public static DecisionRequirementsSort decisionRequirementsSort() {
-    return new DecisionRequirementsSortImpl();
+    throw new UnsupportedOperationException(
+        "Not supported with ZeebeClient. Please use CamundaClient.");
   }
 
   public static DecisionRequirementsSort decisionRequirementsSort(
@@ -188,7 +191,8 @@ public final class SearchRequestBuilders {
   }
 
   public static FlownodeInstanceFilter flowNodeInstanceFilter() {
-    return new FlownodeInstanceFilterImpl();
+    throw new UnsupportedOperationException(
+        "Not supported with ZeebeClient. Please use CamundaClient.");
   }
 
   public static FlownodeInstanceFilter flowNodeInstanceFilter(
@@ -199,7 +203,8 @@ public final class SearchRequestBuilders {
   }
 
   public static FlownodeInstanceSort flowNodeInstanceSort() {
-    return new FlownodeInstanceSortImpl();
+    throw new UnsupportedOperationException(
+        "Not supported with ZeebeClient. Please use CamundaClient.");
   }
 
   public static FlownodeInstanceSort flowNodeInstanceSort(final Consumer<FlownodeInstanceSort> fn) {

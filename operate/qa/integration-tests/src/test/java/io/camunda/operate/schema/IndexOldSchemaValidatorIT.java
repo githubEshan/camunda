@@ -22,14 +22,16 @@ import io.camunda.operate.exceptions.OperateRuntimeException;
 import io.camunda.operate.property.OperateProperties;
 import io.camunda.operate.qa.util.TestElasticsearchSchemaManager;
 import io.camunda.operate.qa.util.TestOpensearchSchemaManager;
-import io.camunda.operate.schema.indices.IndexDescriptor;
-import io.camunda.operate.schema.indices.ProcessIndex;
-import io.camunda.operate.schema.indices.UserIndex;
-import io.camunda.operate.schema.templates.IncidentTemplate;
+import io.camunda.operate.qa.util.TestSchemaManager;
 import io.camunda.operate.store.elasticsearch.RetryElasticsearchClient;
 import io.camunda.operate.store.opensearch.client.sync.OpenSearchIndexOperations;
 import io.camunda.operate.store.opensearch.client.sync.RichOpenSearchClient;
+import io.camunda.operate.util.IndexPrefixHolder;
 import io.camunda.operate.util.apps.nobeans.TestApplicationWithNoBeans;
+import io.camunda.webapps.schema.descriptors.AbstractIndexDescriptor;
+import io.camunda.webapps.schema.descriptors.ComponentNames;
+import io.camunda.webapps.schema.descriptors.IndexDescriptor;
+import io.camunda.webapps.schema.descriptors.operate.index.ProcessIndex;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
@@ -38,6 +40,7 @@ import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.test.context.junit4.SpringRunner;
@@ -53,15 +56,12 @@ import org.springframework.test.context.junit4.SpringRunner;
       TestOpensearchSchemaManager.class,
       RichOpenSearchClient.class,
       OpensearchConnector.class,
-      IndexDescriptor.class,
       JacksonConfig.class,
       OperateDateTimeFormatter.class,
       JacksonConfig.class,
       OperateDateTimeFormatter.class,
-      // Assume we have only 3 indices:
-      ProcessIndex.class,
-      UserIndex.class,
-      IncidentTemplate.class
+      io.camunda.operate.util.IndexTemplateDescriptorsConfigurator.class,
+      IndexPrefixHolder.class
     })
 public class IndexOldSchemaValidatorIT {
 
@@ -71,11 +71,17 @@ public class IndexOldSchemaValidatorIT {
 
   @Autowired List<IndexDescriptor> indexDescriptors;
 
-  @Autowired ProcessIndex processIndex;
+  @Autowired
+  @Qualifier("operateProcessIndex")
+  ProcessIndex processIndex;
 
   @Autowired IndexSchemaValidator indexSchemaValidator;
 
   @Autowired OperateProperties operateProperties;
+
+  @Autowired IndexPrefixHolder indexPrefixHolder;
+
+  @Autowired TestSchemaManager schemaManager;
 
   private String operatePrefix;
 
@@ -88,10 +94,9 @@ public class IndexOldSchemaValidatorIT {
 
   @Before
   public void setUp() {
-    operatePrefix =
-        DatabaseInfo.isOpensearch()
-            ? operateProperties.getOpensearch().getIndexPrefix()
-            : operateProperties.getElasticsearch().getIndexPrefix();
+    schemaManager.setIndexPrefix(indexPrefixHolder.createNewIndexPrefix());
+    operatePrefix = indexPrefixHolder.getIndexPrefix();
+
     allIndexNames =
         indexDescriptors.stream()
             .map(IndexDescriptor::getFullQualifiedName)
@@ -260,6 +265,11 @@ public class IndexOldSchemaValidatorIT {
   }
 
   private String getFullQualifiedIndexName(final String indexNamePart, final String version) {
-    return String.format("%s-%s-%s_", operatePrefix, indexNamePart, version);
+    return String.format(
+        "%s%s-%s-%s_",
+        AbstractIndexDescriptor.formatIndexPrefix(operatePrefix),
+        ComponentNames.OPERATE,
+        indexNamePart,
+        version);
   }
 }

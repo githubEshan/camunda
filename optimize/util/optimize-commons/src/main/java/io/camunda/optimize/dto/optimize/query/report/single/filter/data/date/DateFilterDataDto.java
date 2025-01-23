@@ -18,10 +18,6 @@ import io.camunda.optimize.dto.optimize.query.report.single.filter.data.date.ins
 import io.camunda.optimize.dto.optimize.query.report.single.filter.data.date.instance.RelativeDateFilterDataDto;
 import io.camunda.optimize.dto.optimize.query.report.single.filter.data.date.instance.RollingDateFilterDataDto;
 import java.time.OffsetDateTime;
-import lombok.EqualsAndHashCode;
-import lombok.Getter;
-import lombok.Setter;
-import lombok.experimental.Accessors;
 
 /**
  * Abstract class that contains a hidden "type" field to distinguish which filter type the jackson
@@ -36,10 +32,6 @@ import lombok.experimental.Accessors;
   @JsonSubTypes.Type(value = RollingDateFilterDataDto.class, name = ROLLING_DATE_FILTER),
   @JsonSubTypes.Type(value = RelativeDateFilterDataDto.class, name = RELATIVE_DATE_FILTER),
 })
-@Getter
-@Setter
-@EqualsAndHashCode
-@Accessors(chain = true)
 public abstract class DateFilterDataDto<START> implements FilterDataDto {
 
   protected DateFilterType type;
@@ -57,6 +49,59 @@ public abstract class DateFilterDataDto<START> implements FilterDataDto {
     this.end = end;
   }
 
+  public DateFilterType getType() {
+    return this.type;
+  }
+
+  public START getStart() {
+    return this.start;
+  }
+
+  public OffsetDateTime getEnd() {
+    return this.end;
+  }
+
+  public boolean isIncludeUndefined() {
+    return this.includeUndefined;
+  }
+
+  public boolean isExcludeUndefined() {
+    return this.excludeUndefined;
+  }
+
+  public void setType(final DateFilterType type) {
+    this.type = type;
+  }
+
+  public void setStart(final START start) {
+    this.start = start;
+  }
+
+  public void setEnd(final OffsetDateTime end) {
+    this.end = end;
+  }
+
+  public void setIncludeUndefined(final boolean includeUndefined) {
+    this.includeUndefined = includeUndefined;
+  }
+
+  public void setExcludeUndefined(final boolean excludeUndefined) {
+    this.excludeUndefined = excludeUndefined;
+  }
+
+  public boolean equals(final Object o) {
+    return org.apache.commons.lang3.builder.EqualsBuilder.reflectionEquals(this, o);
+  }
+
+  protected boolean canEqual(final Object other) {
+    return other instanceof DateFilterDataDto;
+  }
+
+  public int hashCode() {
+    return org.apache.commons.lang3.builder.HashCodeBuilder.reflectionHashCode(this);
+  }
+
+  @SuppressWarnings("checkstyle:ConstantName")
   public static final class Fields {
 
     public static final String type = "type";

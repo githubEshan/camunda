@@ -10,20 +10,25 @@ package io.camunda.optimize.service;
 import io.camunda.optimize.dto.optimize.DefinitionType;
 import io.camunda.optimize.dto.optimize.query.analysis.BranchAnalysisRequestDto;
 import io.camunda.optimize.dto.optimize.query.analysis.BranchAnalysisResponseDto;
+import io.camunda.optimize.rest.exceptions.ForbiddenException;
 import io.camunda.optimize.service.db.reader.BranchAnalysisReader;
 import io.camunda.optimize.service.security.util.definition.DataSourceDefinitionAuthorizationService;
 import io.camunda.optimize.service.util.ValidationHelper;
-import jakarta.ws.rs.ForbiddenException;
 import java.time.ZoneId;
-import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
-@RequiredArgsConstructor
 @Component
 public class BranchAnalysisService {
 
   private final DataSourceDefinitionAuthorizationService definitionAuthorizationService;
   private final BranchAnalysisReader branchAnalysisReader;
+
+  public BranchAnalysisService(
+      final DataSourceDefinitionAuthorizationService definitionAuthorizationService,
+      final BranchAnalysisReader branchAnalysisReader) {
+    this.definitionAuthorizationService = definitionAuthorizationService;
+    this.branchAnalysisReader = branchAnalysisReader;
+  }
 
   public BranchAnalysisResponseDto branchAnalysis(
       final String userId, final BranchAnalysisRequestDto request, final ZoneId timezone) {

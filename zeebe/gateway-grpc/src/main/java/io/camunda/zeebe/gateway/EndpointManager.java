@@ -8,8 +8,9 @@
 package io.camunda.zeebe.gateway;
 
 import io.atomix.utils.net.Address;
-import io.camunda.zeebe.auth.api.JwtAuthorizationBuilder;
-import io.camunda.zeebe.auth.impl.Authorization;
+import io.camunda.security.configuration.MultiTenancyConfiguration;
+import io.camunda.zeebe.auth.Authorization;
+import io.camunda.zeebe.auth.ClaimTransformer;
 import io.camunda.zeebe.broker.client.api.BrokerClient;
 import io.camunda.zeebe.broker.client.api.BrokerClusterState;
 import io.camunda.zeebe.broker.client.api.BrokerTopologyManager;
@@ -18,10 +19,9 @@ import io.camunda.zeebe.gateway.ResponseMapper.BrokerResponseMapper;
 import io.camunda.zeebe.gateway.grpc.ServerStreamObserver;
 import io.camunda.zeebe.gateway.impl.broker.RequestRetryHandler;
 import io.camunda.zeebe.gateway.impl.broker.request.BrokerActivateJobsRequest;
-import io.camunda.zeebe.gateway.impl.configuration.MultiTenancyCfg;
 import io.camunda.zeebe.gateway.impl.job.ActivateJobsHandler;
 import io.camunda.zeebe.gateway.impl.stream.StreamJobsHandler;
-import io.camunda.zeebe.gateway.interceptors.InterceptorUtil;
+import io.camunda.zeebe.gateway.interceptors.impl.AuthenticationInterceptor;
 import io.camunda.zeebe.gateway.protocol.GatewayOuterClass.ActivateJobsRequest;
 import io.camunda.zeebe.gateway.protocol.GatewayOuterClass.ActivateJobsResponse;
 import io.camunda.zeebe.gateway.protocol.GatewayOuterClass.ActivatedJob;
@@ -69,13 +69,13 @@ import io.camunda.zeebe.gateway.protocol.GatewayOuterClass.UpdateJobRetriesRespo
 import io.camunda.zeebe.gateway.protocol.GatewayOuterClass.UpdateJobTimeoutRequest;
 import io.camunda.zeebe.gateway.protocol.GatewayOuterClass.UpdateJobTimeoutResponse;
 import io.camunda.zeebe.protocol.impl.stream.job.JobActivationProperties;
-import io.camunda.zeebe.protocol.record.value.TenantOwned;
 import io.camunda.zeebe.util.VersionUtil;
 import io.grpc.Context;
 import io.grpc.stub.ServerCallStreamObserver;
 import java.time.Duration;
 import java.util.ArrayList;
-import java.util.List;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.Set;
 import java.util.function.Function;
 
@@ -86,19 +86,17 @@ public final class EndpointManager {
   private final ActivateJobsHandler<ActivateJobsResponse> activateJobsHandler;
   private final RequestRetryHandler requestRetryHandler;
   private final StreamJobsHandler streamJobsHandler;
-  private final MultiTenancyCfg multiTenancy;
 
   public EndpointManager(
       final BrokerClient brokerClient,
       final ActivateJobsHandler<ActivateJobsResponse> activateJobsHandler,
       final StreamJobsHandler streamJobsHandler,
-      final MultiTenancyCfg multiTenancy) {
+      final MultiTenancyConfiguration multiTenancy) {
     this.brokerClient = brokerClient;
     this.activateJobsHandler = activateJobsHandler;
     this.streamJobsHandler = streamJobsHandler;
     topologyManager = brokerClient.getTopologyManager();
     requestRetryHandler = new RequestRetryHandler(brokerClient, topologyManager);
-    this.multiTenancy = multiTenancy;
     RequestMapper.setMultiTenancyEnabled(multiTenancy.isEnabled());
   }
 
@@ -491,18 +489,22 @@ public final class EndpointManager {
 
     final BrokerRequest<BrokerResponseT> brokerRequest = requestMapper.apply(grpcRequest);
 
-    final List<String> authorizedTenants =
-        multiTenancy.isEnabled()
-            ? Context.current().call(InterceptorUtil.getAuthorizedTenantsKey()::get)
-            : List.of(TenantOwned.DEFAULT_TENANT_IDENTIFIER);
-    final String authorizationToken =
-        Authorization.jwtEncoder()
-            .withIssuer(JwtAuthorizationBuilder.DEFAULT_ISSUER)
-            .withAudience(JwtAuthorizationBuilder.DEFAULT_AUDIENCE)
-            .withSubject(JwtAuthorizationBuilder.DEFAULT_SUBJECT)
-            .withClaim(Authorization.AUTHORIZED_TENANTS, authorizedTenants)
-            .encode();
-    brokerRequest.setAuthorization(authorizationToken);
+    final Map<String, Object> claims = new HashMap<>();
+
+    // retrieve the user claims from the context and add them to the authorization if present
+    final Map<String, Object> userClaims =
+        Context.current().call(AuthenticationInterceptor.USER_CLAIMS::get);
+    if (userClaims != null) {
+      userClaims.forEach((key, value) -> ClaimTransformer.applyUserClaim(claims, key, value));
+    }
+
+    // retrieve the username from the context and add it to the authorization if present
+    final String username = Context.current().call(AuthenticationInterceptor.USERNAME::get);
+    if (username != null) {
+      claims.put(Authorization.AUTHORIZED_USERNAME, username);
+    }
+
+    brokerRequest.setAuthorization(claims);
 
     return brokerRequest;
   }

@@ -12,25 +12,25 @@ import io.camunda.optimize.dto.optimize.cloud.CloudUserDto;
 import io.camunda.optimize.service.exceptions.OptimizeRuntimeException;
 import io.camunda.optimize.service.util.configuration.ConfigurationService;
 import io.camunda.optimize.service.util.configuration.condition.CCSaaSCondition;
-import jakarta.ws.rs.core.Response;
 import java.io.IOException;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.Optional;
-import lombok.extern.slf4j.Slf4j;
 import org.apache.http.client.methods.CloseableHttpResponse;
 import org.apache.http.client.methods.HttpGet;
+import org.slf4j.Logger;
 import org.springframework.context.annotation.Conditional;
+import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Component;
 
 @Component
-@Slf4j
 @Conditional(CCSaaSCondition.class)
 public class CCSaaSUserClient extends AbstractCCSaaSClient {
 
   private static final String GET_USER_BY_ID_TEMPLATE = GET_ORGS_TEMPLATE + "/members/%s";
   private static final String GET_USERS_TEMPLATE = GET_ORGS_TEMPLATE + "/members?filter=members";
+  private static final Logger LOG = org.slf4j.LoggerFactory.getLogger(CCSaaSUserClient.class);
 
   public CCSaaSUserClient(
       final ConfigurationService configurationService, final ObjectMapper objectMapper) {
@@ -39,7 +39,7 @@ public class CCSaaSUserClient extends AbstractCCSaaSClient {
 
   public Optional<CloudUserDto> getCloudUserById(final String userId, final String accessToken) {
     try {
-      log.info("Fetching Cloud user by id.");
+      LOG.info("Fetching Cloud user by id.");
       final HttpGet request =
           new HttpGet(
               String.format(
@@ -48,9 +48,9 @@ public class CCSaaSUserClient extends AbstractCCSaaSClient {
                   getCloudAuthConfiguration().getOrganizationId(),
                   URLEncoder.encode(userId, StandardCharsets.UTF_8)));
       try (final CloseableHttpResponse response = performRequest(request, accessToken)) {
-        if (response.getStatusLine().getStatusCode() == Response.Status.NOT_FOUND.getStatusCode()) {
+        if (response.getStatusLine().getStatusCode() == HttpStatus.NOT_FOUND.value()) {
           return Optional.empty();
-        } else if (response.getStatusLine().getStatusCode() != Response.Status.OK.getStatusCode()) {
+        } else if (response.getStatusLine().getStatusCode() != HttpStatus.OK.value()) {
           throw new OptimizeRuntimeException(
               String.format(
                   "Unexpected response when fetching cloud user by id: %s",
@@ -66,7 +66,7 @@ public class CCSaaSUserClient extends AbstractCCSaaSClient {
 
   public List<CloudUserDto> fetchAllCloudUsers(final String accessToken) {
     try {
-      log.info("Fetching Cloud users.");
+      LOG.info("Fetching Cloud users.");
       final HttpGet request =
           new HttpGet(
               String.format(
@@ -74,7 +74,7 @@ public class CCSaaSUserClient extends AbstractCCSaaSClient {
                   getCloudUsersConfiguration().getAccountsUrl(),
                   getCloudAuthConfiguration().getOrganizationId()));
       try (final CloseableHttpResponse response = performRequest(request, accessToken)) {
-        if (response.getStatusLine().getStatusCode() != Response.Status.OK.getStatusCode()) {
+        if (response.getStatusLine().getStatusCode() != HttpStatus.OK.value()) {
           throw new OptimizeRuntimeException(
               String.format(
                   "Unexpected response when fetching cloud users: %s",

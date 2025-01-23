@@ -22,7 +22,6 @@ import java.time.OffsetDateTime;
 import java.time.ZoneId;
 import java.time.temporal.ChronoUnit;
 import java.util.Optional;
-import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -31,7 +30,6 @@ import org.springframework.context.annotation.Scope;
 import org.springframework.stereotype.Component;
 
 @Component
-@RequiredArgsConstructor
 @Scope(value = ConfigurableBeanFactory.SCOPE_PROTOTYPE)
 public class ExternalVariableUpdateImportIndexHandler
     implements ImportIndexHandler<TimestampBasedImportPage, TimestampBasedImportIndexDto> {
@@ -50,21 +48,14 @@ public class ExternalVariableUpdateImportIndexHandler
   private OffsetDateTime timestampOfLastEntity = BEGINNING_OF_TIME;
   private OffsetDateTime persistedTimestampOfLastEntity = BEGINNING_OF_TIME;
 
-  public TimestampBasedImportIndexDto getIndexStateDto() {
-    TimestampBasedImportIndexDto indexToStore = new TimestampBasedImportIndexDto();
-    indexToStore.setLastImportExecutionTimestamp(lastImportExecutionTimestamp);
-    indexToStore.setTimestampOfLastEntity(persistedTimestampOfLastEntity);
-    indexToStore.setDataSource(getDataSource());
-    indexToStore.setEsTypeIndexRefersTo(getDatabaseDocID());
-    return indexToStore;
-  }
+  public ExternalVariableUpdateImportIndexHandler() {}
 
   @PostConstruct
   protected void init() {
     final Optional<TimestampBasedImportIndexDto> dto =
         importIndexReader.getImportIndex(getDatabaseDocID(), getDataSource());
     if (dto.isPresent()) {
-      TimestampBasedImportIndexDto loadedImportIndex = dto.get();
+      final TimestampBasedImportIndexDto loadedImportIndex = dto.get();
       updateLastPersistedEntityTimestamp(loadedImportIndex.getTimestampOfLastEntity());
       updatePendingLastEntityTimestamp(loadedImportIndex.getTimestampOfLastEntity());
       updateLastImportExecutionTimestamp(loadedImportIndex.getLastImportExecutionTimestamp());
@@ -76,6 +67,16 @@ public class ExternalVariableUpdateImportIndexHandler
     final TimestampBasedImportPage page = new TimestampBasedImportPage();
     page.setTimestampOfLastEntity(timestampOfLastEntity);
     return page;
+  }
+
+  @Override
+  public TimestampBasedImportIndexDto getIndexStateDto() {
+    final TimestampBasedImportIndexDto indexToStore = new TimestampBasedImportIndexDto();
+    indexToStore.setLastImportExecutionTimestamp(lastImportExecutionTimestamp);
+    indexToStore.setTimestampOfLastEntity(persistedTimestampOfLastEntity);
+    indexToStore.setDataSource(getDataSource());
+    indexToStore.setDbTypeIndexRefersTo(getDatabaseDocID());
+    return indexToStore;
   }
 
   @Override
@@ -132,11 +133,11 @@ public class ExternalVariableUpdateImportIndexHandler
   }
 
   private void updateLastPersistedEntityTimestamp(final OffsetDateTime timestamp) {
-    this.persistedTimestampOfLastEntity = timestamp;
+    persistedTimestampOfLastEntity = timestamp;
   }
 
   private void updateLastImportExecutionTimestamp(final OffsetDateTime timestamp) {
-    this.lastImportExecutionTimestamp = timestamp;
+    lastImportExecutionTimestamp = timestamp;
   }
 
   private void updatePendingLastEntityTimestamp(final OffsetDateTime timestamp) {

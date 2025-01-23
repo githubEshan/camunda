@@ -11,19 +11,16 @@ import static io.camunda.optimize.upgrade.steps.UpgradeStepType.SCHEMA_DELETE_TE
 
 import io.camunda.optimize.service.db.schema.IndexMappingCreator;
 import io.camunda.optimize.service.db.schema.OptimizeIndexNameService;
-import io.camunda.optimize.upgrade.es.SchemaUpgradeClient;
+import io.camunda.optimize.upgrade.db.SchemaUpgradeClient;
 import io.camunda.optimize.upgrade.exception.UpgradeRuntimeException;
 import io.camunda.optimize.upgrade.steps.UpgradeStep;
 import io.camunda.optimize.upgrade.steps.UpgradeStepType;
-import lombok.EqualsAndHashCode;
-import lombok.Getter;
 
-@EqualsAndHashCode(callSuper = true)
 public class DeleteIndexTemplateIfExistsStep extends UpgradeStep {
 
   // This should be the name of the template prefix and without version suffix or optimize prefix
-  @Getter private final String templateName;
-  @Getter private final int templateVersion;
+  private final String templateName;
+  private final int templateVersion;
 
   public DeleteIndexTemplateIfExistsStep(final String templateName, final int templateVersion) {
     super(null);
@@ -43,7 +40,7 @@ public class DeleteIndexTemplateIfExistsStep extends UpgradeStep {
   }
 
   @Override
-  public void execute(final SchemaUpgradeClient schemaUpgradeClient) {
+  public void performUpgradeStep(final SchemaUpgradeClient schemaUpgradeClient) {
     final String fullTemplateName =
         schemaUpgradeClient
             .getIndexNameService()
@@ -57,5 +54,28 @@ public class DeleteIndexTemplateIfExistsStep extends UpgradeStep {
         "%s[Template]",
         OptimizeIndexNameService.getOptimizeIndexOrTemplateNameForAliasAndVersion(
             templateName, String.valueOf(templateVersion)));
+  }
+
+  @Override
+  public boolean equals(final Object o) {
+    return org.apache.commons.lang3.builder.EqualsBuilder.reflectionEquals(this, o);
+  }
+
+  @Override
+  protected boolean canEqual(final Object other) {
+    return other instanceof DeleteIndexTemplateIfExistsStep;
+  }
+
+  @Override
+  public int hashCode() {
+    return org.apache.commons.lang3.builder.HashCodeBuilder.reflectionHashCode(this);
+  }
+
+  public String getTemplateName() {
+    return this.templateName;
+  }
+
+  public int getTemplateVersion() {
+    return this.templateVersion;
   }
 }

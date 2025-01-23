@@ -16,23 +16,27 @@ import jakarta.annotation.PostConstruct;
 import jakarta.annotation.PreDestroy;
 import java.time.OffsetDateTime;
 import java.util.List;
-import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
+import org.slf4j.Logger;
 import org.springframework.context.ApplicationContext;
 import org.springframework.scheduling.support.CronTrigger;
 import org.springframework.stereotype.Component;
 
-@RequiredArgsConstructor
 @Component
-@Slf4j
 public class CleanupScheduler extends AbstractScheduledService implements ConfigurationReloadable {
 
+  private static final Logger LOG = org.slf4j.LoggerFactory.getLogger(CleanupScheduler.class);
   private final ConfigurationService configurationService;
   private final List<CleanupService> cleanupServices;
 
+  public CleanupScheduler(
+      final ConfigurationService configurationService, final List<CleanupService> cleanupServices) {
+    this.configurationService = configurationService;
+    this.cleanupServices = cleanupServices;
+  }
+
   @PostConstruct
   public void init() {
-    log.info("Initializing OptimizeCleanupScheduler");
+    LOG.info("Initializing OptimizeCleanupScheduler");
     getCleanupConfiguration().validate();
     if (getCleanupConfiguration().isEnabled()) {
       startCleanupScheduling();
@@ -42,13 +46,13 @@ public class CleanupScheduler extends AbstractScheduledService implements Config
   }
 
   public synchronized void startCleanupScheduling() {
-    log.info("Starting cleanup scheduling");
+    LOG.info("Starting cleanup scheduling");
     startScheduling();
   }
 
   @PreDestroy
   public synchronized void stopCleanupScheduling() {
-    log.info("Stopping cleanup scheduling");
+    LOG.info("Stopping cleanup scheduling");
     stopScheduling();
   }
 
@@ -57,20 +61,25 @@ public class CleanupScheduler extends AbstractScheduledService implements Config
     runCleanup();
   }
 
+  @Override
+  protected CronTrigger createScheduleTrigger() {
+    return new CronTrigger(getCleanupConfiguration().getCronTrigger());
+  }
+
   public void runCleanup() {
-    log.info("Running optimize history cleanup...");
+    LOG.info("Running optimize history cleanup...");
     final OffsetDateTime startTime = LocalDateUtil.getCurrentDateTime();
 
     cleanupServices.stream()
         .filter(CleanupService::isEnabled)
         .forEach(
             optimizeCleanupService -> {
-              log.info(
+              LOG.info(
                   "Running CleanupService {}", optimizeCleanupService.getClass().getSimpleName());
               try {
                 optimizeCleanupService.doCleanup(startTime);
-              } catch (Exception e) {
-                log.error(
+              } catch (final Exception e) {
+                LOG.error(
                     "Execution of cleanupService {} failed",
                     optimizeCleanupService.getClass().getSimpleName(),
                     e);
@@ -79,7 +88,7 @@ public class CleanupScheduler extends AbstractScheduledService implements Config
 
     final long durationSeconds =
         OffsetDateTime.now().minusSeconds(startTime.toEpochSecond()).toEpochSecond();
-    log.info("Finished optimize history cleanup in {}s", durationSeconds);
+    LOG.info("Finished optimize history cleanup in {}s", durationSeconds);
   }
 
   public List<CleanupService> getCleanupServices() {
@@ -92,11 +101,6 @@ public class CleanupScheduler extends AbstractScheduledService implements Config
   }
 
   protected CleanupConfiguration getCleanupConfiguration() {
-    return this.configurationService.getCleanupServiceConfiguration();
-  }
-
-  @Override
-  protected CronTrigger createScheduleTrigger() {
-    return new CronTrigger(getCleanupConfiguration().getCronTrigger());
+    return configurationService.getCleanupServiceConfiguration();
   }
 }

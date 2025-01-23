@@ -7,14 +7,16 @@
  */
 package io.camunda.optimize.service.db.os;
 
+import static io.camunda.optimize.service.util.ExceptionUtil.isInstanceIndexNotFoundException;
+
 import io.camunda.optimize.dto.optimize.SimpleDefinitionDto;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.function.Consumer;
-import lombok.extern.slf4j.Slf4j;
 import org.opensearch.client.opensearch._types.aggregations.Aggregate;
 import org.opensearch.client.opensearch._types.aggregations.Aggregation;
 import org.opensearch.client.opensearch._types.aggregations.Aggregation.Builder;
@@ -25,10 +27,12 @@ import org.opensearch.client.opensearch._types.aggregations.NestedAggregation;
 import org.opensearch.client.opensearch._types.query_dsl.Query;
 import org.opensearch.client.opensearch.core.SearchRequest;
 import org.opensearch.client.opensearch.core.SearchResponse;
+import org.slf4j.Logger;
 
-@Slf4j
 public class OpenSearchCompositeAggregationScroller {
 
+  private static final Logger LOG =
+      org.slf4j.LoggerFactory.getLogger(OpenSearchCompositeAggregationScroller.class);
   private OptimizeOpenSearchClient osClient;
   private SearchRequest.Builder searchRequestBuilder;
   private Consumer<CompositeBucket> compositeBucketConsumer;
@@ -93,49 +97,81 @@ public class OpenSearchCompositeAggregationScroller {
             .aggregations(aggregations)
             .size(requestSize);
 
-    final SearchResponse searchResponse =
-        osClient.search(searchRequestBuilder, SimpleDefinitionDto.class, errorMessage);
+    try {
+      final SearchResponse searchResponse =
+          osClient.search(searchRequestBuilder, SimpleDefinitionDto.class, errorMessage);
 
-    final CompositeAggregate compositeAggregationResult =
-        extractCompositeAggregationResult(searchResponse);
+      final CompositeAggregate compositeAggregationResult =
+          extractCompositeAggregationResult(searchResponse);
 
-    Map<String, String> convertedCompositeBucketConsumer =
-        compositeAggregationResult.afterKey().entrySet().stream()
-            // Below is a workaround for a known java issue
-            // https://bugs.openjdk.org/browse/JDK-8148463
-            .collect(
-                HashMap::new,
-                (m, v) -> m.put(v.getKey(), v.getValue().to(String.class)),
-                HashMap::putAll);
+      final Map<String, String> safeAfterKeyMap =
+          compositeAggregationResult.afterKey().entrySet().stream()
+              // Below is a workaround for a known java issue
+              // https://bugs.openjdk.org/browse/JDK-8148463
+              .collect(
+                  HashMap::new,
+                  (m, v) -> m.put(v.getKey(), v.getValue().to(String.class)),
+                  HashMap::putAll);
 
-    aggregations =
-        updateAfterKeyInCompositeAggregation(convertedCompositeBucketConsumer, aggregations);
+      aggregations = updateAfterKeyInCompositeAggregation(safeAfterKeyMap, aggregations);
 
-    return compositeAggregationResult.buckets().array();
+      return compositeAggregationResult.buckets().array();
+    } catch (final RuntimeException e) {
+      if (isInstanceIndexNotFoundException(e)) {
+        LOG.info(
+            "Was not able to get next page of {} aggregation because at least one instance from {} does not exist.",
+            pathToAggregation.getLast(),
+            indices);
+        return Collections.emptyList();
+      }
+      throw e;
+    }
   }
 
   private HashMap<String, Aggregation> updateAfterKeyInCompositeAggregation(
-      Map<String, String> convertedCompositeBucketConsumer, Map<String, Aggregation> currentAgg) {
-    HashMap<String, Aggregation> newAggregations = new HashMap<>();
+      final Map<String, String> safeAfterKeyMap, final Map<String, Aggregation> currentAgg) {
+    return updateAfterKeyInCompositeAggregation(safeAfterKeyMap, currentAgg, false);
+  }
 
-    // find aggregation response
-    for (String aggPath : pathToAggregation) {
-      Aggregation agg = currentAgg.get(aggPath);
-      if (agg != null) {
-        if (agg.isNested()) {
-          Aggregation newNestedAgg =
-              new Builder()
-                  .nested(new NestedAggregation.Builder().path(agg.nested().path()).build())
-                  .aggregations(
-                      updateAfterKeyInCompositeAggregation(
-                          convertedCompositeBucketConsumer, agg.aggregations()))
-                  .build();
-          newAggregations.put(aggPath, newNestedAgg);
-        } else if (agg.isComposite()) {
-          newAggregations.put(
-              aggPath,
-              updateCompositeAggregation(convertedCompositeBucketConsumer, agg.composite())
-                  ._toAggregation());
+  private HashMap<String, Aggregation> updateAfterKeyInCompositeAggregation(
+      final Map<String, String> safeAfterKeyMap,
+      final Map<String, Aggregation> currentAgg,
+      final boolean isFromNested) {
+    final HashMap<String, Aggregation> newAggregations = new HashMap<>();
+
+    if (safeAfterKeyMap.isEmpty()) {
+      return new HashMap<>(currentAgg);
+    }
+
+    for (final String aggPath : pathToAggregation) {
+      final Aggregation agg = currentAgg.get(aggPath);
+      if (agg == null) {
+        continue;
+      }
+
+      if (agg.isNested()) {
+        final Aggregation newNestedAgg =
+            new Builder()
+                .nested(new NestedAggregation.Builder().path(agg.nested().path()).build())
+                .aggregations(
+                    updateAfterKeyInCompositeAggregation(safeAfterKeyMap, agg.aggregations(), true))
+                .build();
+        newAggregations.put(aggPath, newNestedAgg);
+      } else if (agg.isComposite()) {
+        final CompositeAggregation newAgg =
+            updateCompositeAggregation(agg.composite(), safeAfterKeyMap);
+        if (isFromNested) {
+          newAggregations.put(aggPath, newAgg._toAggregation());
+        } else {
+          final Aggregation upgradeAgg =
+              Aggregation.of(
+                  a -> {
+                    if (agg.aggregations() != null) {
+                      a.aggregations(agg.aggregations());
+                    }
+                    return a.composite(newAgg);
+                  });
+          newAggregations.put(aggPath, upgradeAgg);
         }
       }
     }
@@ -143,13 +179,14 @@ public class OpenSearchCompositeAggregationScroller {
   }
 
   private CompositeAggregation updateCompositeAggregation(
-      Map<String, String> convertedCompositeBucketConsumer,
-      CompositeAggregation prevCompositeAggregation) {
-    // find aggregation and adjust after key for next invocation
+      final CompositeAggregation prevCompositeAggregation,
+      final Map<String, String> safeAfterKeyMap) {
     return new CompositeAggregation.Builder()
         .sources(prevCompositeAggregation.sources())
         .size(prevCompositeAggregation.size())
-        .after(convertedCompositeBucketConsumer)
+        .name(prevCompositeAggregation.name())
+        .meta(prevCompositeAggregation.meta())
+        .after(safeAfterKeyMap)
         .build();
   }
 
@@ -158,7 +195,7 @@ public class OpenSearchCompositeAggregationScroller {
     Map<String, Aggregate> aggregations = searchResponse.aggregations();
     // find aggregation response
     for (int i = 0; i < pathToAggregation.size() - 1; i++) {
-      Aggregate agg = aggregations.get(pathToAggregation.get(i));
+      final Aggregate agg = aggregations.get(pathToAggregation.get(i));
       if (agg.isNested()) {
         aggregations = agg.nested().aggregations();
       }
@@ -187,7 +224,8 @@ public class OpenSearchCompositeAggregationScroller {
    * @param pathToAggregation a path to where to find the composite aggregation
    * @return the scroller object
    */
-  public OpenSearchCompositeAggregationScroller setPathToAggregation(String... pathToAggregation) {
+  public OpenSearchCompositeAggregationScroller setPathToAggregation(
+      final String... pathToAggregation) {
     this.pathToAggregation = new LinkedList<>(Arrays.asList(pathToAggregation));
     return this;
   }

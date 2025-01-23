@@ -7,8 +7,9 @@
  */
 package io.camunda.operate.webapp.security;
 
-import static io.camunda.operate.property.WebSecurityProperties.DEFAULT_SM_SECURITY_POLICY;
 import static io.camunda.operate.webapp.security.OperateURIs.*;
+import static io.camunda.webapps.util.HttpUtils.REQUESTED_URL;
+import static io.camunda.webapps.util.HttpUtils.getRequestedUrl;
 import static org.apache.http.entity.ContentType.APPLICATION_JSON;
 import static org.springframework.http.HttpStatus.NO_CONTENT;
 import static org.springframework.http.HttpStatus.UNAUTHORIZED;
@@ -25,7 +26,6 @@ import java.io.IOException;
 import java.io.PrintWriter;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.actuate.autoconfigure.security.servlet.EndpointRequest;
 import org.springframework.boot.actuate.logging.LoggersEndpoint;
 import org.springframework.context.annotation.Bean;
@@ -47,11 +47,17 @@ public abstract class BaseWebConfigurer {
 
   protected final Logger logger = LoggerFactory.getLogger(getClass());
 
-  @Autowired protected OperateProperties operateProperties;
-
-  @Autowired OperateProfileService errorMessageService;
-
+  protected OperateProperties operateProperties;
+  OperateProfileService errorMessageService;
   final CookieCsrfTokenRepository cookieCsrfTokenRepository = new CookieCsrfTokenRepository();
+  private final WebSecurityProperties webSecurityProperties;
+
+  public BaseWebConfigurer(
+      final OperateProperties operateProperties, final OperateProfileService errorMessageService) {
+    this.operateProperties = operateProperties;
+    this.errorMessageService = errorMessageService;
+    webSecurityProperties = operateProperties.getWebSecurity();
+  }
 
   public static void sendJSONErrorMessage(final HttpServletResponse response, final String message)
       throws IOException {
@@ -112,11 +118,7 @@ public abstract class BaseWebConfigurer {
   protected void applySecurityHeadersSettings(final HttpSecurity http) throws Exception {
     final WebSecurityProperties webSecurityConfig = operateProperties.getWebSecurity();
 
-    // Only SaaS has CloudProperties
-    final String policyDirectives =
-        (operateProperties.getCloud().getClusterId() == null)
-            ? DEFAULT_SM_SECURITY_POLICY
-            : webSecurityConfig.getContentSecurityPolicy();
+    final String policyDirectives = getContentSecurityPolicy();
 
     http.headers(
         headers -> {
@@ -133,6 +135,17 @@ public abstract class BaseWebConfigurer {
                             webSecurityConfig.getHttpStrictTransportSecurityIncludeSubDomains());
                   });
         });
+  }
+
+  protected String getContentSecurityPolicy() {
+    if (operateProperties.getCloud().getClusterId() == null) {
+      return (webSecurityProperties.getContentSecurityPolicy() == null)
+          ? webSecurityProperties.DEFAULT_SM_SECURITY_POLICY
+          : webSecurityProperties.getContentSecurityPolicy();
+    }
+    return (webSecurityProperties.getContentSecurityPolicy() == null)
+        ? webSecurityProperties.DEFAULT_SAAS_SECURITY_POLICY
+        : webSecurityProperties.getContentSecurityPolicy();
   }
 
   protected void applySecurityFilterSettings(final HttpSecurity http) throws Exception {
@@ -197,8 +210,7 @@ public abstract class BaseWebConfigurer {
       final HttpServletResponse response,
       final AuthenticationException ex)
       throws IOException {
-    final String requestedUrl =
-        request.getRequestURI().substring(request.getContextPath().length());
+    final String requestedUrl = getRequestedUrl(request);
     if (requestedUrl.contains("/api/")
         || requestedUrl.contains("/v1/")
         || requestedUrl.contains("/v2/")) {
@@ -209,11 +221,10 @@ public abstract class BaseWebConfigurer {
   }
 
   private void storeRequestedUrlAndRedirectToLogin(
-      final HttpServletRequest request, final HttpServletResponse response, String requestedUrl)
+      final HttpServletRequest request,
+      final HttpServletResponse response,
+      final String requestedUrl)
       throws IOException {
-    if (request.getQueryString() != null && !request.getQueryString().isEmpty()) {
-      requestedUrl = requestedUrl + "?" + request.getQueryString();
-    }
     logger.warn("Try to access protected resource {}. Save it for later redirect", requestedUrl);
     request.getSession(true).setAttribute(REQUESTED_URL, requestedUrl);
     response.sendRedirect(request.getContextPath() + LOGIN_RESOURCE);

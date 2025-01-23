@@ -7,25 +7,30 @@
  */
 package io.camunda.optimize.rest.providers;
 
-import jakarta.ws.rs.ServiceUnavailableException;
-import jakarta.ws.rs.core.MediaType;
-import jakarta.ws.rs.core.Response;
-import jakarta.ws.rs.ext.ExceptionMapper;
-import jakarta.ws.rs.ext.Provider;
-import lombok.extern.slf4j.Slf4j;
+import com.fasterxml.jackson.core.JsonParseException;
+import io.camunda.optimize.rest.exceptions.ServiceUnavailableException;
+import org.slf4j.Logger;
+import org.springframework.core.Ordered;
+import org.springframework.core.annotation.Order;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.ControllerAdvice;
+import org.springframework.web.bind.annotation.ExceptionHandler;
 
-@Provider
-@Slf4j
-public class ServiceUnavailableExceptionMapper
-    implements ExceptionMapper<ServiceUnavailableException> {
+@ControllerAdvice
+@Order(Ordered.HIGHEST_PRECEDENCE) // This mapper takes precedence over GenericExceptionMapper
+public class ServiceUnavailableExceptionMapper {
 
-  @Override
-  public Response toResponse(ServiceUnavailableException exception) {
-    log.info("Mapping ServiceUnavailableException");
+  private static final Logger LOG =
+      org.slf4j.LoggerFactory.getLogger(ServiceUnavailableExceptionMapper.class);
 
-    return Response.status(Response.Status.SERVICE_UNAVAILABLE)
-        .type(MediaType.TEXT_PLAIN_TYPE)
-        .entity("null")
+  @ExceptionHandler(ServiceUnavailableException.class)
+  public ResponseEntity<String> handleServiceUnavailableException(
+      final JsonParseException exception) {
+    LOG.debug("Mapping ServiceUnavailableException");
+    return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
+        .contentType(MediaType.TEXT_PLAIN)
         .build();
   }
 }

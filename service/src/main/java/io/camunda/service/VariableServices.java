@@ -7,15 +7,18 @@
  */
 package io.camunda.service;
 
-import io.camunda.search.clients.CamundaSearchClient;
-import io.camunda.service.entities.VariableEntity;
+import static io.camunda.search.query.SearchQueryBuilders.variableSearchQuery;
+
+import io.camunda.search.clients.VariableSearchClient;
+import io.camunda.search.entities.VariableEntity;
+import io.camunda.search.query.SearchQueryResult;
+import io.camunda.search.query.VariableQuery;
+import io.camunda.search.query.VariableQuery.Builder;
+import io.camunda.security.auth.Authentication;
+import io.camunda.security.auth.Authorization;
+import io.camunda.service.exception.ForbiddenException;
 import io.camunda.service.search.core.SearchQueryService;
-import io.camunda.service.search.query.SearchQueryBuilders;
-import io.camunda.service.search.query.SearchQueryResult;
-import io.camunda.service.search.query.VariableQuery;
-import io.camunda.service.search.query.VariableQuery.Builder;
-import io.camunda.service.security.auth.Authentication;
-import io.camunda.service.transformers.ServiceTransformers;
+import io.camunda.service.security.SecurityContextProvider;
 import io.camunda.util.ObjectBuilder;
 import io.camunda.zeebe.broker.client.api.BrokerClient;
 import java.util.function.Function;
@@ -23,31 +26,48 @@ import java.util.function.Function;
 public final class VariableServices
     extends SearchQueryService<VariableServices, VariableQuery, VariableEntity> {
 
-  public VariableServices(
-      final BrokerClient brokerClient, final CamundaSearchClient dataStoreClient) {
-    this(brokerClient, dataStoreClient, null, null);
-  }
+  private final VariableSearchClient variableSearchClient;
 
   public VariableServices(
       final BrokerClient brokerClient,
-      final CamundaSearchClient searchClient,
-      final ServiceTransformers transformers,
+      final SecurityContextProvider securityContextProvider,
+      final VariableSearchClient variableSearchClient,
       final Authentication authentication) {
-    super(brokerClient, searchClient, transformers, authentication);
+    super(brokerClient, securityContextProvider, authentication);
+    this.variableSearchClient = variableSearchClient;
   }
 
   @Override
   public VariableServices withAuthentication(final Authentication authentication) {
-    return new VariableServices(brokerClient, searchClient, transformers, authentication);
+    return new VariableServices(
+        brokerClient, securityContextProvider, variableSearchClient, authentication);
   }
 
   @Override
   public SearchQueryResult<VariableEntity> search(final VariableQuery query) {
-    return executor.search(query, VariableEntity.class);
+    return variableSearchClient
+        .withSecurityContext(
+            securityContextProvider.provideSecurityContext(
+                authentication, Authorization.of(a -> a.processDefinition().readProcessInstance())))
+        .searchVariables(query);
   }
 
   public SearchQueryResult<VariableEntity> search(
       final Function<Builder, ObjectBuilder<VariableQuery>> fn) {
-    return search(SearchQueryBuilders.variableSearchQuery(fn));
+    return search(variableSearchQuery(fn));
+  }
+
+  public VariableEntity getByKey(final Long key) {
+    final var result =
+        variableSearchClient
+            .withSecurityContext(securityContextProvider.provideSecurityContext(authentication))
+            .searchVariables(variableSearchQuery(q -> q.filter(f -> f.variableKeys(key))));
+    final var variableEntity = getSingleResultOrThrow(result, key, "Variable");
+    final var authorization = Authorization.of(a -> a.processDefinition().readProcessInstance());
+    if (!securityContextProvider.isAuthorized(
+        variableEntity.processDefinitionId(), authentication, authorization)) {
+      throw new ForbiddenException(authorization);
+    }
+    return variableEntity;
   }
 }

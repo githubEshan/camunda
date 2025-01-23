@@ -5,7 +5,7 @@
   <parent>
     <groupId>io.camunda</groupId>
     <artifactId>operate-parent</artifactId>
-    <version>8.6.0-SNAPSHOT</version>
+    <version>8.8.0-SNAPSHOT</version>
     <relativePath>../pom.xml</relativePath>
   </parent>
   <artifactId>operate-webapp</artifactId>
@@ -23,12 +23,19 @@
     </dependency>
     <dependency>
       <groupId>io.camunda</groupId>
-      <artifactId>operate-importer</artifactId>
-      <scope>runtime</scope>
+      <artifactId>webapps-schema</artifactId>
     </dependency>
     <dependency>
       <groupId>io.camunda</groupId>
-      <artifactId>operate-archiver</artifactId>
+      <artifactId>webapps-common</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>io.camunda</groupId>
+      <artifactId>camunda-search-domain</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>io.camunda</groupId>
+      <artifactId>operate-importer</artifactId>
       <scope>runtime</scope>
     </dependency>
     <dependency>
@@ -40,10 +47,13 @@
       <groupId>io.camunda</groupId>
       <artifactId>operate-mvc-auth-commons</artifactId>
     </dependency>
-
     <dependency>
       <groupId>io.camunda</groupId>
-      <artifactId>zeebe-client-java</artifactId>
+      <artifactId>camunda-authentication</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>io.camunda</groupId>
+      <artifactId>camunda-client-java</artifactId>
     </dependency>
 
     <dependency>
@@ -63,6 +73,15 @@
           <artifactId>transport</artifactId>
         </exclusion>
       </exclusions>
+    </dependency>
+
+    <dependency>
+      <groupId>io.camunda</groupId>
+      <artifactId>camunda-security-core</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>io.camunda</groupId>
+      <artifactId>camunda-security-services</artifactId>
     </dependency>
 
     <dependency>
@@ -90,10 +109,6 @@
     <dependency>
       <groupId>org.springframework.boot</groupId>
       <artifactId>spring-boot-starter-security</artifactId>
-    </dependency>
-    <dependency>
-      <groupId>org.springframework.session</groupId>
-      <artifactId>spring-session-data-redis</artifactId>
     </dependency>
     <dependency>
       <groupId>org.springframework.boot</groupId>
@@ -179,10 +194,6 @@
     <dependency>
       <groupId>org.springframework.security</groupId>
       <artifactId>spring-security-core</artifactId>
-    </dependency>
-    <dependency>
-      <groupId>org.springframework.session</groupId>
-      <artifactId>spring-session-core</artifactId>
     </dependency>
     <dependency>
       <groupId>org.springframework.security</groupId>
@@ -414,7 +425,6 @@
         <configuration>
           <usedDependencies>
             <dependency>io.camunda:operate-importer</dependency>
-            <dependency>io.camunda:operate-archiver</dependency>
             <dependency>io.camunda:operate-webjar</dependency>
             <dependency>io.camunda:identity-spring-boot-starter</dependency>
             <dependency>org.springframework.boot:spring-boot-starter-web</dependency>
@@ -425,7 +435,6 @@
             <dependency>org.springframework.boot:spring-boot-starter-thymeleaf</dependency>
             <dependency>org.springframework.boot:spring-boot-starter-actuator</dependency>
             <dependency>org.springdoc:springdoc-openapi-starter-webmvc-ui</dependency>
-            <dependency>org.springframework.session:spring-session-data-redis</dependency>
             <dependency>org.thymeleaf:thymeleaf</dependency>
             <dependency>jakarta.json:jakarta.json-api</dependency>
             <dependency>io.micrometer:micrometer-registry-prometheus-simpleclient</dependency>

@@ -13,16 +13,7 @@ import io.camunda.optimize.dto.optimize.AuthorizedEntityDto;
 import io.camunda.optimize.dto.optimize.RoleType;
 import io.camunda.optimize.dto.optimize.query.collection.CollectionDefinitionDto;
 import io.camunda.optimize.dto.optimize.query.entity.EntityResponseDto;
-import lombok.AccessLevel;
-import lombok.AllArgsConstructor;
-import lombok.Data;
-import lombok.EqualsAndHashCode;
-import lombok.NoArgsConstructor;
 
-@NoArgsConstructor(access = AccessLevel.PROTECTED)
-@AllArgsConstructor
-@Data
-@EqualsAndHashCode(callSuper = true)
 public class AuthorizedCollectionDefinitionDto extends AuthorizedEntityDto {
 
   @JsonUnwrapped private CollectionDefinitionDto definitionDto;
@@ -32,6 +23,12 @@ public class AuthorizedCollectionDefinitionDto extends AuthorizedEntityDto {
     super(currentUserRole);
     this.definitionDto = definitionDto;
   }
+
+  public AuthorizedCollectionDefinitionDto(final CollectionDefinitionDto definitionDto) {
+    this.definitionDto = definitionDto;
+  }
+
+  protected AuthorizedCollectionDefinitionDto() {}
 
   public EntityResponseDto toEntityDto() {
     return definitionDto.toEntityDto(getCurrentUserRole());
@@ -47,5 +44,34 @@ public class AuthorizedCollectionDefinitionDto extends AuthorizedEntityDto {
       default:
         return RoleType.VIEWER;
     }
+  }
+
+  public CollectionDefinitionDto getDefinitionDto() {
+    return definitionDto;
+  }
+
+  @JsonUnwrapped
+  public void setDefinitionDto(final CollectionDefinitionDto definitionDto) {
+    this.definitionDto = definitionDto;
+  }
+
+  @Override
+  protected boolean canEqual(final Object other) {
+    return other instanceof AuthorizedCollectionDefinitionDto;
+  }
+
+  @Override
+  public int hashCode() {
+    return org.apache.commons.lang3.builder.HashCodeBuilder.reflectionHashCode(this);
+  }
+
+  @Override
+  public boolean equals(final Object o) {
+    return org.apache.commons.lang3.builder.EqualsBuilder.reflectionEquals(this, o);
+  }
+
+  @Override
+  public String toString() {
+    return "AuthorizedCollectionDefinitionDto(definitionDto=" + getDefinitionDto() + ")";
   }
 }

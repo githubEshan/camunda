@@ -7,14 +7,40 @@
  */
 package io.camunda.optimize.rest.engine.dto;
 
-import lombok.AccessLevel;
-import lombok.AllArgsConstructor;
-import lombok.Data;
-import lombok.NoArgsConstructor;
-
-@Data
-@NoArgsConstructor(access = AccessLevel.PROTECTED)
-@AllArgsConstructor
 public class UserCredentialsDto {
+
   private String password;
+
+  public UserCredentialsDto(final String password) {
+    this.password = password;
+  }
+
+  protected UserCredentialsDto() {}
+
+  public String getPassword() {
+    return password;
+  }
+
+  public void setPassword(final String password) {
+    this.password = password;
+  }
+
+  protected boolean canEqual(final Object other) {
+    return other instanceof UserCredentialsDto;
+  }
+
+  @Override
+  public int hashCode() {
+    return org.apache.commons.lang3.builder.HashCodeBuilder.reflectionHashCode(this);
+  }
+
+  @Override
+  public boolean equals(final Object o) {
+    return org.apache.commons.lang3.builder.EqualsBuilder.reflectionEquals(this, o);
+  }
+
+  @Override
+  public String toString() {
+    return "UserCredentialsDto(password=" + getPassword() + ")";
+  }
 }

@@ -13,31 +13,36 @@ import io.camunda.optimize.service.mixpanel.MixpanelReportingService;
 import io.camunda.optimize.service.mixpanel.client.EventReportingEvent;
 import io.camunda.optimize.service.util.configuration.condition.CCSaaSCondition;
 import java.util.Optional;
-import lombok.AllArgsConstructor;
-import lombok.NonNull;
 import org.springframework.context.annotation.Conditional;
 import org.springframework.stereotype.Component;
 
 @Component
 @Conditional(CCSaaSCondition.class)
-@AllArgsConstructor
 public class MixpanelNotificationService implements AlertNotificationService {
 
   private final MixpanelReportingService mixpanelReportingService;
 
+  public MixpanelNotificationService(final MixpanelReportingService mixpanelReportingService) {
+    this.mixpanelReportingService = mixpanelReportingService;
+  }
+
   @Override
-  public void notify(@NonNull final AlertNotificationDto notification) {
+  public void notify(final AlertNotificationDto notification) {
+    if (notification == null) {
+      throw new IllegalArgumentException("Notification cannot be null");
+    }
+
     final EventReportingEvent eventName;
     switch (Optional.ofNullable(notification.getType()).orElse(AlertNotificationType.NEW)) {
-      default:
-      case NEW:
-        eventName = EventReportingEvent.ALERT_NEW_TRIGGERED;
-        break;
       case REMINDER:
         eventName = EventReportingEvent.ALERT_REMINDER_TRIGGERED;
         break;
       case RESOLVED:
         eventName = EventReportingEvent.ALERT_RESOLVED_TRIGGERED;
+        break;
+      case NEW:
+      default:
+        eventName = EventReportingEvent.ALERT_NEW_TRIGGERED;
         break;
     }
     mixpanelReportingService.sendEntityEvent(eventName, notification.getAlert().getId());

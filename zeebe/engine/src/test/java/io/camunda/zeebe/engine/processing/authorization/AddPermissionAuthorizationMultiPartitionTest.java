@@ -18,16 +18,15 @@ import io.camunda.zeebe.protocol.record.ValueType;
 import io.camunda.zeebe.protocol.record.intent.AuthorizationIntent;
 import io.camunda.zeebe.protocol.record.intent.CommandDistributionIntent;
 import io.camunda.zeebe.protocol.record.intent.UserIntent;
+import io.camunda.zeebe.protocol.record.value.AuthorizationOwnerType;
 import io.camunda.zeebe.protocol.record.value.AuthorizationResourceType;
 import io.camunda.zeebe.protocol.record.value.CommandDistributionRecordValue;
-import io.camunda.zeebe.protocol.record.value.PermissionAction;
 import io.camunda.zeebe.protocol.record.value.PermissionType;
 import io.camunda.zeebe.test.util.record.RecordingExporter;
 import io.camunda.zeebe.test.util.record.RecordingExporterTestWatcher;
 import java.time.Duration;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.stream.Collectors;
-import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.TestWatcher;
@@ -39,30 +38,27 @@ public class AddPermissionAuthorizationMultiPartitionTest {
   @Rule public final EngineRule engine = EngineRule.multiplePartition(PARTITION_COUNT);
   @Rule public final TestWatcher recordingExporterTestWatcher = new RecordingExporterTestWatcher();
 
-  private long ownerKey;
-
-  @Before
-  public void setUp() {
-    ownerKey =
+  @Test
+  public void shouldTestLifecycle() {
+    // when
+    final var userRecord =
         engine
             .user()
             .newUser("foo")
             .withEmail("foo@bar")
             .withName("Foo Bar")
             .withPassword("zabraboof")
-            .create()
-            .getKey();
-  }
+            .create();
+    final var ownerKey = userRecord.getValue().getUserKey();
+    final var ownerId = userRecord.getValue().getUsername();
 
-  @Test
-  public void shouldTestLifecycle() {
-    // when
     engine
         .authorization()
         .permission()
-        .withAction(PermissionAction.ADD)
         .withOwnerKey(ownerKey)
-        .withResourceType(AuthorizationResourceType.JOB)
+        .withOwnerId(ownerId)
+        .withOwnerType(AuthorizationOwnerType.USER)
+        .withResourceType(AuthorizationResourceType.RESOURCE)
         .withPermission(PermissionType.CREATE, "foo")
         .add();
 
@@ -70,7 +66,13 @@ public class AddPermissionAuthorizationMultiPartitionTest {
     assertThat(
             RecordingExporter.records()
                 .withPartitionId(1)
-                .limitByCount(r -> r.getIntent().equals(CommandDistributionIntent.FINISHED), 2))
+                .limitByCount(r -> r.getIntent().equals(CommandDistributionIntent.FINISHED), 2)
+                .filter(
+                    record ->
+                        record.getValueType() == ValueType.AUTHORIZATION
+                            || (record.getValueType() == ValueType.COMMAND_DISTRIBUTION
+                                && ((CommandDistributionRecordValue) record.getValue()).getIntent()
+                                    == AuthorizationIntent.ADD_PERMISSION)))
         .extracting(
             Record::getIntent,
             Record::getRecordType,
@@ -100,7 +102,7 @@ public class AddPermissionAuthorizationMultiPartitionTest {
       assertThat(
               RecordingExporter.records()
                   .withPartitionId(partitionId)
-                  .limit(r -> r.getIntent().equals(AuthorizationIntent.PERMISSION_ADDED))
+                  .limitByCount(r -> r.getIntent().equals(AuthorizationIntent.PERMISSION_ADDED), 2)
                   .collect(Collectors.toList()))
           .extracting(Record::getIntent)
           .endsWith(AuthorizationIntent.ADD_PERMISSION, AuthorizationIntent.PERMISSION_ADDED);
@@ -110,12 +112,20 @@ public class AddPermissionAuthorizationMultiPartitionTest {
   @Test
   public void shouldDistributeInIdentityQueue() {
     // when
+    final var ownerKey =
+        engine
+            .user()
+            .newUser("foo")
+            .withEmail("foo@bar")
+            .withName("Foo Bar")
+            .withPassword("zabraboof")
+            .create()
+            .getKey();
     engine
         .authorization()
         .permission()
-        .withAction(PermissionAction.ADD)
         .withOwnerKey(ownerKey)
-        .withResourceType(AuthorizationResourceType.JOB)
+        .withResourceType(AuthorizationResourceType.RESOURCE)
         .withPermission(PermissionType.CREATE, "foo")
         .add();
 
@@ -135,13 +145,22 @@ public class AddPermissionAuthorizationMultiPartitionTest {
       interceptUserCreateForPartition(partitionId);
     }
 
+    final var ownerKey =
+        engine
+            .user()
+            .newUser("foo")
+            .withEmail("foo@bar")
+            .withName("Foo Bar")
+            .withPassword("zabraboof")
+            .create()
+            .getKey();
+
     // when
     engine
         .authorization()
         .permission()
-        .withAction(PermissionAction.ADD)
         .withOwnerKey(ownerKey)
-        .withResourceType(AuthorizationResourceType.JOB)
+        .withResourceType(AuthorizationResourceType.RESOURCE)
         .withPermission(PermissionType.CREATE, "foo")
         .add();
 

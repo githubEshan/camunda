@@ -5,23 +5,48 @@
   <parent>
     <groupId>io.camunda.optimize</groupId>
     <artifactId>optimize-qa</artifactId>
-    <version>8.6.0-SNAPSHOT</version>
+    <version>8.8.0-SNAPSHOT</version>
   </parent>
 
   <artifactId>optimize-schema-integrity-tests</artifactId>
+  <name>Optimize Schema Integrity Tests</name>
 
   <properties>
-    <old.elasticsearch.port>9250</old.elasticsearch.port>
-    <new.elasticsearch.port>9200</new.elasticsearch.port>
+    <old.database.port>9250</old.database.port>
+    <new.database.port>9200</new.database.port>
   </properties>
 
+  <!-- this is necessary. Dependency:analyze error suppressed -->
   <dependencies>
     <dependency>
-      <groupId>org.elasticsearch.client</groupId>
-      <artifactId>elasticsearch-rest-high-level-client</artifactId>
-      <version>${elasticsearch.client.version}</version>
+      <groupId>io.github.netmikey.logunit</groupId>
+      <artifactId>logunit-log4j2</artifactId>
+      <version>2.0.0</version>
+    </dependency>
+
+    <dependency>
+      <groupId>co.elastic.clients</groupId>
+      <artifactId>elasticsearch-java</artifactId>
       <scope>test</scope>
     </dependency>
+    <dependency>
+      <groupId>org.elasticsearch.client</groupId>
+      <artifactId>elasticsearch-rest-client</artifactId>
+      <scope>test</scope>
+    </dependency>
+
+    <!-- scope here is wider than test. Dependency:analyze error suppressed -->
+    <dependency>
+      <groupId>org.opensearch.client</groupId>
+      <artifactId>opensearch-java</artifactId>
+      <exclusions>
+        <exclusion>
+          <groupId>commons-logging</groupId>
+          <artifactId>commons-logging</artifactId>
+        </exclusion>
+      </exclusions>
+    </dependency>
+
     <dependency>
       <groupId>io.camunda.optimize</groupId>
       <artifactId>optimize-backend</artifactId>
@@ -41,10 +66,95 @@
       <version>${project.version}</version>
       <scope>test</scope>
     </dependency>
+
+    <!-- used/undeclared block -->
+
     <dependency>
-      <groupId>org.elasticsearch.client</groupId>
-      <artifactId>elasticsearch-rest-client</artifactId>
+      <groupId>jakarta.ws.rs</groupId>
+      <artifactId>jakarta.ws.rs-api</artifactId>
+      <version>${jakarta.rs-api.version}</version>
       <scope>test</scope>
+    </dependency>
+
+    <dependency>
+      <groupId>org.glassfish.jersey.core</groupId>
+      <artifactId>jersey-client</artifactId>
+      <version>3.1.9</version>
+      <scope>test</scope>
+    </dependency>
+
+    <dependency>
+      <groupId>org.glassfish.jersey.media</groupId>
+      <artifactId>jersey-media-json-jackson</artifactId>
+      <scope>test</scope>
+    </dependency>
+
+    <dependency>
+      <groupId>org.springframework</groupId>
+      <artifactId>spring-web</artifactId>
+      <version>${version.spring}</version>
+      <scope>test</scope>
+    </dependency>
+
+    <dependency>
+      <groupId>io.camunda.optimize</groupId>
+      <artifactId>optimize-commons</artifactId>
+      <version>${project.version}</version>
+      <scope>test</scope>
+    </dependency>
+
+    <dependency>
+      <groupId>org.apache.commons</groupId>
+      <artifactId>commons-lang3</artifactId>
+      <version>3.17.0</version>
+      <scope>test</scope>
+    </dependency>
+
+    <dependency>
+      <groupId>org.apache.httpcomponents.core5</groupId>
+      <artifactId>httpcore5</artifactId>
+      <scope>runtime</scope>
+    </dependency>
+
+    <dependency>
+      <groupId>com.fasterxml.jackson.core</groupId>
+      <artifactId>jackson-databind</artifactId>
+      <scope>runtime</scope>
+    </dependency>
+
+    <dependency>
+      <groupId>org.apache.httpcomponents</groupId>
+      <artifactId>httpclient</artifactId>
+      <version>${version.httpclient}</version>
+      <scope>runtime</scope>
+    </dependency>
+
+    <dependency>
+      <groupId>org.apache.httpcomponents</groupId>
+      <artifactId>httpcore</artifactId>
+      <version>4.4.16</version>
+      <scope>runtime</scope>
+    </dependency>
+
+    <dependency>
+      <groupId>org.jetbrains</groupId>
+      <artifactId>annotations</artifactId>
+      <version>26.0.1</version>
+      <scope>test</scope>
+    </dependency>
+
+    <dependency>
+      <groupId>commons-io</groupId>
+      <artifactId>commons-io</artifactId>
+      <version>2.18.0</version>
+      <scope>test</scope>
+    </dependency>
+
+    <dependency>
+      <groupId>org.slf4j</groupId>
+      <artifactId>slf4j-api</artifactId>
+      <version>${version.slf4j}</version>
+      <scope>runtime</scope>
     </dependency>
   </dependencies>
 
@@ -61,10 +171,10 @@
         <executions>
           <execution>
             <id>copy-test-resources</id>
-            <phase>process-test-resources</phase>
             <goals>
               <goal>testResources</goal>
             </goals>
+            <phase>process-test-resources</phase>
           </execution>
         </executions>
       </plugin>
@@ -84,8 +194,8 @@
             <previousVersion>${project.previousVersion}</previousVersion>
             <currentVersion>${project.version}</currentVersion>
             <buildDirectory>${project.build.directory}</buildDirectory>
-            <oldElasticPort>${old.elasticsearch.port}</oldElasticPort>
-            <newElasticPort>${new.elasticsearch.port}</newElasticPort>
+            <oldDatabasePort>${old.database.port}</oldDatabasePort>
+            <newDatabasePort>${new.database.port}</newDatabasePort>
           </systemPropertyVariables>
         </configuration>
       </plugin>
@@ -97,6 +207,44 @@
       <plugin>
         <groupId>org.apache.maven.plugins</groupId>
         <artifactId>maven-dependency-plugin</artifactId>
+        <executions>
+          <execution>
+            <id>unpack-previous-and-current-optimize</id>
+            <goals>
+              <goal>unpack</goal>
+            </goals>
+            <phase>pre-integration-test</phase>
+            <configuration>
+              <skip>${skipTests}</skip>
+              <artifactItems>
+                <artifactItem>
+                  <groupId>io.camunda.optimize</groupId>
+                  <artifactId>camunda-optimize</artifactId>
+                  <version>${project.previousVersion}</version>
+                  <type>tar.gz</type>
+                  <classifier>production</classifier>
+                  <!-- we want to use environment variables as present in the internal service-config -->
+                  <!-- thus excluding the default environment-config -->
+                  <excludes>**/environment-config.yaml</excludes>
+                  <overWrite>true</overWrite>
+                  <outputDirectory>${project.build.directory}/${project.previousVersion}</outputDirectory>
+                </artifactItem>
+                <artifactItem>
+                  <groupId>io.camunda.optimize</groupId>
+                  <artifactId>camunda-optimize</artifactId>
+                  <version>${project.version}</version>
+                  <type>tar.gz</type>
+                  <classifier>production</classifier>
+                  <!-- we want to use environment variables as present in the internal service-config -->
+                  <!-- thus excluding the default environment-config -->
+                  <excludes>**/environment-config.yaml</excludes>
+                  <overWrite>true</overWrite>
+                  <outputDirectory>${project.build.directory}/${project.version}</outputDirectory>
+                </artifactItem>
+              </artifactItems>
+            </configuration>
+          </execution>
+        </executions>
       </plugin>
     </plugins>
   </build>
@@ -115,26 +263,26 @@
               <removeVolumes>true</removeVolumes>
               <envVars>
                 <NEW_ES_VERSION>${elasticsearch.test.version}</NEW_ES_VERSION>
-                <NEW_ES_PORT>${new.elasticsearch.port}</NEW_ES_PORT>
+                <NEW_ES_PORT>${new.database.port}</NEW_ES_PORT>
                 <OLD_ES_VERSION>${previous.optimize.elasticsearch.version}</OLD_ES_VERSION>
-                <OLD_ES_PORT>${old.elasticsearch.port}</OLD_ES_PORT>
+                <OLD_ES_PORT>${old.database.port}</OLD_ES_PORT>
               </envVars>
             </configuration>
             <executions>
               <!-- Starting old and new ES through docker-compose -->
               <execution>
                 <id>docker-compose-start</id>
-                <phase>pre-integration-test</phase>
                 <goals>
                   <goal>up</goal>
                 </goals>
+                <phase>pre-integration-test</phase>
               </execution>
               <execution>
                 <id>docker-compose-stop</id>
-                <phase>post-integration-test</phase>
                 <goals>
                   <goal>down</goal>
                 </goals>
+                <phase>post-integration-test</phase>
               </execution>
             </executions>
           </plugin>
@@ -143,59 +291,38 @@
     </profile>
     <profile>
       <id>es-schema-integrity-tests</id>
-      <activation>
-        <activeByDefault>true</activeByDefault>
-      </activation>
       <build>
         <plugins>
-          <plugin>
-            <groupId>org.apache.maven.plugins</groupId>
-            <artifactId>maven-dependency-plugin</artifactId>
-            <executions>
-              <execution>
-                <id>unpack-previous-and-current-optimize</id>
-                <phase>pre-integration-test</phase>
-                <goals>
-                  <goal>unpack</goal>
-                </goals>
-                <configuration>
-                  <artifactItems>
-                    <artifactItem>
-                      <!-- This will be updated in https://github.com/camunda/camunda-optimize/issues/14145-->
-                      <groupId>org.camunda.optimize</groupId>
-                      <artifactId>camunda-optimize</artifactId>
-                      <version>${project.previousVersion}</version>
-                      <type>tar.gz</type>
-                      <classifier>production</classifier>
-                      <!-- we want to use environment variables as present in the internal service-config -->
-                      <!-- thus excluding the default environment-config -->
-                      <excludes>**/environment-config.yaml</excludes>
-                      <overWrite>true</overWrite>
-                      <outputDirectory>${project.build.directory}/${project.previousVersion}</outputDirectory>
-                    </artifactItem>
-                    <artifactItem>
-                      <groupId>io.camunda.optimize</groupId>
-                      <artifactId>camunda-optimize</artifactId>
-                      <version>${project.version}</version>
-                      <type>tar.gz</type>
-                      <classifier>production</classifier>
-                      <!-- we want to use environment variables as present in the internal service-config -->
-                      <!-- thus excluding the default environment-config -->
-                      <excludes>**/environment-config.yaml</excludes>
-                      <overWrite>true</overWrite>
-                      <outputDirectory>${project.build.directory}/${project.version}</outputDirectory>
-                    </artifactItem>
-                  </artifactItems>
-                </configuration>
-              </execution>
-            </executions>
-          </plugin>
           <plugin>
             <groupId>org.apache.maven.plugins</groupId>
             <artifactId>maven-failsafe-plugin</artifactId>
             <configuration>
               <includes>
-                <include>**/UpgradeEsSchemaIT.java</include>
+                <include>**/UpgradeElasticsearchSchemaIT.java</include>
+              </includes>
+            </configuration>
+            <executions>
+              <execution>
+                <goals>
+                  <goal>integration-test</goal>
+                  <goal>verify</goal>
+                </goals>
+              </execution>
+            </executions>
+          </plugin>
+        </plugins>
+      </build>
+    </profile>
+    <profile>
+      <id>os-schema-integrity-tests</id>
+      <build>
+        <plugins>
+          <plugin>
+            <groupId>org.apache.maven.plugins</groupId>
+            <artifactId>maven-failsafe-plugin</artifactId>
+            <configuration>
+              <includes>
+                <include>**/UpgradeOpenSearchSchemaIT.java</include>
               </includes>
             </configuration>
             <executions>

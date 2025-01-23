@@ -34,7 +34,7 @@ to configure your benchmark.
 ### How to configure a Benchmark
 
 The benchmark configuration is completely done via the `values.yaml` file.
-If there is a property missing that you want to change please open an issue at https://github.com/zeebe-io/benchmark-helm
+If there is a property missing that you want to change please open an issue at https://github.com/camunda/zeebe-benchmark-helm
 
 #### Use different Zeebe Snapshot
 
@@ -43,8 +43,8 @@ If you want to use your own or a different Zeebe snapshot then you could do the 
 **Build the docker image:**
 
 ```bash
-# builds the dist with zbctl packed
-clients/go/cmd/zbctl/build.sh && mvn clean install -T1C -DskipTests -pl dist -am
+# builds the dist
+mvn clean install -T1C -DskipTests -pl dist -am
 # builds the a new zeebe docker image
 docker build --build-arg DISTBALL=dist/target/camunda-zeebe-*.tar.gz -t gcr.io/zeebe-io/zeebe:SNAPSHOT-$(date +%Y-%m-%d)-$(git rev-parse --short=8 HEAD) --target app .
 # pushes the image to our docker registry

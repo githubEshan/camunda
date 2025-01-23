@@ -8,10 +8,13 @@
 package io.camunda.zeebe.broker;
 
 import static io.camunda.zeebe.broker.test.EmbeddedBrokerRule.assignSocketAddresses;
+import static java.util.Collections.emptyList;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.mock;
 
 import io.atomix.cluster.AtomixCluster;
+import io.camunda.security.configuration.SecurityConfiguration;
+import io.camunda.service.UserServices;
 import io.camunda.zeebe.broker.client.api.BrokerClient;
 import io.camunda.zeebe.broker.system.SystemContext;
 import io.camunda.zeebe.broker.system.configuration.BrokerCfg;
@@ -31,6 +34,7 @@ import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.TemporaryFolder;
+import org.springframework.security.crypto.password.PasswordEncoder;
 
 public final class SimpleBrokerStartTest {
 
@@ -61,8 +65,11 @@ public final class SimpleBrokerStartTest {
                       brokerCfg,
                       mock(ActorScheduler.class),
                       mock(AtomixCluster.class),
-                      mock(BrokerClient.class));
-              new Broker(systemContext, TEST_SPRING_BROKER_BRIDGE);
+                      mock(BrokerClient.class),
+                      new SecurityConfiguration(),
+                      mock(UserServices.class),
+                      mock(PasswordEncoder.class));
+              new Broker(systemContext, TEST_SPRING_BROKER_BRIDGE, emptyList());
             });
 
     // then
@@ -82,7 +89,14 @@ public final class SimpleBrokerStartTest {
         TestBrokerClientFactory.createBrokerClient(atomixCluster, actorScheduler);
 
     final var systemContext =
-        new SystemContext(brokerCfg, actorScheduler, atomixCluster, brokerClient);
+        new SystemContext(
+            brokerCfg,
+            actorScheduler,
+            atomixCluster,
+            brokerClient,
+            new SecurityConfiguration(),
+            mock(UserServices.class),
+            mock(PasswordEncoder.class));
 
     final var leaderLatch = new CountDownLatch(1);
     final var listener =

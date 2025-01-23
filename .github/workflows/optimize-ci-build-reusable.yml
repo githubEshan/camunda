@@ -55,36 +55,54 @@ jobs:
       # Setup: read java version from pom
       - name: "Read Java / Version Info"
         id: pom-info
-        uses: YunaBraska/java-info-action@72dd3fb638d774fb4353d99d2bb3fddddd084789 # 2.1.0
-
-      #########################################################################
-      # Docker login and image tagging
-      - name: Login to Harbor registry
-        uses: ./.github/actions/login-registry
+        uses: YunaBraska/java-info-action@9152316d886e2947f1069cfe001930a0eab54c41 # 2.1.32
         with:
-          secrets: ${{ toJSON(secrets) }}
+          work-dir: ./optimize
 
       #########################################################################
       # Setup and configure Maven
       - name: Setup Maven
-        uses: ./.github/actions/setup-maven
+        uses: ./.github/actions/setup-build
         with:
-          secrets: ${{ toJSON(secrets) }}
+          harbor: true
+          maven-cache-key-modifier: optimize
+          maven-version: 3.8.6
+          time-zone: Europe/Berlin
+          vault-address: ${{ secrets.VAULT_ADDR }}
+          vault-role-id: ${{ secrets.VAULT_ROLE_ID }}
+          vault-secret-id: ${{ secrets.VAULT_SECRET_ID }}
+
+      #########################################################################
+      # Build Optimize frontend
+      - name: Build frontend
+        uses: ./.github/actions/build-frontend
+        with:
+          directory: ./optimize/client
+
+      #########################################################################
+      # Build optimize dependencies
+      - name: Build optimize dependencies
+        uses: ./.github/actions/run-maven
+        with:
+          parameters: -pl optimize/backend -am install -Dquickly -P skipFrontendBuild,runAssembly -T 1
 
       #########################################################################
       # Build Optimize
       - name: Generate production .tar.gz
         uses: ./.github/actions/run-maven
         with:
-          parameters: -f optimize/pom.xml install -DskipTests -Dskip.docker -PrunAssembly
+          parameters: -f optimize/pom.xml install -DskipTests -Dskip.docker -P skipFrontendBuild,runAssembly -T 1
 
       #########################################################################
       # Build Docker image
       - name: Build and push Docker image
-        uses: docker/build-push-action@ca052bb54ab0790a636c9b5f226502c73d547a25 # v5
+        uses: docker/build-push-action@67a2d409c0a876cbe6b11854e3e25193efe4e62d # v6
+        env:
+          DOCKER_BUILD_SUMMARY: false
+          DOCKER_BUILD_RECORD_UPLOAD: false
         with:
           context: .
-          file: optimize.Dockerfile
+          file: optimize-internal-test.Dockerfile
           provenance: false
           build-args: |
             VERSION=${{ steps.pom-info.outputs.project_version }}

@@ -41,7 +41,7 @@ const props = {
   mightFail: (promise, cb) => cb(promise),
   getUser: () => ({id: 'demo', name: 'Demo Demo'}),
   entity: 'dashboard',
-  history: {replace: jest.fn()},
+  history: {replace: jest.fn(), push: jest.fn()},
 };
 
 const templateState = {
@@ -113,7 +113,7 @@ it('should show a notification error if dashboard fails to load on refresh', () 
     loaded: true,
   });
 
-  node.setProps({mightFail: (promise, cb, error) => error('Loading failed')});
+  node.setProps({mightFail: (_promise, _cb, error) => error('Loading failed')});
 
   node.instance().loadDashboard();
 
@@ -189,7 +189,7 @@ it('should redirect to the Overview page on dashboard deletion', async () => {
 
   await node.find(DashboardView).prop('onDelete')();
 
-  expect(node.find('Redirect')).toExist();
+  expect(props.history.push).toHaveBeenCalledWith('../../');
 });
 
 it('should initialize tiles based on location state', async () => {

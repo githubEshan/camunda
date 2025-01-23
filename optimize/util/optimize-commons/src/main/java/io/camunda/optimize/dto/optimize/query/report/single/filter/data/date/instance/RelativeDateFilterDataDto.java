@@ -10,15 +10,29 @@ package io.camunda.optimize.dto.optimize.query.report.single.filter.data.date.in
 import io.camunda.optimize.dto.optimize.query.report.single.filter.data.date.DateFilterDataDto;
 import io.camunda.optimize.dto.optimize.query.report.single.filter.data.date.DateFilterType;
 import io.camunda.optimize.dto.optimize.query.report.single.filter.data.date.RelativeDateFilterStartDto;
-import lombok.EqualsAndHashCode;
 
-@EqualsAndHashCode(callSuper = true)
 public class RelativeDateFilterDataDto extends DateFilterDataDto<RelativeDateFilterStartDto> {
+
   public RelativeDateFilterDataDto() {
     this(null);
   }
 
   public RelativeDateFilterDataDto(final RelativeDateFilterStartDto relativeDateFilterStartDto) {
     super(DateFilterType.RELATIVE, relativeDateFilterStartDto, null);
+  }
+
+  @Override
+  protected boolean canEqual(final Object other) {
+    return other instanceof RelativeDateFilterDataDto;
+  }
+
+  @Override
+  public int hashCode() {
+    return org.apache.commons.lang3.builder.HashCodeBuilder.reflectionHashCode(this);
+  }
+
+  @Override
+  public boolean equals(final Object o) {
+    return org.apache.commons.lang3.builder.EqualsBuilder.reflectionEquals(this, o);
   }
 }

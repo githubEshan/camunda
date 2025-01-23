@@ -18,9 +18,12 @@ import io.camunda.zeebe.protocol.record.intent.CommandDistributionIntent;
 import io.camunda.zeebe.protocol.record.intent.DecisionEvaluationIntent;
 import io.camunda.zeebe.protocol.record.intent.DeploymentIntent;
 import io.camunda.zeebe.protocol.record.intent.EscalationIntent;
+import io.camunda.zeebe.protocol.record.intent.GroupIntent;
+import io.camunda.zeebe.protocol.record.intent.IdentitySetupIntent;
 import io.camunda.zeebe.protocol.record.intent.IncidentIntent;
 import io.camunda.zeebe.protocol.record.intent.JobBatchIntent;
 import io.camunda.zeebe.protocol.record.intent.JobIntent;
+import io.camunda.zeebe.protocol.record.intent.MappingIntent;
 import io.camunda.zeebe.protocol.record.intent.MessageBatchIntent;
 import io.camunda.zeebe.protocol.record.intent.MessageCorrelationIntent;
 import io.camunda.zeebe.protocol.record.intent.MessageIntent;
@@ -29,14 +32,19 @@ import io.camunda.zeebe.protocol.record.intent.MessageSubscriptionIntent;
 import io.camunda.zeebe.protocol.record.intent.ProcessInstanceIntent;
 import io.camunda.zeebe.protocol.record.intent.ProcessInstanceMigrationIntent;
 import io.camunda.zeebe.protocol.record.intent.ProcessInstanceModificationIntent;
+import io.camunda.zeebe.protocol.record.intent.ProcessIntent;
 import io.camunda.zeebe.protocol.record.intent.ProcessMessageSubscriptionIntent;
 import io.camunda.zeebe.protocol.record.intent.ResourceDeletionIntent;
+import io.camunda.zeebe.protocol.record.intent.RoleIntent;
 import io.camunda.zeebe.protocol.record.intent.SignalIntent;
 import io.camunda.zeebe.protocol.record.intent.SignalSubscriptionIntent;
+import io.camunda.zeebe.protocol.record.intent.TenantIntent;
 import io.camunda.zeebe.protocol.record.intent.TimerIntent;
+import io.camunda.zeebe.protocol.record.intent.UserIntent;
 import io.camunda.zeebe.protocol.record.intent.UserTaskIntent;
 import io.camunda.zeebe.protocol.record.intent.VariableDocumentIntent;
 import io.camunda.zeebe.protocol.record.intent.VariableIntent;
+import io.camunda.zeebe.protocol.record.intent.scaling.ScaleIntent;
 import io.camunda.zeebe.protocol.record.value.AuthorizationRecordValue;
 import io.camunda.zeebe.protocol.record.value.ClockRecordValue;
 import io.camunda.zeebe.protocol.record.value.CommandDistributionRecordValue;
@@ -46,9 +54,12 @@ import io.camunda.zeebe.protocol.record.value.DeploymentDistributionRecordValue;
 import io.camunda.zeebe.protocol.record.value.DeploymentRecordValue;
 import io.camunda.zeebe.protocol.record.value.ErrorRecordValue;
 import io.camunda.zeebe.protocol.record.value.EscalationRecordValue;
+import io.camunda.zeebe.protocol.record.value.GroupRecordValue;
+import io.camunda.zeebe.protocol.record.value.IdentitySetupRecordValue;
 import io.camunda.zeebe.protocol.record.value.IncidentRecordValue;
 import io.camunda.zeebe.protocol.record.value.JobBatchRecordValue;
 import io.camunda.zeebe.protocol.record.value.JobRecordValue;
+import io.camunda.zeebe.protocol.record.value.MappingRecordValue;
 import io.camunda.zeebe.protocol.record.value.MessageBatchRecordValue;
 import io.camunda.zeebe.protocol.record.value.MessageCorrelationRecordValue;
 import io.camunda.zeebe.protocol.record.value.MessageRecordValue;
@@ -62,8 +73,10 @@ import io.camunda.zeebe.protocol.record.value.ProcessInstanceRecordValue;
 import io.camunda.zeebe.protocol.record.value.ProcessInstanceResultRecordValue;
 import io.camunda.zeebe.protocol.record.value.ProcessMessageSubscriptionRecordValue;
 import io.camunda.zeebe.protocol.record.value.ResourceDeletionRecordValue;
+import io.camunda.zeebe.protocol.record.value.RoleRecordValue;
 import io.camunda.zeebe.protocol.record.value.SignalRecordValue;
 import io.camunda.zeebe.protocol.record.value.SignalSubscriptionRecordValue;
+import io.camunda.zeebe.protocol.record.value.TenantRecordValue;
 import io.camunda.zeebe.protocol.record.value.TimerRecordValue;
 import io.camunda.zeebe.protocol.record.value.UserRecordValue;
 import io.camunda.zeebe.protocol.record.value.UserTaskRecordValue;
@@ -73,6 +86,8 @@ import io.camunda.zeebe.protocol.record.value.deployment.DecisionRecordValue;
 import io.camunda.zeebe.protocol.record.value.deployment.DecisionRequirementsRecordValue;
 import io.camunda.zeebe.protocol.record.value.deployment.Form;
 import io.camunda.zeebe.protocol.record.value.deployment.Process;
+import io.camunda.zeebe.protocol.record.value.deployment.Resource;
+import io.camunda.zeebe.protocol.record.value.scaling.ScaleRecordValue;
 import java.time.Duration;
 import java.util.Collection;
 import java.util.Iterator;
@@ -129,6 +144,16 @@ public final class RecordingExporter implements Exporter {
       if (controller != null && autoAcknowledge) { // the engine tests do not open the exporter
         controller.updateLastExportedRecordPosition(record.getPosition());
       }
+    } finally {
+      LOCK.unlock();
+    }
+  }
+
+  @Override
+  public void purge() throws Exception {
+    LOCK.lock();
+    try {
+      RECORDS.clear();
     } finally {
       LOCK.unlock();
     }
@@ -218,6 +243,10 @@ public final class RecordingExporter implements Exporter {
 
   public static ProcessRecordStream processRecords() {
     return new ProcessRecordStream(records(ValueType.PROCESS, Process.class));
+  }
+
+  public static ProcessRecordStream processRecords(final ProcessIntent intent) {
+    return processRecords().withIntent(intent);
   }
 
   public static DeploymentDistributionRecordStream deploymentDistributionRecords() {
@@ -412,6 +441,10 @@ public final class RecordingExporter implements Exporter {
     return new FormRecordStream(records(ValueType.FORM, Form.class));
   }
 
+  public static ResourceRecordStream resourceRecords() {
+    return new ResourceRecordStream(records(ValueType.RESOURCE, Resource.class));
+  }
+
   public static ErrorRecordStream errorRecords() {
     return new ErrorRecordStream(records(ValueType.ERROR, ErrorRecordValue.class));
   }
@@ -433,6 +466,10 @@ public final class RecordingExporter implements Exporter {
     return new UserRecordStream(records(ValueType.USER, UserRecordValue.class));
   }
 
+  public static UserRecordStream userRecords(final UserIntent intent) {
+    return userRecords().withIntent(intent);
+  }
+
   public static ClockRecordStream clockRecords() {
     return new ClockRecordStream(records(ValueType.CLOCK, ClockRecordValue.class));
   }
@@ -448,6 +485,55 @@ public final class RecordingExporter implements Exporter {
 
   public static AuthorizationRecordStream authorizationRecords(final AuthorizationIntent intent) {
     return authorizationRecords().withIntent(intent);
+  }
+
+  public static RoleRecordStream roleRecords() {
+    return new RoleRecordStream(records(ValueType.ROLE, RoleRecordValue.class));
+  }
+
+  public static RoleRecordStream roleRecords(final RoleIntent intent) {
+    return roleRecords().withIntent(intent);
+  }
+
+  public static ScaleRecordStream scaleRecords() {
+    return new ScaleRecordStream(records(ValueType.SCALE, ScaleRecordValue.class));
+  }
+
+  public static ScaleRecordStream scaleRecords(final ScaleIntent intent) {
+    return scaleRecords().withIntent(intent);
+  }
+
+  public static TenantRecordStream tenantRecords() {
+    return new TenantRecordStream(records(ValueType.TENANT, TenantRecordValue.class));
+  }
+
+  public static TenantRecordStream tenantRecords(final TenantIntent intent) {
+    return tenantRecords().withIntent(intent);
+  }
+
+  public static MappingRecordStream mappingRecords() {
+    return new MappingRecordStream(records(ValueType.MAPPING, MappingRecordValue.class));
+  }
+
+  public static MappingRecordStream mappingRecords(final MappingIntent intent) {
+    return mappingRecords().withIntent(intent);
+  }
+
+  public static GroupRecordStream groupRecords() {
+    return new GroupRecordStream(records(ValueType.GROUP, GroupRecordValue.class));
+  }
+
+  public static GroupRecordStream groupRecords(final GroupIntent intent) {
+    return groupRecords().withIntent(intent);
+  }
+
+  public static IdentitySetupRecordStream identitySetupRecords() {
+    return new IdentitySetupRecordStream(
+        records(ValueType.IDENTITY_SETUP, IdentitySetupRecordValue.class));
+  }
+
+  public static IdentitySetupRecordStream identitySetupRecords(final IdentitySetupIntent intent) {
+    return identitySetupRecords().withIntent(intent);
   }
 
   public static void autoAcknowledge(final boolean shouldAcknowledgeRecords) {

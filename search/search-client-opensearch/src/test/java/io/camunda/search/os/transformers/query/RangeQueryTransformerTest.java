@@ -11,9 +11,9 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import io.camunda.search.clients.query.SearchQueryBuilders;
 import io.camunda.search.clients.query.SearchRangeQuery;
+import io.camunda.search.clients.transformers.SearchTransfomer;
 import io.camunda.search.os.transformers.OpensearchTransformers;
 import io.camunda.search.os.util.OSQuerySerializer;
-import io.camunda.search.transformers.SearchTransfomer;
 import java.io.IOException;
 import java.util.stream.Stream;
 import org.assertj.core.api.Assertions;
@@ -67,12 +67,7 @@ public class RangeQueryTransformerTest {
             SearchQueryBuilders.range().field("foo").gt(1234L).build(), "{'foo':{'gt':1234}}"),
         Arguments.arguments(
             SearchQueryBuilders.range().field("foo").format("format").build(),
-            "{'foo':{'format':'format'}}"),
-        Arguments.arguments(
-            SearchQueryBuilders.range().field("foo").to("toBar").build(), "{'foo':{'to':'toBar'}}"),
-        Arguments.arguments(
-            SearchQueryBuilders.range().field("foo").from("fromBar").build(),
-            "{'foo':{'from':'fromBar'}}"));
+            "{'foo':{'format':'format'}}"));
   }
 
   @ParameterizedTest

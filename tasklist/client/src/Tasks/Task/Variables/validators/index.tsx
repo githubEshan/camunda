@@ -8,11 +8,11 @@
 
 import {createVariableFieldName} from '../createVariableFieldName';
 import {getNewVariablePrefix} from '../getVariableFieldName';
-import {isValidJSON} from 'modules/utils/isValidJSON';
+import {isValidJSON} from 'modules/utils/jsonUtils';
 import {promisifyValidator} from './promisifyValidator';
-import {FormValues} from '../types';
+import type {FormValues} from '../types';
 import get from 'lodash/get';
-import {FieldValidator} from 'final-form';
+import type {FieldValidator} from 'final-form';
 
 const ERROR_MESSAGES = {
   invalidName: 'Name is invalid',

@@ -15,10 +15,10 @@
  */
 package io.camunda.zeebe.protocol.record.intent;
 
-import static io.camunda.zeebe.protocol.record.ValueType.MESSAGE_CORRELATION;
-
 import io.camunda.zeebe.protocol.record.ValueType;
 import io.camunda.zeebe.protocol.record.intent.management.CheckpointIntent;
+import io.camunda.zeebe.protocol.record.intent.scaling.RedistributionIntent;
+import io.camunda.zeebe.protocol.record.intent.scaling.ScaleIntent;
 import java.util.Arrays;
 import java.util.Collection;
 
@@ -56,13 +56,21 @@ public interface Intent {
           CommandDistributionIntent.class,
           ProcessInstanceBatchIntent.class,
           FormIntent.class,
+          ResourceIntent.class,
           UserTaskIntent.class,
           ProcessInstanceMigrationIntent.class,
           CompensationSubscriptionIntent.class,
           MessageCorrelationIntent.class,
           UserIntent.class,
           ClockIntent.class,
-          AuthorizationIntent.class);
+          AuthorizationIntent.class,
+          RoleIntent.class,
+          TenantIntent.class,
+          ScaleIntent.class,
+          RedistributionIntent.class,
+          GroupIntent.class,
+          MappingIntent.class,
+          IdentitySetupIntent.class);
   short NULL_VAL = 255;
   Intent UNKNOWN = UnknownIntent.UNKNOWN;
 
@@ -140,6 +148,8 @@ public interface Intent {
         return ProcessInstanceBatchIntent.from(intent);
       case FORM:
         return FormIntent.from(intent);
+      case RESOURCE:
+        return ResourceIntent.from(intent);
       case USER_TASK:
         return UserTaskIntent.from(intent);
       case PROCESS_INSTANCE_MIGRATION:
@@ -154,6 +164,20 @@ public interface Intent {
         return ClockIntent.from(intent);
       case AUTHORIZATION:
         return AuthorizationIntent.from(intent);
+      case ROLE:
+        return RoleIntent.from(intent);
+      case TENANT:
+        return TenantIntent.from(intent);
+      case SCALE:
+        return ScaleIntent.from(intent);
+      case REDISTRIBUTION:
+        return RedistributionIntent.from(intent);
+      case GROUP:
+        return GroupIntent.from(intent);
+      case MAPPING:
+        return MappingIntent.from(intent);
+      case IDENTITY_SETUP:
+        return IdentitySetupIntent.from(intent);
       case NULL_VAL:
       case SBE_UNKNOWN:
         return Intent.UNKNOWN;
@@ -223,6 +247,8 @@ public interface Intent {
         return ResourceDeletionIntent.valueOf(intent);
       case FORM:
         return FormIntent.valueOf(intent);
+      case RESOURCE:
+        return ResourceIntent.valueOf(intent);
       case USER_TASK:
         return UserTaskIntent.valueOf(intent);
       case PROCESS_INSTANCE_MIGRATION:
@@ -237,6 +263,18 @@ public interface Intent {
         return ClockIntent.valueOf(intent);
       case AUTHORIZATION:
         return AuthorizationIntent.valueOf(intent);
+      case ROLE:
+        return RoleIntent.valueOf(intent);
+      case TENANT:
+        return TenantIntent.valueOf(intent);
+      case SCALE:
+        return ScaleIntent.valueOf(intent);
+      case GROUP:
+        return GroupIntent.valueOf(intent);
+      case MAPPING:
+        return MappingIntent.valueOf(intent);
+      case IDENTITY_SETUP:
+        return IdentitySetupIntent.valueOf(intent);
       case NULL_VAL:
       case SBE_UNKNOWN:
         return Intent.UNKNOWN;

@@ -17,7 +17,7 @@ import Statistics from './Statistics';
 
 jest.mock('components', () => {
   return {
-    LoadingIndicator: () => <span>loading</span>,
+    Loading: () => <span>loading</span>,
   };
 });
 
@@ -35,7 +35,7 @@ jest.mock('./service', () => {
 
 jest.mock('services', () => {
   return {
-    getFlowNodeNames: jest.fn().mockReturnValue({
+    getFlowNodeNames: jest.fn().mockResolvedValue({
       a: 'foo',
       b: 'bar',
     }),

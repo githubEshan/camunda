@@ -10,8 +10,11 @@ package io.camunda.optimize.service.importing;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
+import co.elastic.clients.elasticsearch._types.ShardStatistics;
+import co.elastic.clients.elasticsearch.core.SearchResponse;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.camunda.optimize.dto.zeebe.variable.ZeebeVariableRecordDto;
 import io.camunda.optimize.service.db.es.OptimizeElasticsearchClient;
@@ -24,8 +27,6 @@ import io.camunda.optimize.service.util.configuration.ConfigurationService;
 import java.io.IOException;
 import java.util.List;
 import java.util.stream.IntStream;
-import lombok.SneakyThrows;
-import org.elasticsearch.action.search.SearchResponse;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Answers;
@@ -38,19 +39,17 @@ import org.mockito.junit.jupiter.MockitoExtension;
 public class ZeebeRecordFetcherTest {
 
   public static final int TEST_CONFIGURED_BATCH_SIZE = 5;
-  // We test using a single specific implementation of the abstract record fetcher
-  private ZeebeProcessInstanceFetcher underTest;
-
-  @Mock private OptimizeElasticsearchClient optimizeElasticsearchClient;
   @Mock ObjectMapper objectMapper;
 
   @Mock(answer = Answers.RETURNS_DEEP_STUBS)
   ConfigurationService configurationService;
 
   @Mock SearchResponse searchResponse;
+  // We test using a single specific implementation of the abstract record fetcher
+  private ZeebeProcessInstanceFetcher underTest;
+  @Mock private OptimizeElasticsearchClient optimizeElasticsearchClient;
 
   @Test
-  @SneakyThrows
   public void testFetchFailsTriggersDynamicBatchResizing() {
     // given
     when(configurationService.getConfiguredZeebe().getMaxImportPageSize())
@@ -65,7 +64,12 @@ public class ZeebeRecordFetcherTest {
     assertThat(underTest.getDynamicBatchSize()).isEqualTo(TEST_CONFIGURED_BATCH_SIZE);
     assertThat(underTest.getConsecutiveSuccessfulFetches()).isZero();
     // and search requests fail with an IOException
-    when(optimizeElasticsearchClient.searchWithoutPrefixing(any())).thenThrow(IOException.class);
+    try {
+      when(optimizeElasticsearchClient.searchWithoutPrefixing(any(), any()))
+          .thenThrow(IOException.class);
+    } catch (final IOException e) {
+      throw new OptimizeRuntimeException(e);
+    }
 
     // when the next import is attempted
     triggerFailedFetchAttempt();
@@ -93,13 +97,24 @@ public class ZeebeRecordFetcherTest {
     assertThat(underTest.getBatchSizeDeque()).containsExactly(1, 2);
 
     // given that search is successful
-    try (MockedStatic<ElasticsearchReaderUtil> mockEsReaderUtil =
+    try (final MockedStatic<ElasticsearchReaderUtil> mockEsReaderUtil =
         Mockito.mockStatic(ElasticsearchReaderUtil.class)) {
       mockEsReaderUtil
           .when(() -> ElasticsearchReaderUtil.mapHits(any(), any(), any()))
           .thenReturn(List.of());
       Mockito.reset(optimizeElasticsearchClient);
-      when(optimizeElasticsearchClient.searchWithoutPrefixing(any())).thenReturn(searchResponse);
+      final ShardStatistics mockedShardStatistics = mock(ShardStatistics.class);
+      when(mockedShardStatistics.failures()).thenReturn(List.of());
+      when(mockedShardStatistics.total()).thenReturn(0);
+      when(mockedShardStatistics.failed()).thenReturn(0);
+      when(mockedShardStatistics.successful()).thenReturn(0);
+      when(searchResponse.shards()).thenReturn(mockedShardStatistics);
+      try {
+        when(optimizeElasticsearchClient.searchWithoutPrefixing(any(), any()))
+            .thenReturn(searchResponse);
+      } catch (final IOException e) {
+        throw new OptimizeRuntimeException(e);
+      }
 
       // when the next import is attempted
       underTest.getZeebeRecordsForPrefixAndPartitionFrom(new PositionBasedImportPage());
@@ -185,7 +200,6 @@ public class ZeebeRecordFetcherTest {
   }
 
   @Test
-  @SneakyThrows
   public void testThatEmptyPageFetchesAreTrackedCorrectly() {
     // given
     when(configurationService.getConfiguredZeebe().getImportConfig().getMaxEmptyPagesToImport())
@@ -195,13 +209,24 @@ public class ZeebeRecordFetcherTest {
     assertThat(underTest.getConsecutiveEmptyPages()).isZero();
 
     // given that search is successfully executed but returning empty pages
-    try (MockedStatic<ElasticsearchReaderUtil> mockEsReaderUtil =
+    try (final MockedStatic<ElasticsearchReaderUtil> mockEsReaderUtil =
         Mockito.mockStatic(ElasticsearchReaderUtil.class)) {
       mockEsReaderUtil
           .when(() -> ElasticsearchReaderUtil.mapHits(any(), any(), any()))
           .thenReturn(List.of());
       Mockito.reset(optimizeElasticsearchClient);
-      when(optimizeElasticsearchClient.searchWithoutPrefixing(any())).thenReturn(searchResponse);
+      final ShardStatistics mockedShardStatistics = mock(ShardStatistics.class);
+      when(mockedShardStatistics.failures()).thenReturn(List.of());
+      when(mockedShardStatistics.total()).thenReturn(0);
+      when(mockedShardStatistics.failed()).thenReturn(0);
+      when(mockedShardStatistics.successful()).thenReturn(0);
+      when(searchResponse.shards()).thenReturn(mockedShardStatistics);
+      try {
+        when(optimizeElasticsearchClient.searchWithoutPrefixing(any(), any()))
+            .thenReturn(searchResponse);
+      } catch (final IOException e) {
+        throw new OptimizeRuntimeException(e);
+      }
 
       // when the next import is attempted
       triggerFetchAttemptForEmptyPage();
@@ -245,7 +270,7 @@ public class ZeebeRecordFetcherTest {
   }
 
   private void initalizeClassUnderTest() {
-    this.underTest =
+    underTest =
         new ZeebeProcessInstanceFetcherES(
             1, optimizeElasticsearchClient, objectMapper, configurationService);
   }

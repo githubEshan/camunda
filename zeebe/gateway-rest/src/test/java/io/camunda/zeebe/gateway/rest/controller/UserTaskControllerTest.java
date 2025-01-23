@@ -13,17 +13,18 @@ import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 
-import io.camunda.service.CamundaServiceException;
+import io.camunda.security.auth.Authentication;
 import io.camunda.service.UserTaskServices;
-import io.camunda.service.security.auth.Authentication;
+import io.camunda.service.exception.CamundaBrokerException;
 import io.camunda.zeebe.broker.client.api.dto.BrokerRejection;
 import io.camunda.zeebe.gateway.rest.RestControllerTest;
+import io.camunda.zeebe.gateway.rest.cache.ProcessCache;
 import io.camunda.zeebe.protocol.impl.record.value.usertask.UserTaskRecord;
 import io.camunda.zeebe.protocol.record.Assertions;
 import io.camunda.zeebe.protocol.record.RejectionType;
 import io.camunda.zeebe.protocol.record.intent.UserTaskIntent;
-import java.time.ZoneId;
-import java.time.ZonedDateTime;
+import java.time.OffsetDateTime;
+import java.time.ZoneOffset;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.stream.Stream;
@@ -45,9 +46,10 @@ public class UserTaskControllerTest extends RestControllerTest {
   static final CompletableFuture<UserTaskRecord> BROKER_RESPONSE =
       CompletableFuture.completedFuture(new UserTaskRecord());
   static final String TEST_TIME =
-      ZonedDateTime.of(2023, 11, 11, 11, 11, 11, 11, ZoneId.of("UTC")).toString();
+      OffsetDateTime.of(2023, 11, 11, 11, 11, 11, 11, ZoneOffset.of("Z")).toString();
 
   @MockBean UserTaskServices userTaskServices;
+  @MockBean ProcessCache processCache;
 
   static Stream<String> urls() {
     return Stream.of("/v1/user-tasks", "/v2/user-tasks");
@@ -77,6 +79,18 @@ public class UserTaskControllerTest extends RestControllerTest {
                         RejectionType.SBE_UNKNOWN,
                         RejectionType.NULL_VAL)
                     .flatMap(r -> Stream.of(Pair.of(r, url))));
+  }
+
+  static Stream<Pair<String, String>> validDateInputsAndUrls() {
+    return urls()
+        .flatMap(
+            url ->
+                Stream.of(
+                        "2023-11-11T10:10:10.1010Z",
+                        "2023-11-11T10:10:10Z",
+                        "2023-11-11T10:10:10.1010+01:00",
+                        "2023-11-11T10:10:10.101010101+01:00")
+                    .flatMap(date -> Stream.of(Pair.of(date, url))));
   }
 
   @BeforeEach
@@ -113,9 +127,9 @@ public class UserTaskControllerTest extends RestControllerTest {
         .thenReturn(BROKER_RESPONSE);
     final var request =
         """
-        {
-          "action": "customAction"
-        }""";
+            {
+              "action": "customAction"
+            }""";
 
     // when / then
     webClient
@@ -130,7 +144,7 @@ public class UserTaskControllerTest extends RestControllerTest {
         .expectBody()
         .isEmpty();
 
-    Mockito.verify(userTaskServices).completeUserTask(1L, null, "customAction");
+    Mockito.verify(userTaskServices).completeUserTask(1L, Map.of(), "customAction");
   }
 
   @ParameterizedTest
@@ -141,12 +155,12 @@ public class UserTaskControllerTest extends RestControllerTest {
         .thenReturn(BROKER_RESPONSE);
     final var request =
         """
-        {
-          "variables" : {
-            "foo": "bar",
-            "baz": 1234
-          }
-        }""";
+            {
+              "variables" : {
+                "foo": "bar",
+                "baz": 1234
+              }
+            }""";
 
     // when / then
     webClient
@@ -172,13 +186,13 @@ public class UserTaskControllerTest extends RestControllerTest {
         .thenReturn(BROKER_RESPONSE);
     final var request =
         """
-        {
-          "action": "customAction",
-          "variables": {
-            "foo": "bar",
-            "baz": 1234
-          }
-        }""";
+            {
+              "action": "customAction",
+              "variables": {
+                "foo": "bar",
+                "baz": 1234
+              }
+            }""";
 
     // when / then
     webClient
@@ -205,9 +219,9 @@ public class UserTaskControllerTest extends RestControllerTest {
         .thenReturn(BROKER_RESPONSE);
     final var request =
         """
-        {
-          "action": "customAction"
-        }""";
+            {
+              "action": "customAction"
+            }""";
 
     // when / then
     webClient
@@ -241,15 +255,15 @@ public class UserTaskControllerTest extends RestControllerTest {
         .thenReturn(BROKER_RESPONSE);
     final var request =
         """
-        {
-          "changeset": {
-            "candidateGroups": ["foo"],
-            "candidateUsers": ["bar"],
-            "dueDate": "%s",
-            "followUpDate": "%s",
-            "priority": 33
-          }
-        }"""
+            {
+              "changeset": {
+                "candidateGroups": ["foo"],
+                "candidateUsers": ["bar"],
+                "dueDate": "%s",
+                "followUpDate": "%s",
+                "priority": 33
+              }
+            }"""
             .formatted(TEST_TIME, TEST_TIME);
 
     // when / then
@@ -289,12 +303,12 @@ public class UserTaskControllerTest extends RestControllerTest {
         .thenReturn(BROKER_RESPONSE);
     final var request =
         """
-        {
-          "changeset": {
-            "candidateGroups": ["foo"],
-            "followUpDate": "%s"
-          }
-        }"""
+            {
+              "changeset": {
+                "candidateGroups": ["foo"],
+                "followUpDate": "%s"
+              }
+            }"""
             .formatted(TEST_TIME);
 
     // when / then
@@ -366,16 +380,16 @@ public class UserTaskControllerTest extends RestControllerTest {
         .thenReturn(BROKER_RESPONSE);
     final var request =
         """
-        {
-          "action": "customAction",
-          "changeset": {
-            "candidateGroups": ["foo"],
-            "candidateUsers": ["bar"],
-            "dueDate": "%s",
-            "followUpDate": "%s",
-            "priority": 33
-          }
-        }"""
+            {
+              "action": "customAction",
+              "changeset": {
+                "candidateGroups": ["foo"],
+                "candidateUsers": ["bar"],
+                "dueDate": "%s",
+                "followUpDate": "%s",
+                "priority": 33
+              }
+            }"""
             .formatted(TEST_TIME, TEST_TIME);
 
     // when / then
@@ -409,19 +423,56 @@ public class UserTaskControllerTest extends RestControllerTest {
   }
 
   @ParameterizedTest
+  @MethodSource("validDateInputsAndUrls")
+  void shouldUpdateTaskWithDateChanges(final Pair<String, String> dateAndUrl) {
+    // given
+    Mockito.when(userTaskServices.updateUserTask(anyLong(), any(), anyString()))
+        .thenReturn(BROKER_RESPONSE);
+    final var request =
+        """
+            {
+              "changeset": {
+                "dueDate": "%s",
+                "followUpDate": "%s"
+              }
+            }"""
+            .formatted(dateAndUrl.getLeft(), dateAndUrl.getLeft());
+
+    // when / then
+    webClient
+        .patch()
+        .uri(dateAndUrl.getRight() + "/1")
+        .accept(MediaType.APPLICATION_JSON)
+        .contentType(MediaType.APPLICATION_JSON)
+        .bodyValue(request)
+        .exchange()
+        .expectStatus()
+        .isNoContent()
+        .expectBody()
+        .isEmpty();
+
+    final var argumentCaptor = ArgumentCaptor.forClass(UserTaskRecord.class);
+    Mockito.verify(userTaskServices).updateUserTask(eq(1L), argumentCaptor.capture(), eq(""));
+    Assertions.assertThat(argumentCaptor.getValue())
+        .hasChangedAttributes(UserTaskRecord.DUE_DATE, UserTaskRecord.FOLLOW_UP_DATE)
+        .hasDueDate(dateAndUrl.getLeft())
+        .hasFollowUpDate(dateAndUrl.getLeft());
+  }
+
+  @ParameterizedTest
   @MethodSource("urls")
   void shouldYieldBadRequestWhenUpdateTaskWithoutActionAndChanges(final String baseUrl) {
     // given
     final var expectedBody =
         """
-        {
-          "type": "about:blank",
-          "status": 400,
-          "title": "INVALID_ARGUMENT",
-          "detail": "No update data provided. Provide at least an \\"action\\" or a non-null value \
-for a supported attribute in the \\"changeset\\".",
-          "instance": "%s"
-        }"""
+                    {
+                      "type": "about:blank",
+                      "status": 400,
+                      "title": "INVALID_ARGUMENT",
+                      "detail": "No update data provided. Provide at least an \\"action\\" or a non-null value \
+            for a supported attribute in the \\"changeset\\".",
+                      "instance": "%s"
+                    }"""
             .formatted(baseUrl + "/1");
 
     // when / then
@@ -488,21 +539,66 @@ for a supported attribute in the \\"changeset\\".",
     // given
     final var request =
         """
-         {
-           "changeset": {
-             "followUpDate": "foo"
-           }
-         }""";
+            {
+              "changeset": {
+                "followUpDate": "foo"
+              }
+            }""";
 
     final var expectedBody =
         """
-         {
-           "type": "about:blank",
-           "status": 400,
-           "title": "INVALID_ARGUMENT",
-           "detail": "The provided follow-up date 'foo' cannot be parsed as a date according to RFC 3339, section 5.6.",
-           "instance": "%s"
-         }"""
+            {
+              "type": "about:blank",
+              "status": 400,
+              "title": "INVALID_ARGUMENT",
+              "detail": "The provided follow-up date 'foo' cannot be parsed as a date according to RFC 3339, section 5.6.",
+              "instance": "%s"
+            }"""
+            .formatted(baseUrl + "/1");
+
+    // when / then
+    webClient
+        .patch()
+        .uri(baseUrl + "/1")
+        .accept(MediaType.APPLICATION_JSON)
+        .contentType(MediaType.APPLICATION_JSON)
+        .bodyValue(request)
+        .exchange()
+        .expectStatus()
+        .isBadRequest()
+        .expectHeader()
+        .contentType(MediaType.APPLICATION_PROBLEM_JSON)
+        .expectBody()
+        .json(expectedBody);
+
+    Mockito.verifyNoInteractions(userTaskServices);
+  }
+
+  @ParameterizedTest
+  @MethodSource("urls")
+  void shouldYieldBadRequestWhenUpdateTaskWithInvalidOffsetFollowUpDate(final String baseUrl) {
+    // given
+    final var request =
+        """
+            {
+              "changeset": {
+                "followUpDate": "2023-11-11T12:12:12.1234+0100",
+                "dueDate": "2023-11-11T10:10:10.1010+01:00[Europe/Paris]"
+              }
+            }""";
+
+    final var expectedBody =
+        """
+            {
+              "type": "about:blank",
+              "status": 400,
+              "title": "INVALID_ARGUMENT",
+              "detail": "The provided due date '2023-11-11T10:10:10.1010+01:00[Europe/Paris]' \
+            cannot be parsed as a date according to RFC 3339, section 5.6. The provided follow-up \
+            date '2023-11-11T12:12:12.1234+0100' cannot be parsed as a date according to RFC 3339, \
+            section 5.6.",
+              "instance": "%s"
+            }"""
             .formatted(baseUrl + "/1");
 
     // when / then
@@ -538,15 +634,15 @@ for a supported attribute in the \\"changeset\\".",
 
     final var expectedBody =
         """
-            {
-              "type": "about:blank",
-              "status": 400,
-              "title": "INVALID_ARGUMENT",
-              "detail": "The provided due date 'bar' cannot be parsed as a date according to \
-RFC 3339, section 5.6. The provided follow-up date 'foo' cannot be parsed as a date according to \
-RFC 3339, section 5.6.",
-              "instance": "%s"
-            }"""
+                        {
+                          "type": "about:blank",
+                          "status": 400,
+                          "title": "INVALID_ARGUMENT",
+                          "detail": "The provided due date 'bar' cannot be parsed as a date according to \
+            RFC 3339, section 5.6. The provided follow-up date 'foo' cannot be parsed as a date according to \
+            RFC 3339, section 5.6.",
+                          "instance": "%s"
+                        }"""
             .formatted(baseUrl + "/1");
 
     // when / then
@@ -612,21 +708,21 @@ RFC 3339, section 5.6.",
     // given
     final var request =
         """
-        {
-          "changeset": {
-            "elementInstanceKey": 12345
-          }
-        }""";
+            {
+              "changeset": {
+                "elementInstanceKey": 12345
+              }
+            }""";
 
     final var expectedBody =
         """
-        {
-          "type": "about:blank",
-          "status": 400,
-          "title": "INVALID_ARGUMENT",
-          "detail": "No update data provided. Provide at least an \\"action\\" or a non-null value for a supported attribute in the \\"changeset\\".",
-          "instance": "%s"
-        }"""
+            {
+              "type": "about:blank",
+              "status": 400,
+              "title": "INVALID_ARGUMENT",
+              "detail": "No update data provided. Provide at least an \\"action\\" or a non-null value for a supported attribute in the \\"changeset\\".",
+              "instance": "%s"
+            }"""
             .formatted(baseUrl + "/1");
 
     // when / then
@@ -658,22 +754,22 @@ RFC 3339, section 5.6.",
     // given
     final var request =
         """
-         {
-           "changeset": {
-             "priority": %d
-           }
-         }"""
+            {
+              "changeset": {
+                "priority": %d
+              }
+            }"""
             .formatted(priority);
 
     final var expectedBody =
         """
-         {
-           "type": "about:blank",
-           "status": 400,
-           "title": "INVALID_ARGUMENT",
-           "detail": "The value for priority is '%s' but must be within the [0,100] range.",
-           "instance": "%s"
-         }"""
+            {
+              "type": "about:blank",
+              "status": 400,
+              "title": "INVALID_ARGUMENT",
+              "detail": "The value for priority is '%s' but must be within the [0,100] range.",
+              "instance": "%s"
+            }"""
             .formatted(priority, baseUrl + "/1");
 
     // when / then
@@ -703,19 +799,19 @@ RFC 3339, section 5.6.",
     Mockito.when(userTaskServices.completeUserTask(anyLong(), any(), anyString()))
         .thenReturn(
             CompletableFuture.failedFuture(
-                new CamundaServiceException(
+                new CamundaBrokerException(
                     new BrokerRejection(
                         UserTaskIntent.COMPLETE, 1L, RejectionType.NOT_FOUND, "Task not found"))));
 
     final var expectedBody =
         """
-        {
-          "type": "about:blank",
-          "status": 404,
-          "title": "NOT_FOUND",
-          "detail": "Command 'COMPLETE' rejected with code 'NOT_FOUND': Task not found",
-          "instance": "%s"
-        }"""
+            {
+              "type": "about:blank",
+              "status": 404,
+              "title": "NOT_FOUND",
+              "detail": "Command 'COMPLETE' rejected with code 'NOT_FOUND': Task not found",
+              "instance": "%s"
+            }"""
             .formatted(baseUrl + "/1/completion");
 
     // when / then
@@ -742,7 +838,7 @@ RFC 3339, section 5.6.",
     Mockito.when(userTaskServices.completeUserTask(anyLong(), any(), anyString()))
         .thenReturn(
             CompletableFuture.failedFuture(
-                new CamundaServiceException(
+                new CamundaBrokerException(
                     new BrokerRejection(
                         UserTaskIntent.COMPLETE,
                         1L,
@@ -751,13 +847,13 @@ RFC 3339, section 5.6.",
 
     final var expectedBody =
         """
-        {
-          "type": "about:blank",
-          "status": 409,
-          "title": "INVALID_STATE",
-          "detail": "Command 'COMPLETE' rejected with code 'INVALID_STATE': Task is not in state CREATED",
-          "instance": "%s"
-        }"""
+            {
+              "type": "about:blank",
+              "status": 409,
+              "title": "INVALID_STATE",
+              "detail": "Command 'COMPLETE' rejected with code 'INVALID_STATE': Task is not in state CREATED",
+              "instance": "%s"
+            }"""
             .formatted(baseUrl + "/1/completion");
 
     // when / then
@@ -785,19 +881,19 @@ RFC 3339, section 5.6.",
     Mockito.when(userTaskServices.completeUserTask(anyLong(), any(), anyString()))
         .thenReturn(
             CompletableFuture.failedFuture(
-                new CamundaServiceException(
+                new CamundaBrokerException(
                     new BrokerRejection(
                         UserTaskIntent.COMPLETE, 1L, parameters.getLeft(), "Just an error"))));
 
     final var expectedBody =
         """
-        {
-          "type": "about:blank",
-          "status": 400,
-          "title": "%s",
-          "detail": "Command 'COMPLETE' rejected with code '%s': Just an error",
-          "instance": "%s"
-        }"""
+            {
+              "type": "about:blank",
+              "status": 400,
+              "title": "%s",
+              "detail": "Command 'COMPLETE' rejected with code '%s': Just an error",
+              "instance": "%s"
+            }"""
             .formatted(
                 parameters.getLeft().name(),
                 parameters.getLeft(),
@@ -828,19 +924,19 @@ RFC 3339, section 5.6.",
     Mockito.when(userTaskServices.completeUserTask(anyLong(), any(), anyString()))
         .thenReturn(
             CompletableFuture.failedFuture(
-                new CamundaServiceException(
+                new CamundaBrokerException(
                     new BrokerRejection(
                         UserTaskIntent.COMPLETE, 1L, parameters.getLeft(), "Just an error"))));
 
     final var expectedBody =
         """
-        {
-          "type": "about:blank",
-          "status": 409,
-          "title": "%s",
-          "detail": "Command 'COMPLETE' rejected with code '%s': Just an error",
-          "instance": "%s"
-        }"""
+            {
+              "type": "about:blank",
+              "status": 409,
+              "title": "%s",
+              "detail": "Command 'COMPLETE' rejected with code '%s': Just an error",
+              "instance": "%s"
+            }"""
             .formatted(
                 parameters.getLeft().name(),
                 parameters.getLeft(),
@@ -871,19 +967,19 @@ RFC 3339, section 5.6.",
     Mockito.when(userTaskServices.completeUserTask(anyLong(), any(), anyString()))
         .thenReturn(
             CompletableFuture.failedFuture(
-                new CamundaServiceException(
+                new CamundaBrokerException(
                     new BrokerRejection(
                         UserTaskIntent.COMPLETE, 1L, parameters.getLeft(), "Just an error"))));
 
     final var expectedBody =
         """
-         {
-           "type": "about:blank",
-           "status": 500,
-           "title": "%s",
-           "detail": "Command 'COMPLETE' rejected with code '%s': Just an error",
-           "instance": "%s"
-         }"""
+            {
+              "type": "about:blank",
+              "status": 500,
+              "title": "%s",
+              "detail": "Command 'COMPLETE' rejected with code '%s': Just an error",
+              "instance": "%s"
+            }"""
             .formatted(
                 parameters.getLeft().name(),
                 parameters.getLeft(),
@@ -914,9 +1010,9 @@ RFC 3339, section 5.6.",
         .thenReturn(BROKER_RESPONSE);
     final var request =
         """
-        {
-          "assignee": "Test Assignee"
-        }""";
+            {
+              "assignee": "Test Assignee"
+            }""";
 
     // when / then
     webClient
@@ -943,10 +1039,10 @@ RFC 3339, section 5.6.",
         .thenReturn(BROKER_RESPONSE);
     final var request =
         """
-        {
-          "assignee": "Test Assignee",
-          "action": "custom action"
-        }""";
+            {
+              "assignee": "Test Assignee",
+              "action": "custom action"
+            }""";
 
     // when / then
     webClient
@@ -973,11 +1069,11 @@ RFC 3339, section 5.6.",
         .thenReturn(BROKER_RESPONSE);
     final var request =
         """
-        {
-          "assignee": "Test Assignee",
-          "action": "custom action",
-          "allowOverride": true
-        }""";
+            {
+              "assignee": "Test Assignee",
+              "action": "custom action",
+              "allowOverride": true
+            }""";
 
     // when/then
     webClient
@@ -1004,11 +1100,11 @@ RFC 3339, section 5.6.",
         .thenReturn(BROKER_RESPONSE);
     final var request =
         """
-        {
-          "assignee": "Test Assignee",
-          "action": "custom action",
-          "allowOverride": false
-        }""";
+            {
+              "assignee": "Test Assignee",
+              "action": "custom action",
+              "allowOverride": false
+            }""";
 
     // when / then
     webClient
@@ -1035,10 +1131,10 @@ RFC 3339, section 5.6.",
         .thenReturn(BROKER_RESPONSE);
     final var request =
         """
-        {
-          "assignee": "Test Assignee",
-          "allowOverride": true
-        }""";
+            {
+              "assignee": "Test Assignee",
+              "allowOverride": true
+            }""";
 
     // when / then
     webClient
@@ -1065,10 +1161,10 @@ RFC 3339, section 5.6.",
         .thenReturn(BROKER_RESPONSE);
     final var request =
         """
-        {
-          "assignee": "Test Assignee",
-          "allowOverride": false
-        }""";
+            {
+              "assignee": "Test Assignee",
+              "allowOverride": false
+            }""";
 
     // when / then
     webClient
@@ -1095,13 +1191,13 @@ RFC 3339, section 5.6.",
 
     final var expectedBody =
         """
-        {
-          "type": "about:blank",
-          "status": 400,
-          "title": "INVALID_ARGUMENT",
-          "detail": "No assignee provided",
-          "instance": "%s"
-        }"""
+            {
+              "type": "about:blank",
+              "status": 400,
+              "title": "INVALID_ARGUMENT",
+              "detail": "No assignee provided",
+              "instance": "%s"
+            }"""
             .formatted(baseUrl + "/1/assignment");
 
     // when / then

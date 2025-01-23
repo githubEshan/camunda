@@ -10,9 +10,6 @@ package io.camunda.operate.webapp.rest;
 import static io.camunda.operate.webapp.rest.ProcessInstanceRestService.PROCESS_INSTANCE_URL;
 
 import io.camunda.operate.Metrics;
-import io.camunda.operate.entities.BatchOperationEntity;
-import io.camunda.operate.entities.OperationType;
-import io.camunda.operate.entities.SequenceFlowEntity;
 import io.camunda.operate.store.SequenceFlowStore;
 import io.camunda.operate.util.rest.ValidLongId;
 import io.camunda.operate.webapp.InternalAPIErrorController;
@@ -40,8 +37,11 @@ import io.camunda.operate.webapp.rest.exception.NotAuthorizedException;
 import io.camunda.operate.webapp.rest.validation.ModifyProcessInstanceRequestValidator;
 import io.camunda.operate.webapp.rest.validation.ProcessInstanceRequestValidator;
 import io.camunda.operate.webapp.security.identity.IdentityPermission;
-import io.camunda.operate.webapp.security.identity.PermissionsService;
+import io.camunda.operate.webapp.security.permission.PermissionsService;
 import io.camunda.operate.webapp.writer.BatchOperationWriter;
+import io.camunda.webapps.schema.entities.operate.SequenceFlowEntity;
+import io.camunda.webapps.schema.entities.operation.BatchOperationEntity;
+import io.camunda.webapps.schema.entities.operation.OperationType;
 import io.micrometer.core.annotation.Timed;
 import io.swagger.v3.oas.annotations.Operation;
 import jakarta.validation.ConstraintViolationException;
@@ -50,7 +50,6 @@ import java.util.List;
 import java.util.Map;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-import org.springframework.lang.Nullable;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
@@ -62,7 +61,7 @@ public class ProcessInstanceRestService extends InternalAPIErrorController {
 
   public static final String PROCESS_INSTANCE_URL = "/api/process-instances";
 
-  protected final PermissionsService permissionsService;
+  private final PermissionsService permissionsService;
   private final ProcessInstanceRequestValidator processInstanceRequestValidator;
   private final ModifyProcessInstanceRequestValidator modifyProcessInstanceRequestValidator;
   private final BatchOperationWriter batchOperationWriter;
@@ -76,7 +75,7 @@ public class ProcessInstanceRestService extends InternalAPIErrorController {
   private final SequenceFlowStore sequenceFlowStore;
 
   public ProcessInstanceRestService(
-      @Nullable final PermissionsService permissionsService,
+      final PermissionsService permissionsService,
       final ProcessInstanceRequestValidator processInstanceRequestValidator,
       final ModifyProcessInstanceRequestValidator modifyProcessInstanceRequestValidator,
       final BatchOperationWriter batchOperationWriter,
@@ -264,12 +263,12 @@ public class ProcessInstanceRestService extends InternalAPIErrorController {
   }
 
   private void checkIdentityReadPermission(final Long processInstanceKey) {
-    checkIdentityPermission(processInstanceKey, IdentityPermission.READ);
+    checkIdentityPermission(processInstanceKey, IdentityPermission.READ_PROCESS_INSTANCE);
   }
 
   private void checkIdentityPermission(
       final Long processInstanceKey, final IdentityPermission permission) {
-    if (permissionsService != null
+    if (permissionsService.permissionsEnabled()
         && !permissionsService.hasPermissionForProcess(
             processInstanceReader.getProcessInstanceByKey(processInstanceKey).getBpmnProcessId(),
             permission)) {

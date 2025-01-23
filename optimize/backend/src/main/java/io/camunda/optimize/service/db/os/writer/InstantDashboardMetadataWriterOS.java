@@ -8,94 +8,122 @@
 package io.camunda.optimize.service.db.os.writer;
 
 import static io.camunda.optimize.service.db.DatabaseConstants.INSTANT_DASHBOARD_INDEX_NAME;
-import static io.camunda.optimize.service.db.os.externalcode.client.dsl.QueryDSL.longTerms;
-import static io.camunda.optimize.service.db.os.externalcode.client.dsl.QueryDSL.not;
-import static java.lang.String.format;
 
 import io.camunda.optimize.dto.optimize.query.dashboard.InstantDashboardDataDto;
 import io.camunda.optimize.service.db.os.OptimizeOpenSearchClient;
+import io.camunda.optimize.service.db.os.builders.OptimizeDeleteOperationBuilderOS;
 import io.camunda.optimize.service.db.writer.InstantDashboardMetadataWriter;
 import io.camunda.optimize.service.exceptions.OptimizeRuntimeException;
 import io.camunda.optimize.service.util.configuration.condition.OpenSearchCondition;
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
-import lombok.AllArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
+import org.opensearch.client.opensearch._types.FieldValue;
 import org.opensearch.client.opensearch._types.Refresh;
 import org.opensearch.client.opensearch._types.Result;
 import org.opensearch.client.opensearch.core.BulkRequest;
 import org.opensearch.client.opensearch.core.IndexRequest;
 import org.opensearch.client.opensearch.core.SearchRequest;
+import org.opensearch.client.opensearch.core.SearchResponse;
+import org.opensearch.client.opensearch.core.bulk.BulkOperation;
+import org.slf4j.Logger;
 import org.springframework.context.annotation.Conditional;
 import org.springframework.stereotype.Component;
 
-@AllArgsConstructor
 @Component
-@Slf4j
 @Conditional(OpenSearchCondition.class)
 public class InstantDashboardMetadataWriterOS implements InstantDashboardMetadataWriter {
+
+  private static final Logger LOG =
+      org.slf4j.LoggerFactory.getLogger(InstantDashboardMetadataWriterOS.class);
   private final OptimizeOpenSearchClient osClient;
+
+  public InstantDashboardMetadataWriterOS(final OptimizeOpenSearchClient osClient) {
+    this.osClient = osClient;
+  }
 
   @Override
   public void saveInstantDashboard(final InstantDashboardDataDto dashboardDataDto) {
-    log.debug("Writing new Instant preview dashboard to Opensearch");
-    String id = dashboardDataDto.getInstantDashboardId();
+    LOG.debug("Writing new Instant preview dashboard to Opensearch");
+    final String id = dashboardDataDto.getInstantDashboardId();
 
-    IndexRequest.Builder<InstantDashboardDataDto> requestBuilder =
+    final IndexRequest.Builder<InstantDashboardDataDto> requestBuilder =
         new IndexRequest.Builder<InstantDashboardDataDto>()
             .index(INSTANT_DASHBOARD_INDEX_NAME)
             .id(id)
             .document(dashboardDataDto)
             .refresh(Refresh.True);
 
-    Result result = osClient.index(requestBuilder).result();
+    final Result result = osClient.index(requestBuilder).result();
 
     if (!Set.of(Result.Created, Result.Updated).contains(result)) {
-      String message =
+      final String message =
           "Could not write Instant preview dashboard data to Opensearch. "
               + "Maybe the connection to Opensearch got lost?";
-      log.error(message);
+      LOG.error(message);
       throw new OptimizeRuntimeException(message);
     }
 
-    log.debug("Instant preview dashboard information with id [{}] has been created", id);
+    LOG.debug("Instant preview dashboard information with id [{}] has been created", id);
   }
 
   @Override
   public List<String> deleteOutdatedTemplateEntriesAndGetExistingDashboardIds(
       final List<Long> hashesAllowed) throws IOException {
-    record Result(String dashboardId) {}
-    BulkRequest.Builder bulkRequestBuilder = new BulkRequest.Builder();
-    SearchRequest.Builder requestBuilder =
+    final List<String> dashboardIdsToBeDeleted = new ArrayList<>();
+    final SearchRequest.Builder requestBuilder =
         new SearchRequest.Builder()
             .index(INSTANT_DASHBOARD_INDEX_NAME)
-            .query(not(longTerms(InstantDashboardDataDto.Fields.templateHash, hashesAllowed)));
+            .query(
+                q ->
+                    q.bool(
+                        b ->
+                            b.mustNot(
+                                m ->
+                                    m.terms(
+                                        t ->
+                                            t.field(InstantDashboardDataDto.Fields.templateHash)
+                                                .terms(
+                                                    tt ->
+                                                        tt.value(
+                                                            hashesAllowed.stream()
+                                                                .map(FieldValue::of)
+                                                                .toList()))))));
 
-    List<String> dashboardIdsToBeDeleted =
-        osClient.searchValues(requestBuilder, Result.class).stream()
-            .map(Result::dashboardId)
-            .toList();
+    final SearchResponse<InstantDashboardDataDto> searchResponse =
+        osClient.search(
+            requestBuilder,
+            InstantDashboardDataDto.class,
+            "Some errors occurred while deleting outdated instant dashboards.");
 
-    if (!dashboardIdsToBeDeleted.isEmpty()) {
-      dashboardIdsToBeDeleted.forEach(
-          id ->
-              bulkRequestBuilder.operations(
-                  op -> op.delete(del -> del.index(INSTANT_DASHBOARD_INDEX_NAME).id(id))));
+    final BulkRequest.Builder bulkRequestBuilder = new BulkRequest.Builder();
+    LOG.debug(
+        "Deleting [{}] instant dashboard documents by id with bulk request.",
+        searchResponse.hits().hits().size());
+    final List<BulkOperation> bulkOperations = new ArrayList<>();
+    searchResponse
+        .hits()
+        .hits()
+        .forEach(
+            hit -> {
+              assert hit.source() != null;
+              dashboardIdsToBeDeleted.add(hit.source().getDashboardId());
+              bulkOperations.add(
+                  BulkOperation.of(
+                      o ->
+                          o.delete(
+                              OptimizeDeleteOperationBuilderOS.of(
+                                  d ->
+                                      d.optimizeIndex(osClient, INSTANT_DASHBOARD_INDEX_NAME)
+                                          .id(hit.id())))));
+            });
 
-      log.debug(
-          "Deleting [{}] instant dashboard documents by id with bulk request.",
-          dashboardIdsToBeDeleted.size());
-
+    if (!bulkOperations.isEmpty()) {
+      bulkRequestBuilder.operations(bulkOperations);
       osClient.bulk(
-          bulkRequestBuilder,
-          format(
-              "Failed to bulk delete from %s %s outdated template entries: %s",
-              INSTANT_DASHBOARD_INDEX_NAME,
-              dashboardIdsToBeDeleted.size(),
-              dashboardIdsToBeDeleted));
+          bulkRequestBuilder, "Some errors occurred while deleting outdated instant dashboards.");
     }
-
     return dashboardIdsToBeDeleted;
   }
 }

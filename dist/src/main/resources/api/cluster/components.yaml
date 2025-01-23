@@ -52,6 +52,47 @@ schemas:
     items:
       $ref: "components.yaml#/schemas/BrokerId"
 
+  ClusterConfigPatchRequest:
+    title: ClusterConfigPatchRequest
+    description: Request body for reconfiguring the cluster
+    type: object
+    properties:
+      brokers:
+        type: object
+        description: Specify the required changes to the brokers. You can either provide the set of
+          brokers to add and remove or the new count of brokers.
+        properties:
+          add:
+            type: array
+            description: List of brokers to add. Can be omitted if no brokers are added.
+            items:
+              $ref: "components.yaml#/schemas/BrokerId"
+          remove:
+            type: array
+            description: List of brokers to remove. Can be omitted if no brokers are removed.
+            items:
+              $ref: "components.yaml#/schemas/BrokerId"
+          count:
+            type: integer
+            format: int32
+            description: The new number of brokers. Can be omitted if the broker count is not changed
+              or if the brokers to add or remove is provided.
+            example: 12
+      partitions:
+        type: object
+        properties:
+          count:
+            type: integer
+            format: int32
+            description: The new number of partitions. Can be omitted if the partition count is not
+              changed. This is an experimental feature.
+            example: 12
+          replicationFactor:
+            type: integer
+            format: int32
+            description: The new replication factor. Can be omitted if the replication factor is not changed.
+            example: 3
+
   PlannedOperationsResponse:
     title: PlannedOperationsResponse
     description: Returns the current topology, planned changes and the expected final topology
@@ -101,7 +142,7 @@ schemas:
     type: object
     required:
       - version
-      - activePartitions
+      - requestHandling
       - messageCorrelation
     properties:
       version:
@@ -109,16 +150,65 @@ schemas:
         format: int64
         description: The version of the routing state
         example: 1
-      activePartitions:
-        type: array
-        description: The list of active partitions that accept round-robin requests
-        example: [1, 2, 3]
-        items:
-          type: integer
-          format: int32
+      requestHandling:
+        $ref: "components.yaml#/schemas/RequestHandling"
       messageCorrelation:
         $ref: "components.yaml#/schemas/MessageCorrelation"
 
+  RequestHandling:
+    description: The request handling strategy
+    oneOf:
+      - $ref: "components.yaml#/schemas/RequestHandlingAllPartitions"
+      - $ref: "components.yaml#/schemas/RequestHandlingActivePartitions"
+    discriminator:
+      propertyName: strategy
+      mapping:
+        AllPartitions: "components.yaml#/schemas/RequestHandlingAllPartitions"
+        ActivePartitions: "components.yaml#/schemas/RequestHandlingActivePartitions"
+
+  RequestHandlingAllPartitions:
+    description: Requests are handled by all partitions
+    type: object
+    required:
+      - partitionCount
+    properties:
+      strategy:
+        type: string
+      partitionCount:
+        type: integer
+        format: int32
+        description: The number of partitions
+        example: 3
+
+  RequestHandlingActivePartitions:
+    description: Requests are only handled by active partitions, inactive partitions are excluded
+    type: object
+    required:
+      - basePartitionCount
+      - additionalActivePartitions
+      - inactivePartitions
+    properties:
+      strategy:
+        type: string
+      basePartitionCount:
+        type: integer
+        format: int32
+        description: Contiguous range of partitions (1..=N) that are active.
+        example: 3
+      additionalActivePartitions:
+        type: array
+        description: A list of additional, active partitions that also accept round-robin requests
+        example: [ 4, 5 ]
+        items:
+          type: integer
+          format: int32
+      inactivePartitions:
+        type: array
+        description: A list of inactive partitions that do not accept round-robing requests
+        example: [ 6, 7 ]
+        items:
+          type: integer
+          format: int32
 
   MessageCorrelation:
     description: The message correlation strategy
@@ -227,6 +317,8 @@ schemas:
           - UNKNOWN
           - PARTITION_DISABLE_EXPORTER
           - PARTITION_ENABLE_EXPORTER
+          - PARTITION_BOOTSTRAP
+          - DELETE_HISTORY
       brokerId:
         $ref: "components.yaml#/schemas/BrokerId"
       partitionId:

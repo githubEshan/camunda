@@ -10,24 +10,24 @@ package io.camunda.zeebe.gateway;
 import static java.util.concurrent.Executors.newThreadPerTaskExecutor;
 
 import com.google.rpc.Code;
-import io.camunda.identity.sdk.IdentityConfiguration;
+import io.camunda.security.configuration.MultiTenancyConfiguration;
+import io.camunda.security.configuration.SecurityConfiguration;
+import io.camunda.security.entity.AuthenticationMethod;
+import io.camunda.service.UserServices;
 import io.camunda.zeebe.broker.client.api.BrokerClient;
 import io.camunda.zeebe.gateway.health.GatewayHealthManager;
 import io.camunda.zeebe.gateway.health.Status;
 import io.camunda.zeebe.gateway.health.impl.GatewayHealthManagerImpl;
-import io.camunda.zeebe.gateway.impl.configuration.AuthenticationCfg.AuthMode;
 import io.camunda.zeebe.gateway.impl.configuration.GatewayCfg;
-import io.camunda.zeebe.gateway.impl.configuration.IdentityCfg;
-import io.camunda.zeebe.gateway.impl.configuration.MultiTenancyCfg;
 import io.camunda.zeebe.gateway.impl.configuration.NetworkCfg;
 import io.camunda.zeebe.gateway.impl.configuration.SecurityCfg;
 import io.camunda.zeebe.gateway.impl.job.ActivateJobsHandler;
 import io.camunda.zeebe.gateway.impl.job.LongPollingActivateJobsHandler;
 import io.camunda.zeebe.gateway.impl.job.RoundRobinActivateJobsHandler;
 import io.camunda.zeebe.gateway.impl.stream.StreamJobsHandler;
+import io.camunda.zeebe.gateway.interceptors.impl.AuthenticationInterceptor;
 import io.camunda.zeebe.gateway.interceptors.impl.ContextInjectingInterceptor;
 import io.camunda.zeebe.gateway.interceptors.impl.DecoratedInterceptor;
-import io.camunda.zeebe.gateway.interceptors.impl.IdentityInterceptor;
 import io.camunda.zeebe.gateway.interceptors.impl.InterceptorRepository;
 import io.camunda.zeebe.gateway.protocol.GatewayOuterClass.ActivateJobsResponse;
 import io.camunda.zeebe.gateway.query.impl.QueryApiImpl;
@@ -50,6 +50,7 @@ import io.grpc.StatusException;
 import io.grpc.netty.GrpcSslContexts;
 import io.grpc.netty.NettyServerBuilder;
 import io.grpc.protobuf.StatusProto;
+import io.netty.channel.ChannelOption;
 import io.netty.handler.ssl.SslContextBuilder;
 import java.io.IOException;
 import java.io.UncheckedIOException;
@@ -70,6 +71,7 @@ import java.util.stream.Collectors;
 import me.dinowernli.grpc.prometheus.Configuration;
 import me.dinowernli.grpc.prometheus.MonitoringServerInterceptor;
 import org.slf4j.Logger;
+import org.springframework.security.crypto.password.PasswordEncoder;
 
 public final class Gateway implements CloseableSilently {
 
@@ -84,7 +86,7 @@ public final class Gateway implements CloseableSilently {
   private static final Duration DEFAULT_SHUTDOWN_TIMEOUT = Duration.ofSeconds(30);
 
   private final GatewayCfg gatewayCfg;
-  private final IdentityConfiguration identityCfg;
+  private final SecurityConfiguration securityConfiguration;
   private final ActorSchedulingService actorSchedulingService;
   private final GatewayHealthManager healthManager;
   private final ClientStreamer<JobActivationProperties> jobStreamer;
@@ -93,44 +95,45 @@ public final class Gateway implements CloseableSilently {
   private Server server;
   private ExecutorService grpcExecutor;
   private final BrokerClient brokerClient;
+  private final UserServices userServices;
+  private final PasswordEncoder passwordEncoder;
 
   public Gateway(
       final GatewayCfg gatewayCfg,
-      final IdentityConfiguration identityCfg,
+      final SecurityConfiguration securityConfiguration,
       final BrokerClient brokerClient,
       final ActorSchedulingService actorSchedulingService,
-      final ClientStreamer<JobActivationProperties> jobStreamer) {
+      final ClientStreamer<JobActivationProperties> jobStreamer,
+      final UserServices userServices,
+      final PasswordEncoder passwordEncoder) {
     this(
         DEFAULT_SHUTDOWN_TIMEOUT,
         gatewayCfg,
-        identityCfg,
+        securityConfiguration,
         brokerClient,
         actorSchedulingService,
-        jobStreamer);
-  }
-
-  public Gateway(
-      final GatewayCfg gatewayCfg,
-      final BrokerClient brokerClient,
-      final ActorSchedulingService actorSchedulingService,
-      final ClientStreamer<JobActivationProperties> jobStreamer) {
-    this(gatewayCfg, null, brokerClient, actorSchedulingService, jobStreamer);
+        jobStreamer,
+        userServices,
+        passwordEncoder);
   }
 
   public Gateway(
       final Duration shutdownDuration,
       final GatewayCfg gatewayCfg,
-      final IdentityConfiguration identityCfg,
+      final SecurityConfiguration securityConfiguration,
       final BrokerClient brokerClient,
       final ActorSchedulingService actorSchedulingService,
-      final ClientStreamer<JobActivationProperties> jobStreamer) {
+      final ClientStreamer<JobActivationProperties> jobStreamer,
+      final UserServices userServices,
+      final PasswordEncoder passwordEncoder) {
     shutdownTimeout = shutdownDuration;
     this.gatewayCfg = gatewayCfg;
-    this.identityCfg = identityCfg;
+    this.securityConfiguration = securityConfiguration;
     this.brokerClient = brokerClient;
     this.actorSchedulingService = actorSchedulingService;
     this.jobStreamer = jobStreamer;
-
+    this.userServices = userServices;
+    this.passwordEncoder = passwordEncoder;
     healthManager = new GatewayHealthManagerImpl();
   }
 
@@ -195,7 +198,7 @@ public final class Gateway implements CloseableSilently {
       final ActivateJobsHandler<ActivateJobsResponse> activateJobsHandler,
       final StreamJobsHandler streamJobsHandler) {
     final NetworkCfg network = gatewayCfg.getNetwork();
-    final MultiTenancyCfg multiTenancy = gatewayCfg.getMultiTenancy();
+    final MultiTenancyConfiguration multiTenancy = securityConfiguration.getMultiTenancy();
 
     final var serverBuilder = applyNetworkConfig(network);
     applyExecutorConfiguration(serverBuilder);
@@ -258,7 +261,9 @@ public final class Gateway implements CloseableSilently {
     return NettyServerBuilder.forAddress(new InetSocketAddress(cfg.getHost(), cfg.getPort()))
         .maxInboundMessageSize(maxMessageSize)
         .permitKeepAliveTime(minKeepAliveInterval.toMillis(), TimeUnit.MILLISECONDS)
-        .permitKeepAliveWithoutCalls(false);
+        .permitKeepAliveWithoutCalls(false)
+        .withOption(ChannelOption.SO_RCVBUF, (int) cfg.getSocketReceiveBuffer().toBytes())
+        .withChildOption(ChannelOption.SO_SNDBUF, (int) cfg.getSocketSendBuffer().toBytes());
   }
 
   private void setSecurityConfig(
@@ -380,24 +385,11 @@ public final class Gateway implements CloseableSilently {
     Collections.reverse(interceptors);
     interceptors.add(new ContextInjectingInterceptor(queryApi));
     interceptors.add(MONITORING_SERVER_INTERCEPTOR);
-    if (AuthMode.IDENTITY == gatewayCfg.getSecurity().getAuthentication().getMode()) {
-      final var zeebeIdentityCfg = gatewayCfg.getSecurity().getAuthentication().getIdentity();
-      if (isZeebeIdentityConfigurationNotNull(zeebeIdentityCfg)) {
-        interceptors.add(new IdentityInterceptor(zeebeIdentityCfg, gatewayCfg.getMultiTenancy()));
-        LOG.warn(
-            "These Zeebe configuration properties for Camunda Identity are deprecated! Please use the "
-                + "corresponding Camunda Identity properties or the environment variables defined here: "
-                + "https://docs.camunda.io/docs/self-managed/identity/deployment/configuration-variables/");
-      } else {
-        interceptors.add(new IdentityInterceptor(identityCfg, gatewayCfg.getMultiTenancy()));
-      }
+    if (!securityConfiguration.getAuthentication().getMethod().equals(AuthenticationMethod.NONE)) {
+      interceptors.add(new AuthenticationInterceptor(userServices, passwordEncoder));
     }
 
     return ServerInterceptors.intercept(service, interceptors);
-  }
-
-  private boolean isZeebeIdentityConfigurationNotNull(final IdentityCfg identityCfg) {
-    return identityCfg.getIssuerBackendUrl() != null || identityCfg.getBaseUrl() != null;
   }
 
   private static StatusException grpcStatusException(final int code, final String msg) {

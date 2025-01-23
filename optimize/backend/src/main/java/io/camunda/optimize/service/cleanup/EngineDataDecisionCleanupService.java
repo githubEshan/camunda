@@ -17,18 +17,26 @@ import io.camunda.optimize.service.util.configuration.cleanup.CleanupConfigurati
 import io.camunda.optimize.service.util.configuration.cleanup.DecisionDefinitionCleanupConfiguration;
 import java.time.OffsetDateTime;
 import java.util.Set;
-import lombok.AllArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
+import org.slf4j.Logger;
 import org.springframework.stereotype.Component;
 
-@AllArgsConstructor
 @Component
-@Slf4j
 public class EngineDataDecisionCleanupService extends CleanupService {
 
+  private static final Logger LOG =
+      org.slf4j.LoggerFactory.getLogger(EngineDataDecisionCleanupService.class);
   private final ConfigurationService configurationService;
   private final DecisionDefinitionReader decisionDefinitionReader;
   private final DecisionInstanceWriter decisionInstanceWriter;
+
+  public EngineDataDecisionCleanupService(
+      final ConfigurationService configurationService,
+      final DecisionDefinitionReader decisionDefinitionReader,
+      final DecisionInstanceWriter decisionInstanceWriter) {
+    this.configurationService = configurationService;
+    this.decisionDefinitionReader = decisionDefinitionReader;
+    this.decisionInstanceWriter = decisionInstanceWriter;
+  }
 
   @Override
   public boolean isEnabled() {
@@ -45,20 +53,20 @@ public class EngineDataDecisionCleanupService extends CleanupService {
             .getDecisionCleanupConfiguration()
             .getAllDecisionSpecificConfigurationKeys());
     int i = 1;
-    for (String currentProcessDefinitionKey : allOptimizeProcessDefinitionKeys) {
-      log.info("Decision History Cleanup step {}/{}", i, allOptimizeProcessDefinitionKeys.size());
+    for (final String currentProcessDefinitionKey : allOptimizeProcessDefinitionKeys) {
+      LOG.info("Decision History Cleanup step {}/{}", i, allOptimizeProcessDefinitionKeys.size());
       performCleanupForDecisionKey(startTime, currentProcessDefinitionKey);
       i++;
     }
   }
 
   private void performCleanupForDecisionKey(
-      OffsetDateTime startTime, String decisionDefinitionKey) {
+      final OffsetDateTime startTime, final String decisionDefinitionKey) {
     final DecisionDefinitionCleanupConfiguration cleanupConfigurationForKey =
         getCleanupConfiguration()
             .getDecisionDefinitionCleanupConfigurationForKey(decisionDefinitionKey);
 
-    log.info(
+    LOG.info(
         "Performing cleanup on decision instances for decisionDefinitionKey: {}, with ttl: {}",
         decisionDefinitionKey,
         cleanupConfigurationForKey.getTtl());
@@ -68,7 +76,7 @@ public class EngineDataDecisionCleanupService extends CleanupService {
     decisionInstanceWriter.deleteDecisionInstancesByDefinitionKeyAndEvaluationDateOlderThan(
         decisionDefinitionKey, endDateFilter);
 
-    log.info(
+    LOG.info(
         "Finished cleanup on decision instances for decisionDefinitionKey: {}, with ttl: {}",
         decisionDefinitionKey,
         cleanupConfigurationForKey.getTtl());
@@ -81,6 +89,6 @@ public class EngineDataDecisionCleanupService extends CleanupService {
   }
 
   private CleanupConfiguration getCleanupConfiguration() {
-    return this.configurationService.getCleanupServiceConfiguration();
+    return configurationService.getCleanupServiceConfiguration();
   }
 }

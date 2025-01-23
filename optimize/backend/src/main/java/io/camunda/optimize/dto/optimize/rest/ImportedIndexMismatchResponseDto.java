@@ -10,13 +10,10 @@ package io.camunda.optimize.dto.optimize.rest;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import java.util.Collections;
 import java.util.Set;
-import lombok.Data;
-import lombok.EqualsAndHashCode;
 
-@Data
-@EqualsAndHashCode(callSuper = true)
 @JsonInclude(JsonInclude.Include.NON_NULL)
 public class ImportedIndexMismatchResponseDto extends ErrorResponseDto {
+
   private Set<ImportIndexMismatchDto> mismatchingIndices;
 
   protected ImportedIndexMismatchResponseDto() {
@@ -30,5 +27,33 @@ public class ImportedIndexMismatchResponseDto extends ErrorResponseDto {
       final Set<ImportIndexMismatchDto> mismatchingIndices) {
     super(errorCode, errorMessage, detailedErrorMessage);
     this.mismatchingIndices = mismatchingIndices;
+  }
+
+  public Set<ImportIndexMismatchDto> getMismatchingIndices() {
+    return mismatchingIndices;
+  }
+
+  public void setMismatchingIndices(final Set<ImportIndexMismatchDto> mismatchingIndices) {
+    this.mismatchingIndices = mismatchingIndices;
+  }
+
+  @Override
+  protected boolean canEqual(final Object other) {
+    return other instanceof ImportedIndexMismatchResponseDto;
+  }
+
+  @Override
+  public int hashCode() {
+    return org.apache.commons.lang3.builder.HashCodeBuilder.reflectionHashCode(this);
+  }
+
+  @Override
+  public boolean equals(final Object o) {
+    return org.apache.commons.lang3.builder.EqualsBuilder.reflectionEquals(this, o);
+  }
+
+  @Override
+  public String toString() {
+    return "ImportedIndexMismatchResponseDto(mismatchingIndices=" + getMismatchingIndices() + ")";
   }
 }

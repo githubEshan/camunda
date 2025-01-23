@@ -18,11 +18,13 @@ import io.camunda.zeebe.dynamic.config.ClusterConfigurationInitializer.SyncIniti
 import io.camunda.zeebe.dynamic.config.ClusterConfigurationManager.InconsistentConfigurationListener;
 import io.camunda.zeebe.dynamic.config.api.ClusterConfigurationManagementRequestsHandler;
 import io.camunda.zeebe.dynamic.config.api.ClusterConfigurationRequestServer;
+import io.camunda.zeebe.dynamic.config.changes.ClusterChangeExecutor;
 import io.camunda.zeebe.dynamic.config.changes.ConfigurationChangeAppliersImpl;
 import io.camunda.zeebe.dynamic.config.changes.ConfigurationChangeCoordinator;
 import io.camunda.zeebe.dynamic.config.changes.ConfigurationChangeCoordinatorImpl;
 import io.camunda.zeebe.dynamic.config.changes.NoopClusterMembershipChangeExecutor;
 import io.camunda.zeebe.dynamic.config.changes.PartitionChangeExecutor;
+import io.camunda.zeebe.dynamic.config.changes.PartitionScalingChangeExecutor;
 import io.camunda.zeebe.dynamic.config.gossip.ClusterConfigurationGossiper;
 import io.camunda.zeebe.dynamic.config.gossip.ClusterConfigurationGossiperConfig;
 import io.camunda.zeebe.dynamic.config.serializer.ProtoBufSerializer;
@@ -54,13 +56,16 @@ public final class ClusterConfigurationManagerService
   private final ClusterConfigurationRequestServer configurationRequestServer;
   private final Actor gossipActor;
   private final Actor managerActor;
+  private final ClusterChangeExecutor clusterChangeExecutor;
 
   public ClusterConfigurationManagerService(
       final Path dataRootDirectory,
       final ClusterCommunicationService communicationService,
       final ClusterMembershipService memberShipService,
       final ClusterConfigurationGossiperConfig config,
-      final boolean enablePartitionScaling) {
+      final boolean enablePartitionScaling,
+      final ClusterChangeExecutor clusterChangeExecutor) {
+    this.clusterChangeExecutor = clusterChangeExecutor;
     this.memberShipService = memberShipService;
     try {
       FileUtil.ensureDirectoryExists(dataRootDirectory);
@@ -227,12 +232,15 @@ public final class ClusterConfigurationManagerService
     return managerActor.closeAsync().andThen(gossipActor::closeAsync, Runnable::run);
   }
 
-  public void registerPartitionChangeExecutor(
-      final PartitionChangeExecutor partitionChangeExecutor) {
-    // TODO: pass concrete TopologyMembershipChangeExecutor
+  public void registerPartitionChangeExecutors(
+      final PartitionChangeExecutor partitionChangeExecutor,
+      final PartitionScalingChangeExecutor partitionScalingChangeExecutor) {
     clusterConfigurationManager.registerTopologyChangeAppliers(
         new ConfigurationChangeAppliersImpl(
-            partitionChangeExecutor, new NoopClusterMembershipChangeExecutor()));
+            partitionChangeExecutor,
+            new NoopClusterMembershipChangeExecutor(),
+            partitionScalingChangeExecutor,
+            clusterChangeExecutor));
   }
 
   public void removePartitionChangeExecutor() {

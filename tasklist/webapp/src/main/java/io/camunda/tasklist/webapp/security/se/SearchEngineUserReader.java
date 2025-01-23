@@ -10,8 +10,9 @@ package io.camunda.tasklist.webapp.security.se;
 import static io.camunda.tasklist.webapp.security.TasklistProfileService.IDENTITY_AUTH_PROFILE;
 import static io.camunda.tasklist.webapp.security.TasklistProfileService.SSO_AUTH_PROFILE;
 
+import io.camunda.authentication.entity.CamundaUser;
 import io.camunda.tasklist.util.CollectionUtil;
-import io.camunda.tasklist.webapp.graphql.entity.UserDTO;
+import io.camunda.tasklist.webapp.dto.UserDTO;
 import io.camunda.tasklist.webapp.security.UserReader;
 import io.camunda.tasklist.webapp.security.se.store.UserStore;
 import java.util.List;
@@ -19,6 +20,7 @@ import java.util.Optional;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Profile;
 import org.springframework.security.core.Authentication;
+import org.springframework.security.core.GrantedAuthority;
 import org.springframework.stereotype.Component;
 
 @Component
@@ -32,14 +34,18 @@ public class SearchEngineUserReader implements UserReader {
   @Override
   public Optional<UserDTO> getCurrentUserBy(final Authentication authentication) {
     final Object principal = authentication.getPrincipal();
-    if (principal instanceof User) {
-      final User user = (User) principal;
+    if (principal instanceof CamundaUser) {
+      final CamundaUser user = (CamundaUser) principal;
       return Optional.of(
           new UserDTO()
               .setUserId(user.getUserId())
               .setDisplayName(user.getDisplayName())
-              .setPermissions(rolePermissionService.getPermissions(user.getRoles()))
-              .setApiUser(false));
+              .setPermissions(
+                  rolePermissionService.getPermissions(
+                      user.getAuthorities().stream()
+                          .map(GrantedAuthority::getAuthority)
+                          .map(Role::fromString)
+                          .toList())));
     }
     return Optional.empty();
   }
@@ -50,14 +56,13 @@ public class SearchEngineUserReader implements UserReader {
   }
 
   @Override
-  public List<UserDTO> getUsersByUsernames(List<String> userIds) {
+  public List<UserDTO> getUsersByUsernames(final List<String> userIds) {
     return CollectionUtil.map(
         userStore.getUsersByUserIds(userIds),
         userEntity ->
             new UserDTO()
                 .setUserId(userEntity.getUserId())
-                .setDisplayName(userEntity.getDisplayName())
-                .setApiUser(false));
+                .setDisplayName(userEntity.getDisplayName()));
   }
 
   @Override

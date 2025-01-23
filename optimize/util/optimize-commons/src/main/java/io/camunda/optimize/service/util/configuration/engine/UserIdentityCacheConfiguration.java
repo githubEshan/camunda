@@ -9,12 +9,30 @@ package io.camunda.optimize.service.util.configuration.engine;
 
 import static io.camunda.optimize.service.util.configuration.ConfigurationServiceConstants.IDENTITY_SYNC_CONFIGURATION;
 
-import lombok.Data;
-import lombok.EqualsAndHashCode;
-
-@Data
-@EqualsAndHashCode(callSuper = true)
 public class UserIdentityCacheConfiguration extends IdentityCacheConfiguration {
+
+  public UserIdentityCacheConfiguration() {}
+
+  @Override
+  public String toString() {
+    return "UserIdentityCacheConfiguration()";
+  }
+
+  @Override
+  public boolean equals(final Object o) {
+    return org.apache.commons.lang3.builder.EqualsBuilder.reflectionEquals(this, o);
+  }
+
+  @Override
+  protected boolean canEqual(final Object other) {
+    return other instanceof UserIdentityCacheConfiguration;
+  }
+
+  @Override
+  public int hashCode() {
+    return org.apache.commons.lang3.builder.HashCodeBuilder.reflectionHashCode(this);
+  }
+
   @Override
   public String getConfigName() {
     return IDENTITY_SYNC_CONFIGURATION;

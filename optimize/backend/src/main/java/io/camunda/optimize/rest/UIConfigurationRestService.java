@@ -7,26 +7,27 @@
  */
 package io.camunda.optimize.rest;
 
+import static io.camunda.optimize.tomcat.OptimizeResourceConstants.REST_API_PATH;
+
 import io.camunda.optimize.dto.optimize.query.ui_configuration.UIConfigurationResponseDto;
 import io.camunda.optimize.service.UIConfigurationService;
-import jakarta.ws.rs.GET;
-import jakarta.ws.rs.Path;
-import jakarta.ws.rs.Produces;
-import jakarta.ws.rs.core.MediaType;
-import lombok.AllArgsConstructor;
-import org.springframework.stereotype.Component;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RestController;
 
-@AllArgsConstructor
-@Path(UIConfigurationRestService.UI_CONFIGURATION_PATH)
-@Component
+@RestController
+@RequestMapping(REST_API_PATH + UIConfigurationRestService.UI_CONFIGURATION_PATH)
 public class UIConfigurationRestService {
 
   public static final String UI_CONFIGURATION_PATH = "/ui-configuration";
 
   private final UIConfigurationService uiConfigurationService;
 
-  @GET
-  @Produces(MediaType.APPLICATION_JSON)
+  public UIConfigurationRestService(final UIConfigurationService uiConfigurationService) {
+    this.uiConfigurationService = uiConfigurationService;
+  }
+
+  @GetMapping
   public UIConfigurationResponseDto getUIConfiguration() {
     return uiConfigurationService.getUIConfiguration();
   }

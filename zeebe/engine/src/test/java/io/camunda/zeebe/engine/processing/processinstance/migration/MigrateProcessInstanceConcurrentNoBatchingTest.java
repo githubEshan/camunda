@@ -33,6 +33,7 @@ import io.camunda.zeebe.protocol.record.intent.ProcessMessageSubscriptionIntent;
 import io.camunda.zeebe.protocol.record.intent.TimerIntent;
 import io.camunda.zeebe.protocol.record.value.BpmnElementType;
 import io.camunda.zeebe.protocol.record.value.BpmnEventType;
+import io.camunda.zeebe.protocol.record.value.JobRecordValue;
 import io.camunda.zeebe.protocol.record.value.ProcessInstanceRecordValue;
 import io.camunda.zeebe.protocol.record.value.ProcessMessageSubscriptionRecordValue;
 import io.camunda.zeebe.protocol.record.value.TimerRecordValue;
@@ -1044,6 +1045,346 @@ public class MigrateProcessInstanceConcurrentNoBatchingTest {
                 is an intermediate catch event attached to an event-based gateway. \
                 Migrating active events attached to an event-based gateway is not possible yet.""",
                 processInstanceKey));
+  }
+
+  @Test
+  public void
+      shouldRejectJoiningParallelGatewayMigrationIfAllIncomingSequenceFlowsOfSourceGatewayIsTaken() {
+    // given
+    final String processId = helper.getBpmnProcessId();
+    final String targetProcessId = helper.getBpmnProcessId() + "_v2";
+
+    final var deployment =
+        ENGINE
+            .deployment()
+            .withXmlResource(
+                Bpmn.createExecutableProcess(processId)
+                    .startEvent()
+                    .parallelGateway("fork")
+                    .serviceTask("task1", b -> b.zeebeJobType("type1"))
+                    .sequenceFlowId("flow1")
+                    .parallelGateway("join1")
+                    .endEvent("end1")
+                    .moveToNode("fork")
+                    .serviceTask("task2", b -> b.zeebeJobType("type2"))
+                    .sequenceFlowId("flow2")
+                    .connectTo("join1")
+                    .done())
+            .withXmlResource(
+                Bpmn.createExecutableProcess(targetProcessId)
+                    .startEvent()
+                    .parallelGateway("fork")
+                    .serviceTask("task1", b -> b.zeebeJobType("type1"))
+                    .sequenceFlowId("flow1")
+                    .parallelGateway("join2")
+                    .endEvent("end2")
+                    .moveToNode("fork")
+                    .serviceTask("task3", b -> b.zeebeJobType("type3"))
+                    .sequenceFlowId("flow2")
+                    .connectTo("join2")
+                    .done())
+            .deploy();
+    final long targetProcessDefinitionKey =
+        extractProcessDefinitionKeyByProcessId(deployment, targetProcessId);
+
+    final long processInstanceKey = ENGINE.processInstance().ofBpmnProcessId(processId).create();
+
+    assertThat(
+            RecordingExporter.processInstanceRecords(ProcessInstanceIntent.ELEMENT_ACTIVATED)
+                .withProcessInstanceKey(processInstanceKey)
+                .withElementType(BpmnElementType.SERVICE_TASK)
+                .limit(2))
+        .hasSize(2);
+
+    ENGINE.job().ofInstance(processInstanceKey).withType("type1").complete();
+
+    io.camunda.zeebe.protocol.record.Assertions.assertThat(
+            RecordingExporter.processInstanceRecords(ProcessInstanceIntent.SEQUENCE_FLOW_TAKEN)
+                .withProcessInstanceKey(processInstanceKey)
+                .withElementId("flow1")
+                .getFirst()
+                .getValue())
+        .describedAs("Expected to take the sequence flow to the joining gateway")
+        .isNotNull();
+
+    final var job2 =
+        RecordingExporter.jobRecords(JobIntent.CREATED)
+            .withType("type2")
+            .withProcessInstanceKey(processInstanceKey)
+            .getFirst();
+
+    final var task2 =
+        RecordingExporter.processInstanceRecords(ProcessInstanceIntent.ELEMENT_ACTIVATED)
+            .withProcessInstanceKey(processInstanceKey)
+            .withElementId("task2")
+            .getFirst();
+
+    ENGINE.pauseProcessing(1);
+    ENGINE.stop();
+
+    ENGINE.writeRecords(
+        RecordToWrite.command().job(JobIntent.COMPLETE, new JobRecord()).key(job2.getKey()),
+        RecordToWrite.command()
+            .key(task2.getKey())
+            .processInstance(ProcessInstanceIntent.COMPLETE_ELEMENT, task2.getValue()),
+        RecordToWrite.command()
+            .key(processInstanceKey)
+            .migration(
+                new ProcessInstanceMigrationRecord()
+                    .setProcessInstanceKey(processInstanceKey)
+                    .setTargetProcessDefinitionKey(targetProcessDefinitionKey)
+                    .addMappingInstruction(
+                        new ProcessInstanceMigrationMappingInstruction()
+                            .setSourceElementId("task2")
+                            .setTargetElementId("task3"))
+                    .addMappingInstruction(
+                        new ProcessInstanceMigrationMappingInstruction()
+                            .setSourceElementId("join1")
+                            .setTargetElementId("join2"))));
+
+    ENGINE.start();
+
+    // then
+    final var rejection =
+        RecordingExporter.processInstanceMigrationRecords(ProcessInstanceMigrationIntent.MIGRATE)
+            .withProcessInstanceKey(processInstanceKey)
+            .onlyCommandRejections()
+            .getFirst();
+
+    assertThat(rejection)
+        .hasRejectionType(RejectionType.INVALID_STATE)
+        .hasRejectionReason(
+            createMigrationRejectionDueConcurrentModificationReason(processInstanceKey));
+  }
+
+  @Test
+  public void
+      shouldRejectJoiningInclusiveGatewayMigrationIfAllIncomingSequenceFlowsOfSourceGatewayIsTaken() {
+    // given
+    final String processId = helper.getBpmnProcessId();
+    final String targetProcessId = helper.getBpmnProcessId() + "_v2";
+
+    final var deployment =
+        ENGINE
+            .deployment()
+            .withXmlResource(
+                Bpmn.createExecutableProcess(processId)
+                    .startEvent()
+                    .inclusiveGateway("fork")
+                    .conditionExpression("= true")
+                    .serviceTask("task1", b -> b.zeebeJobType("type1"))
+                    .sequenceFlowId("flow1")
+                    .inclusiveGateway("join1")
+                    .endEvent("end1")
+                    .moveToNode("fork")
+                    .conditionExpression("= true")
+                    .serviceTask("task2", b -> b.zeebeJobType("type2"))
+                    .sequenceFlowId("flow2")
+                    .connectTo("join1")
+                    .done())
+            .withXmlResource(
+                Bpmn.createExecutableProcess(targetProcessId)
+                    .startEvent()
+                    .inclusiveGateway("fork")
+                    .conditionExpression("= true")
+                    .serviceTask("task1", b -> b.zeebeJobType("type1"))
+                    .sequenceFlowId("flow1")
+                    .inclusiveGateway("join2")
+                    .endEvent("end2")
+                    .moveToNode("fork")
+                    .conditionExpression("= true")
+                    .serviceTask("task3", b -> b.zeebeJobType("type3"))
+                    .sequenceFlowId("flow2")
+                    .connectTo("join2")
+                    .done())
+            .deploy();
+    final long targetProcessDefinitionKey =
+        extractProcessDefinitionKeyByProcessId(deployment, targetProcessId);
+
+    final long processInstanceKey = ENGINE.processInstance().ofBpmnProcessId(processId).create();
+
+    assertThat(
+            RecordingExporter.processInstanceRecords(ProcessInstanceIntent.ELEMENT_ACTIVATED)
+                .withProcessInstanceKey(processInstanceKey)
+                .withElementType(BpmnElementType.SERVICE_TASK)
+                .limit(2))
+        .hasSize(2);
+
+    ENGINE.job().ofInstance(processInstanceKey).withType("type1").complete();
+
+    io.camunda.zeebe.protocol.record.Assertions.assertThat(
+            RecordingExporter.processInstanceRecords(ProcessInstanceIntent.SEQUENCE_FLOW_TAKEN)
+                .withProcessInstanceKey(processInstanceKey)
+                .withElementId("flow1")
+                .getFirst()
+                .getValue())
+        .describedAs("Expected to take the sequence flow to the joining gateway")
+        .isNotNull();
+
+    final var job2 =
+        RecordingExporter.jobRecords(JobIntent.CREATED)
+            .withType("type2")
+            .withProcessInstanceKey(processInstanceKey)
+            .getFirst();
+
+    final var task2 =
+        RecordingExporter.processInstanceRecords(ProcessInstanceIntent.ELEMENT_ACTIVATED)
+            .withProcessInstanceKey(processInstanceKey)
+            .withElementId("task2")
+            .getFirst();
+
+    ENGINE.pauseProcessing(1);
+    ENGINE.stop();
+
+    ENGINE.writeRecords(
+        RecordToWrite.command().job(JobIntent.COMPLETE, new JobRecord()).key(job2.getKey()),
+        RecordToWrite.command()
+            .key(task2.getKey())
+            .processInstance(ProcessInstanceIntent.COMPLETE_ELEMENT, task2.getValue()),
+        RecordToWrite.command()
+            .key(processInstanceKey)
+            .migration(
+                new ProcessInstanceMigrationRecord()
+                    .setProcessInstanceKey(processInstanceKey)
+                    .setTargetProcessDefinitionKey(targetProcessDefinitionKey)
+                    .addMappingInstruction(
+                        new ProcessInstanceMigrationMappingInstruction()
+                            .setSourceElementId("task2")
+                            .setTargetElementId("task3"))
+                    .addMappingInstruction(
+                        new ProcessInstanceMigrationMappingInstruction()
+                            .setSourceElementId("join1")
+                            .setTargetElementId("join2"))));
+
+    ENGINE.start();
+
+    // then
+    final var rejection =
+        RecordingExporter.processInstanceMigrationRecords(ProcessInstanceMigrationIntent.MIGRATE)
+            .withProcessInstanceKey(processInstanceKey)
+            .onlyCommandRejections()
+            .getFirst();
+
+    assertThat(rejection)
+        .hasRejectionType(RejectionType.INVALID_STATE)
+        .hasRejectionReason(
+            createMigrationRejectionDueConcurrentModificationReason(processInstanceKey));
+  }
+
+  @Test
+  public void shouldMigrateParallelMultiInstanceConcurrently() {
+    // given
+    final String sourceProcessId = helper.getBpmnProcessId();
+    final String targetProcessId = helper.getBpmnProcessId() + "2";
+
+    final var deployment =
+        ENGINE
+            .deployment()
+            .withXmlResource(
+                Bpmn.createExecutableProcess(sourceProcessId)
+                    .startEvent()
+                    .userTask("wait", u -> u.zeebeUserTask())
+                    .sequenceFlowId("toA")
+                    .serviceTask(
+                        "A",
+                        a ->
+                            a.zeebeJobType("A")
+                                .multiInstance()
+                                .zeebeInputCollectionExpression("[1,2,3]")
+                                .zeebeInputElement("item"))
+                    .endEvent()
+                    .done())
+            .withXmlResource(
+                Bpmn.createExecutableProcess(targetProcessId)
+                    .startEvent()
+                    .userTask("wait", u -> u.zeebeUserTask())
+                    .sequenceFlowId("toA")
+                    .serviceTask(
+                        "A",
+                        a ->
+                            a.zeebeJobType("A")
+                                .multiInstance()
+                                .zeebeInputCollectionExpression("[1,2,3]")
+                                .zeebeInputElement("item2"))
+                    .endEvent()
+                    .done())
+            .deploy();
+
+    final long targetProcessDefinitionKey =
+        extractProcessDefinitionKeyByProcessId(deployment, targetProcessId);
+
+    final var processInstanceKey =
+        ENGINE.processInstance().ofBpmnProcessId(sourceProcessId).create();
+
+    // We wait for the user task to be activated, so we can complete it, take the sequence flow and
+    // finally activate the multi-instance body before migrating the process instance
+    // we assume that the inner instance activation is postponed by ProcessInstanceBatch commands
+    final var userTask =
+        RecordingExporter.processInstanceRecords(ProcessInstanceIntent.ELEMENT_ACTIVATED)
+            .withProcessInstanceKey(processInstanceKey)
+            .withElementId("wait")
+            .getFirst();
+
+    // we generate a key for the intermediate catch event so we can activate it using events
+    // this requires us to pause processing to avoid concurrent database transaction modification
+    ENGINE.pauseProcessing(1);
+    final var keyGenerator =
+        ((MutableProcessingState) ENGINE.getProcessingState()).getKeyGenerator();
+    final var sequenceFlowKey = keyGenerator.nextKey();
+    final var multiInstanceBodyKey = keyGenerator.nextKey();
+
+    // we need to stop the engine to ensure events are applied after writing the records directly
+    ENGINE.stop();
+
+    // when
+    final var sequenceFlowRecord = new ProcessInstanceRecord();
+    sequenceFlowRecord.copyFrom((ProcessInstanceRecord) userTask.getValue());
+    sequenceFlowRecord.setElementId("toA").setBpmnElementType(BpmnElementType.SEQUENCE_FLOW);
+
+    final var multiInstanceRecord = new ProcessInstanceRecord();
+    multiInstanceRecord.copyFrom((ProcessInstanceRecord) userTask.getValue());
+    multiInstanceRecord.setBpmnElementType(BpmnElementType.MULTI_INSTANCE_BODY).setElementId("A");
+
+    ENGINE.writeRecords(
+        RecordToWrite.event()
+            .processInstance(ProcessInstanceIntent.ELEMENT_COMPLETING, userTask.getValue())
+            .key(userTask.getKey()),
+        RecordToWrite.event()
+            .processInstance(ProcessInstanceIntent.ELEMENT_COMPLETED, userTask.getValue())
+            .key(userTask.getKey()),
+        RecordToWrite.event()
+            .processInstance(ProcessInstanceIntent.SEQUENCE_FLOW_TAKEN, sequenceFlowRecord)
+            .key(sequenceFlowKey),
+        RecordToWrite.command()
+            .processInstance(ProcessInstanceIntent.ACTIVATE_ELEMENT, multiInstanceRecord)
+            .key(multiInstanceBodyKey),
+        RecordToWrite.command()
+            .migration(
+                new ProcessInstanceMigrationRecord()
+                    .setProcessInstanceKey(processInstanceKey)
+                    .setTargetProcessDefinitionKey(targetProcessDefinitionKey)
+                    .addMappingInstruction(
+                        new ProcessInstanceMigrationMappingInstruction()
+                            .setSourceElementId("wait")
+                            .setTargetElementId("wait"))
+                    .addMappingInstruction(
+                        new ProcessInstanceMigrationMappingInstruction()
+                            .setSourceElementId("A")
+                            .setTargetElementId("A"))));
+
+    ENGINE.start();
+
+    assertThat(
+            RecordingExporter.jobRecords(JobIntent.CREATED)
+                .withProcessInstanceKey(processInstanceKey)
+                .withType("A")
+                .limit(3))
+        .describedAs("Expect that the jobs were created successfully")
+        .hasSize(3)
+        .describedAs("Expect that the created jobs are for the target process definition")
+        .extracting(Record::getValue)
+        .extracting(JobRecordValue::getProcessDefinitionKey)
+        .containsOnly(targetProcessDefinitionKey);
   }
 
   private static String createMigrationRejectionDueConcurrentModificationReason(

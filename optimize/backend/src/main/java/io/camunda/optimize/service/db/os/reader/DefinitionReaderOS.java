@@ -31,13 +31,14 @@ import io.camunda.optimize.dto.optimize.datasource.DataSourceDto;
 import io.camunda.optimize.dto.optimize.query.definition.DefinitionWithTenantIdsDto;
 import io.camunda.optimize.dto.optimize.query.definition.TenantIdWithDefinitionsDto;
 import io.camunda.optimize.dto.optimize.rest.DefinitionVersionResponseDto;
+import io.camunda.optimize.rest.exceptions.NotFoundException;
 import io.camunda.optimize.service.db.DatabaseConstants;
 import io.camunda.optimize.service.db.os.OpenSearchCompositeAggregationScroller;
 import io.camunda.optimize.service.db.os.OptimizeOpenSearchClient;
-import io.camunda.optimize.service.db.os.externalcode.client.dsl.AggregationDSL;
-import io.camunda.optimize.service.db.os.externalcode.client.dsl.QueryDSL;
-import io.camunda.optimize.service.db.os.externalcode.client.dsl.RequestDSL;
-import io.camunda.optimize.service.db.os.externalcode.client.sync.OpenSearchDocumentOperations;
+import io.camunda.optimize.service.db.os.client.dsl.AggregationDSL;
+import io.camunda.optimize.service.db.os.client.dsl.QueryDSL;
+import io.camunda.optimize.service.db.os.client.dsl.RequestDSL;
+import io.camunda.optimize.service.db.os.client.sync.OpenSearchDocumentOperations;
 import io.camunda.optimize.service.db.os.schema.index.DecisionDefinitionIndexOS;
 import io.camunda.optimize.service.db.os.schema.index.ProcessDefinitionIndexOS;
 import io.camunda.optimize.service.db.reader.DefinitionReader;
@@ -46,7 +47,6 @@ import io.camunda.optimize.service.exceptions.OptimizeRuntimeException;
 import io.camunda.optimize.service.util.DefinitionVersionHandlingUtil;
 import io.camunda.optimize.service.util.configuration.ConfigurationService;
 import io.camunda.optimize.service.util.configuration.condition.OpenSearchCondition;
-import jakarta.ws.rs.NotFoundException;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -61,8 +61,6 @@ import java.util.function.Function;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
-import lombok.AllArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.collections4.CollectionUtils;
 import org.opensearch.client.opensearch._types.FieldValue;
 import org.opensearch.client.opensearch._types.Script;
@@ -78,6 +76,7 @@ import org.opensearch.client.opensearch._types.aggregations.CompositeAggregate;
 import org.opensearch.client.opensearch._types.aggregations.CompositeAggregation;
 import org.opensearch.client.opensearch._types.aggregations.CompositeAggregationSource;
 import org.opensearch.client.opensearch._types.aggregations.CompositeBucket;
+import org.opensearch.client.opensearch._types.aggregations.CompositeTermsAggregationSource;
 import org.opensearch.client.opensearch._types.aggregations.FiltersAggregation;
 import org.opensearch.client.opensearch._types.aggregations.FiltersBucket;
 import org.opensearch.client.opensearch._types.aggregations.MultiBucketAggregateBase;
@@ -92,17 +91,23 @@ import org.opensearch.client.opensearch.core.SearchResponse;
 import org.opensearch.client.opensearch.core.search.Hit;
 import org.opensearch.client.opensearch.core.search.SourceConfig;
 import org.opensearch.client.opensearch.core.search.SourceFilter;
+import org.slf4j.Logger;
 import org.springframework.context.annotation.Conditional;
 import org.springframework.stereotype.Component;
 
-@AllArgsConstructor
-@Slf4j
 @Component
 @Conditional(OpenSearchCondition.class)
 public class DefinitionReaderOS implements DefinitionReader {
 
+  private static final Logger LOG = org.slf4j.LoggerFactory.getLogger(DefinitionReaderOS.class);
   private final OptimizeOpenSearchClient osClient;
   private final ConfigurationService configurationService;
+
+  public DefinitionReaderOS(
+      final OptimizeOpenSearchClient osClient, final ConfigurationService configurationService) {
+    this.osClient = osClient;
+    this.configurationService = configurationService;
+  }
 
   @Override
   public Optional<DefinitionWithTenantIdsDto> getDefinitionWithAvailableTenants(
@@ -249,9 +254,10 @@ public class DefinitionReaderOS implements DefinitionReader {
             TENANT_AGGREGATION,
             new CompositeAggregationSource.Builder()
                 .terms(
-                    new TermsAggregation.Builder()
+                    new CompositeTermsAggregationSource.Builder()
                         .missingBucket(true)
                         .field(DEFINITION_TENANT_ID)
+                        .order(SortOrder.Asc)
                         .build())
                 .build()));
 
@@ -259,14 +265,17 @@ public class DefinitionReaderOS implements DefinitionReader {
         Collections.singletonMap(
             DEFINITION_KEY_AGGREGATION,
             new CompositeAggregationSource.Builder()
-                .terms(new TermsAggregation.Builder().field(DEFINITION_KEY).build())
+                .terms(new CompositeTermsAggregationSource.Builder().field(DEFINITION_KEY).build())
                 .build()));
 
     keyAndTypeAndTenantSources.add(
         Collections.singletonMap(
             DEFINITION_TYPE_AGGREGATION,
             new CompositeAggregationSource.Builder()
-                .terms(new TermsAggregation.Builder().field(DatabaseConstants.INDEX).build())
+                .terms(
+                    new CompositeTermsAggregationSource.Builder()
+                        .field(DatabaseConstants.INDEX)
+                        .build())
                 .build()));
 
     final CompositeAggregation keyAndTypeAndTenantAggregation =
@@ -353,7 +362,7 @@ public class DefinitionReaderOS implements DefinitionReader {
 
   @Override
   public String getLatestVersionToKey(final DefinitionType type, final String key) {
-    log.debug("Fetching latest [{}] definition for key [{}]", type, key);
+    LOG.debug("Fetching latest [{}] definition for key [{}]", type, key);
 
     final Script script =
         createDefaultScript(
@@ -514,7 +523,7 @@ public class DefinitionReaderOS implements DefinitionReader {
     } catch (final IOException e) {
       final String errorMsg =
           String.format("Was not able to retrieve definitions of type %s", type);
-      log.error(errorMsg, e);
+      LOG.error(errorMsg, e);
       throw new OptimizeRuntimeException(errorMsg, e);
     }
     return OpensearchReaderUtil.extractAggregatedResponseValues(
@@ -581,7 +590,7 @@ public class DefinitionReaderOS implements DefinitionReader {
         osClient.search(searchBuilder, typeClass, errorMessage);
 
     if (searchResponse.hits().total().value() == 0L) {
-      log.debug(
+      LOG.debug(
           "Could not find [{}] definition with key [{}], version [{}] and tenantId [{}]",
           type,
           definitionKey,
@@ -598,7 +607,7 @@ public class DefinitionReaderOS implements DefinitionReader {
   private <T extends DefinitionOptimizeResponseDto>
       List<T> getLatestFullyImportedDefinitionPerTenant(
           final DefinitionType type, final String key) {
-    log.debug(
+    LOG.debug(
         "Fetching latest fully imported [{}] definitions for key [{}] on each tenant", type, key);
 
     final FiltersAggregation keyFilterAgg =
@@ -668,7 +677,7 @@ public class DefinitionReaderOS implements DefinitionReader {
     final List<T> result = retrieveResultsFromLatestDefinitionPerTenant(type, searchResponse);
 
     if (result.isEmpty()) {
-      log.debug("Could not find latest [{}] definitions with key [{}]", type, key);
+      LOG.debug("Could not find latest [{}] definitions with key [{}]", type, key);
     }
     return result;
   }
@@ -716,14 +725,17 @@ public class DefinitionReaderOS implements DefinitionReader {
         Collections.singletonMap(
             DEFINITION_KEY_AGGREGATION,
             new CompositeAggregationSource.Builder()
-                .terms(new TermsAggregation.Builder().field(DEFINITION_KEY).build())
+                .terms(new CompositeTermsAggregationSource.Builder().field(DEFINITION_KEY).build())
                 .build()));
 
     keyAndTypeSources.add(
         Collections.singletonMap(
             DEFINITION_TYPE_AGGREGATION,
             new CompositeAggregationSource.Builder()
-                .terms(new TermsAggregation.Builder().field(DatabaseConstants.INDEX).build())
+                .terms(
+                    new CompositeTermsAggregationSource.Builder()
+                        .field(DatabaseConstants.INDEX)
+                        .build())
                 .build()));
 
     final CompositeAggregation.Builder keyAndTypeCompositeAggregation =
@@ -925,7 +937,7 @@ public class DefinitionReaderOS implements DefinitionReader {
                 + "it was not possible to deserialize a hit from OpenSearch!"
                 + " Hit response from OpenSearch: "
                 + hit.id();
-        log.error(reason, type.getSimpleName(), e);
+        LOG.error(reason, type.getSimpleName(), e);
         throw new OptimizeRuntimeException(reason);
       }
     };

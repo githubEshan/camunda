@@ -13,6 +13,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import io.camunda.optimize.dto.optimize.ProcessInstanceDto;
 import io.camunda.optimize.dto.optimize.query.report.single.process.result.raw.RawDataProcessInstanceDto;
 import io.camunda.optimize.dto.optimize.query.variable.SimpleProcessVariableDto;
+import io.camunda.optimize.service.db.report.interpreter.util.RawProcessDataResultDtoMapper;
 import io.camunda.optimize.service.util.IdGenerator;
 import java.util.Arrays;
 import java.util.Collections;
@@ -31,7 +32,7 @@ public class RawProcessDataResultDtoMapperTest {
   private final ObjectMapper objectMapper = new ObjectMapper();
 
   @Test
-  public void testMapFromSearchResponse_hitCountNotEqualTotalCount() {
+  public void testMapFromSearchResponseHitCountNotEqualTotalCount() {
     // given
     final int rawDataLimit = 2;
     final RawProcessDataResultDtoMapper mapper = new RawProcessDataResultDtoMapper();
@@ -52,7 +53,7 @@ public class RawProcessDataResultDtoMapperTest {
   }
 
   @Test
-  public void testMapFromSearchResponse_additionalVariablesAddedToResults() {
+  public void testMapFromSearchResponseAdditionalVariablesAddedToResults() {
     // given
     final RawProcessDataResultDtoMapper mapper = new RawProcessDataResultDtoMapper();
     final List<ProcessInstanceDto> processInstanceDtos =

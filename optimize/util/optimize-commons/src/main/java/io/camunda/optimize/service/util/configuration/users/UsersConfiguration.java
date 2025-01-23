@@ -7,9 +7,36 @@
  */
 package io.camunda.optimize.service.util.configuration.users;
 
-import lombok.Data;
-
-@Data
 public class UsersConfiguration {
+
   private CloudUsersConfiguration cloud;
+
+  public UsersConfiguration() {}
+
+  public CloudUsersConfiguration getCloud() {
+    return cloud;
+  }
+
+  public void setCloud(final CloudUsersConfiguration cloud) {
+    this.cloud = cloud;
+  }
+
+  protected boolean canEqual(final Object other) {
+    return other instanceof UsersConfiguration;
+  }
+
+  @Override
+  public int hashCode() {
+    return org.apache.commons.lang3.builder.HashCodeBuilder.reflectionHashCode(this);
+  }
+
+  @Override
+  public boolean equals(final Object o) {
+    return org.apache.commons.lang3.builder.EqualsBuilder.reflectionEquals(this, o);
+  }
+
+  @Override
+  public String toString() {
+    return "UsersConfiguration(cloud=" + getCloud() + ")";
+  }
 }

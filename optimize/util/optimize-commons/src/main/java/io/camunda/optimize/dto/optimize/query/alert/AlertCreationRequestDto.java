@@ -9,11 +9,7 @@ package io.camunda.optimize.dto.optimize.query.alert;
 
 import java.util.ArrayList;
 import java.util.List;
-import lombok.AccessLevel;
-import lombok.Data;
-import lombok.NoArgsConstructor;
 
-@Data
 public class AlertCreationRequestDto {
 
   private String name;
@@ -26,8 +22,119 @@ public class AlertCreationRequestDto {
   private List<String> emails = new ArrayList<>();
   private String webhook;
 
+  public AlertCreationRequestDto() {}
+
+  public String getName() {
+    return name;
+  }
+
+  public void setName(final String name) {
+    this.name = name;
+  }
+
+  public AlertInterval getCheckInterval() {
+    return checkInterval;
+  }
+
+  public void setCheckInterval(final AlertInterval checkInterval) {
+    this.checkInterval = checkInterval;
+  }
+
+  public String getReportId() {
+    return reportId;
+  }
+
+  public void setReportId(final String reportId) {
+    this.reportId = reportId;
+  }
+
+  public Double getThreshold() {
+    return threshold;
+  }
+
+  public void setThreshold(final Double threshold) {
+    this.threshold = threshold;
+  }
+
+  public AlertThresholdOperator getThresholdOperator() {
+    return thresholdOperator;
+  }
+
+  public void setThresholdOperator(final AlertThresholdOperator thresholdOperator) {
+    this.thresholdOperator = thresholdOperator;
+  }
+
+  public boolean isFixNotification() {
+    return fixNotification;
+  }
+
+  public void setFixNotification(final boolean fixNotification) {
+    this.fixNotification = fixNotification;
+  }
+
+  public AlertInterval getReminder() {
+    return reminder;
+  }
+
+  public void setReminder(final AlertInterval reminder) {
+    this.reminder = reminder;
+  }
+
+  public List<String> getEmails() {
+    return emails;
+  }
+
+  public void setEmails(final List<String> emails) {
+    this.emails = emails;
+  }
+
+  public String getWebhook() {
+    return webhook;
+  }
+
+  public void setWebhook(final String webhook) {
+    this.webhook = webhook;
+  }
+
+  protected boolean canEqual(final Object other) {
+    return other instanceof AlertCreationRequestDto;
+  }
+
+  @Override
+  public int hashCode() {
+    return org.apache.commons.lang3.builder.HashCodeBuilder.reflectionHashCode(this);
+  }
+
+  @Override
+  public boolean equals(final Object o) {
+    return org.apache.commons.lang3.builder.EqualsBuilder.reflectionEquals(this, o);
+  }
+
+  @Override
+  public String toString() {
+    return "AlertCreationRequestDto(name="
+        + getName()
+        + ", checkInterval="
+        + getCheckInterval()
+        + ", reportId="
+        + getReportId()
+        + ", threshold="
+        + getThreshold()
+        + ", thresholdOperator="
+        + getThresholdOperator()
+        + ", fixNotification="
+        + isFixNotification()
+        + ", reminder="
+        + getReminder()
+        + ", emails="
+        + getEmails()
+        + ", webhook="
+        + getWebhook()
+        + ")";
+  }
+
   // needed to allow inheritance of field name constants
-  @NoArgsConstructor(access = AccessLevel.PROTECTED)
+  @SuppressWarnings("checkstyle:ConstantName")
   public static class Fields {
 
     public static final String name = "name";
@@ -39,5 +146,7 @@ public class AlertCreationRequestDto {
     public static final String reminder = "reminder";
     public static final String emails = "emails";
     public static final String webhook = "webhook";
+
+    protected Fields() {}
   }
 }

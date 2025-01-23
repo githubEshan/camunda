@@ -37,7 +37,7 @@ test('create a dashboard and reports from a template', async (t) => {
 
   await t.click(Common.templateModalProcessField);
   await t.click(Common.carbonOption('Order process'));
-  await t.click(e.templateOption('Improve productivity'));
+  await t.click(Common.templateOption('Improve productivity'));
 
   await t.takeScreenshot('img/dashboardTemplate.png', {fullPage: true});
   await t.resizeWindow(1200, 700);
@@ -102,7 +102,8 @@ test('create a dashboard and reports from a template', async (t) => {
   await t.takeScreenshot('img/dashboard-viewMode-monitorFeatures.png', {fullPage: true});
   await t.maximizeWindow();
 
-  await t.click(e.collectionLink);
+  await t.click(Common.collectionsPage);
+  await t.click(Common.listItemLink('collection'));
 
   await t.expect(Common.listItem('report').visible).ok();
   await t.expect(Common.listItem('dashboard').visible).ok();
@@ -162,7 +163,7 @@ test('sharing', async (t) => {
   await t.click(Common.createNewButton);
   await t.click(Common.menuOption('Dashboard'));
 
-  await t.click(e.templateOption('Improve productivity'));
+  await t.click(Common.templateOption('Improve productivity'));
 
   await t.click(Common.templateModalProcessField);
   await t.click(Common.carbonOption('Order process'));
@@ -429,7 +430,8 @@ test('version selection', async (t) => {
   await u.selectView(t, 'Process instance', 'Count');
   await u.save(t);
 
-  await t.click(e.collectionLink);
+  await t.click(Common.collectionsPage);
+  await t.click(Common.listItemLink('collection'));
   await u.createNewDashboard(t);
   await u.addReportToDashboard(t, 'Number report');
   await u.save(t);
@@ -459,41 +461,6 @@ test('version selection', async (t) => {
   await t.click(Common.notificationCloseButton);
   await t.click(e.alertsDropdown);
   await t.expect(Common.option('Test alert').exists).notOk();
-});
-
-test('add a report from the dashboard', async (t) => {
-  await u.createNewDashboard(t);
-
-  await t
-    .click(Common.addButton)
-    .click(e.createTileModalReportOptions)
-    .click(Common.carbonOption('New report from a template'))
-    .click(e.addTileButton);
-
-  await t
-    .click(Common.templateModalProcessField)
-    .click(Common.carbonOption('Order process'))
-    .click(e.blankReportButton)
-    .click(Common.modalConfirmButton)
-    .hover(Common.addButton)
-    .click('.DashboardRenderer');
-
-  await t
-    .click(Common.addButton)
-    .click(e.createTileModalReportOptions)
-    .click(Common.carbonOption('New report from a template'))
-    .click(e.addTileButton);
-
-  await t.click(Common.templateModalProcessField);
-
-  await t.expect(Common.selectedOption('Order process').exists).ok();
-
-  await t.click(Common.modalConfirmButton).hover(Common.addButton).click('.DashboardRenderer');
-
-  await u.save(t);
-
-  await t.expect(e.reportTile.nth(0).textContent).contains('Blank report');
-  await t.expect(e.reportTile.nth(1).textContent).contains('Locate bottlenecks on a heatmap');
 });
 
 test('add, edit and remove dashboards description', async (t) => {
@@ -622,7 +589,7 @@ test('copy dashboard tiles', async (t) => {
 
   await t.click(Common.templateModalProcessField);
   await t.click(Common.carbonOption('Order process'));
-  await t.click(e.templateOption('Improve productivity'));
+  await t.click(Common.templateOption('Improve productivity'));
   await t.click(Common.modalConfirmButton);
 
   // Text tile
@@ -661,4 +628,28 @@ test('copy dashboard tiles', async (t) => {
   await t.click(e.reportTile.nth(0).find('.CopyButton'));
   await t.click('.DashboardRenderer');
   await t.expect(e.reportTile.count).eql(10);
+});
+
+test('drag a report in a Dashboard', async (t) => {
+  await u.createNewReport(t);
+  await u.selectReportDefinition(t, 'Order process');
+  await u.selectView(t, 'Raw data');
+  await u.save(t);
+  await u.gotoOverview(t);
+  await u.createNewDashboard(t);
+  await u.addReportToDashboard(t, 'Blank report');
+
+  await t.dispatchEvent(e.gridItem, 'mousedown');
+  const leftOffset = await e.gridItem.getBoundingClientRectProperty('left');
+  const DRAG_AMOUNT = 500;
+  await t.expect(leftOffset).lt(DRAG_AMOUNT);
+  await t.drag(e.gridItem, DRAG_AMOUNT, 0);
+  const newLeftOffset = await e.gridItem.getBoundingClientRectProperty('left');
+
+  await t.expect(newLeftOffset).gt(DRAG_AMOUNT);
+
+  await u.save(t);
+
+  const offsetAfterSave = await e.gridItem.getBoundingClientRectProperty('left');
+  await t.expect(offsetAfterSave).gt(DRAG_AMOUNT);
 });

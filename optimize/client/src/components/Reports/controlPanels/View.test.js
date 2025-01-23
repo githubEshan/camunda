@@ -19,7 +19,7 @@ const config = {
   variables: [{id: 'test', type: 'date', name: 'testName'}],
   onChange: jest.fn(),
   report: {
-    view: {type: 'variable'},
+    view: {type: 'variable', properties: []},
     definitions: [{id: 'definitionId'}],
   },
 };

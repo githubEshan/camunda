@@ -22,11 +22,17 @@ public final class AuthorizationProcessors {
       final TypedRecordProcessors typedRecordProcessors,
       final MutableProcessingState processingState,
       final Writers writers,
-      final CommandDistributionBehavior distributionBehavior) {
+      final CommandDistributionBehavior distributionBehavior,
+      final AuthorizationCheckBehavior authCheckBehavior) {
     typedRecordProcessors.onCommand(
         ValueType.AUTHORIZATION,
         AuthorizationIntent.ADD_PERMISSION,
         new AuthorizationAddPermissionProcessor(
-            writers, keyGenerator, processingState, distributionBehavior));
+            writers, keyGenerator, processingState, distributionBehavior, authCheckBehavior));
+    typedRecordProcessors.onCommand(
+        ValueType.AUTHORIZATION,
+        AuthorizationIntent.REMOVE_PERMISSION,
+        new AuthorizationRemovePermissionProcessor(
+            writers, keyGenerator, processingState, distributionBehavior, authCheckBehavior));
   }
 }

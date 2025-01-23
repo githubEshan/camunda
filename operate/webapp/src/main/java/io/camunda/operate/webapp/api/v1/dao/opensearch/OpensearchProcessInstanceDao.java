@@ -9,7 +9,6 @@ package io.camunda.operate.webapp.api.v1.dao.opensearch;
 
 import io.camunda.operate.conditions.OpensearchCondition;
 import io.camunda.operate.connect.OperateDateTimeFormatter;
-import io.camunda.operate.schema.templates.ListViewTemplate;
 import io.camunda.operate.store.opensearch.client.sync.RichOpenSearchClient;
 import io.camunda.operate.webapp.api.v1.dao.ProcessInstanceDao;
 import io.camunda.operate.webapp.api.v1.entities.ChangeStatus;
@@ -21,6 +20,7 @@ import io.camunda.operate.webapp.api.v1.exceptions.ServerException;
 import io.camunda.operate.webapp.opensearch.OpensearchQueryDSLWrapper;
 import io.camunda.operate.webapp.opensearch.OpensearchRequestDSLWrapper;
 import io.camunda.operate.webapp.writer.ProcessInstanceWriter;
+import io.camunda.webapps.schema.descriptors.operate.template.ListViewTemplate;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Objects;
@@ -101,6 +101,8 @@ public class OpensearchProcessInstanceDao
               ProcessInstance.PARENT_FLOW_NODE_INSTANCE_KEY,
               filter.getParentFlowNodeInstanceKey()));
       queryTerms.add(queryDSLWrapper.term(ProcessInstance.VERSION, filter.getProcessVersion()));
+      queryTerms.add(
+          queryDSLWrapper.term(ProcessInstance.VERSION_TAG, filter.getProcessVersionTag()));
       queryTerms.add(
           queryDSLWrapper.term(ProcessInstance.BPMN_PROCESS_ID, filter.getBpmnProcessId()));
       queryTerms.add(queryDSLWrapper.term(ProcessInstance.STATE, filter.getState()));

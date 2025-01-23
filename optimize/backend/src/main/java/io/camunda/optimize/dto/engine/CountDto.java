@@ -7,10 +7,36 @@
  */
 package io.camunda.optimize.dto.engine;
 
-import lombok.Data;
-
-@Data
 public class CountDto {
 
   protected long count;
+
+  public CountDto() {}
+
+  public long getCount() {
+    return count;
+  }
+
+  public void setCount(final long count) {
+    this.count = count;
+  }
+
+  protected boolean canEqual(final Object other) {
+    return other instanceof CountDto;
+  }
+
+  @Override
+  public int hashCode() {
+    return org.apache.commons.lang3.builder.HashCodeBuilder.reflectionHashCode(this);
+  }
+
+  @Override
+  public boolean equals(final Object o) {
+    return org.apache.commons.lang3.builder.EqualsBuilder.reflectionEquals(this, o);
+  }
+
+  @Override
+  public String toString() {
+    return "CountDto(count=" + getCount() + ")";
+  }
 }

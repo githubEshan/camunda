@@ -19,7 +19,6 @@ import FilterSingleDefinitionSelection from '../FilterSingleDefinitionSelection'
 import NodeSelection from './NodeSelection';
 
 jest.mock('hooks', () => ({
-  ...jest.requireActual('hooks'),
   useErrorHandling: () => ({
     mightFail: jest.fn().mockImplementation((data, cb) => cb(data)),
   }),
@@ -28,7 +27,7 @@ jest.mock('hooks', () => ({
 jest.mock('bpmn-js/lib/NavigatedViewer', () => {
   return class Viewer {
     elements: {id: string; name: string}[];
-    elementRegistry: {filter: () => {map: () => any}};
+    elementRegistry: {filter: () => {map: () => {id: string; name: string}[]}};
     constructor() {
       this.elements = [
         {id: 'a', name: 'Element A'},
@@ -80,7 +79,8 @@ it('should contain a modal', () => {
 it('should display a diagram', async () => {
   const node = shallow(<NodeSelection {...props} />);
 
-  await runAllEffects();
+  runAllEffects();
+  await flushPromises();
 
   expect(node.find(BPMNDiagram).props().xml).toBe('fooXml');
 });
@@ -93,7 +93,8 @@ it('should add an unselected node to the selectedNodes on toggle', async () => {
     id: 'bar',
   };
 
-  await runAllEffects();
+  runAllEffects();
+  await flushPromises();
 
   node.find(ClickBehavior).prop('onClick')(flowNode);
 
@@ -108,7 +109,8 @@ it('should remove a selected node from the selectedNodes on toggle', async () =>
     id: 'bar',
   };
 
-  await runAllEffects();
+  runAllEffects();
+  await flushPromises();
 
   node.find(ClickBehavior).prop('onClick')(flowNode);
   node.find(ClickBehavior).prop('onClick')(flowNode);
@@ -120,7 +122,8 @@ it('should invoke addFilter when applying the filter', async () => {
   const spy = jest.fn();
   const node = shallow(<NodeSelection {...props} addFilter={spy} />);
 
-  await runAllEffects();
+  runAllEffects();
+  await flushPromises();
 
   node.find(ClickBehavior).prop('onClick')({id: 'a'});
 
@@ -137,7 +140,8 @@ it('should use the in operator when the more than half of the nodes are deselect
   const spy = jest.fn();
   const node = shallow(<NodeSelection {...props} addFilter={spy} />);
 
-  await runAllEffects();
+  runAllEffects();
+  await flushPromises();
 
   node.find(ClickBehavior).prop('onClick')({id: 'a'});
   node.find(ClickBehavior).prop('onClick')({id: 'b'});
@@ -167,7 +171,8 @@ it('should disable create filter button if no node was selected', () => {
 it('should disable create filter button if all nodes are selected', async () => {
   const node = await shallow(<NodeSelection {...props} />);
 
-  await runAllEffects();
+  runAllEffects();
+  await flushPromises();
 
   node.find(ClickBehavior).prop('onClick')({id: 'a'});
   node.find(ClickBehavior).prop('onClick')({id: 'b'});
@@ -179,7 +184,8 @@ it('should disable create filter button if all nodes are selected', async () => 
 it('should deselect/select All nodes using the provided buttons', async () => {
   const node = shallow(<NodeSelection {...props} />);
 
-  await runAllEffects();
+  runAllEffects();
+  await flushPromises();
 
   node.find('.diagramActions Button').at(1).simulate('click');
   expect(node.find(ClickBehavior).prop('selectedNodes')).toEqual([]);
@@ -191,7 +197,8 @@ it('should deselect/select All nodes using the provided buttons', async () => {
 it('should initially load xml', async () => {
   shallow(<NodeSelection {...props} />);
 
-  await runAllEffects();
+  runAllEffects();
+  await flushPromises();
 
   expect(loadProcessDefinitionXml).toHaveBeenCalledWith('definitionKey', 'all', null);
 });
@@ -208,11 +215,13 @@ it('should load new xml after changing definition', async () => {
   ];
   const node = shallow(<NodeSelection {...props} definitions={definitions} />);
 
-  await runAllEffects();
+  runAllEffects();
+  await flushPromises();
 
   node.find(FilterSingleDefinitionSelection).prop('setApplyTo')(definitions[1]);
 
-  await runAllEffects();
+  runAllEffects();
+  await flushPromises();
 
   expect(loadProcessDefinitionXml).toHaveBeenCalledWith('otherDefinitionKey', '1', 'marketing');
 });
@@ -226,7 +235,8 @@ it('should populate selected values correctly', async () => {
   const spy = jest.fn();
   const node = shallow(<NodeSelection {...props} filterData={filterData} addFilter={spy} />);
 
-  await runAllEffects();
+  runAllEffects();
+  await flushPromises();
 
   expect(node.find('ClickBehavior').prop('selectedNodes')).toEqual(['a']);
 
@@ -250,13 +260,67 @@ it('should replace selected nodes when changing definition', async () => {
   ];
   const node = shallow(<NodeSelection {...props} definitions={definitions} />);
 
-  await runAllEffects();
+  runAllEffects();
+  await flushPromises();
 
   node.find(ClickBehavior).prop('onClick')({id: 'a'});
 
   node.find(FilterSingleDefinitionSelection).prop('setApplyTo')(definitions[1]);
 
-  await runAllEffects();
+  runAllEffects();
+  await flushPromises();
 
   expect(node.find(ClickBehavior).prop('selectedNodes')).toEqual(['a', 'b', 'c']);
+});
+
+it('should populate empty values correctly', async () => {
+  const filterData: ComponentProps<typeof NodeSelection>['filterData'] = {
+    type: 'executedFlowNodes',
+    appliedTo: props.definitions[0] ? [props.definitions[0].identifier] : [],
+    data: {operator: 'in', values: []},
+  };
+  const node = shallow(<NodeSelection {...props} filterData={filterData} />);
+
+  runAllEffects();
+  await flushPromises();
+
+  expect(node.find('ClickBehavior').prop('selectedNodes')).toEqual([]);
+});
+
+it('should populate select all flow node for new filter', async () => {
+  const node = shallow(<NodeSelection {...props} filterData={undefined} />);
+
+  runAllEffects();
+  await flushPromises();
+
+  expect(node.find('ClickBehavior').prop('selectedNodes')).toEqual(['a', 'b', 'c']);
+});
+
+it('should select all flow nodes if definition changed', async () => {
+  const filterData: ComponentProps<typeof NodeSelection>['filterData'] = {
+    type: 'executedFlowNodes',
+    appliedTo: props.definitions[0] ? [props.definitions[0].identifier] : [],
+    data: {operator: 'in', values: ['a']},
+  };
+
+  const definitions = [
+    {identifier: 'definition', key: 'definitionKey', versions: ['all'], tenantIds: [null]},
+    {
+      identifier: 'otherDefinition',
+      key: 'otherDefinitionKey',
+      versions: ['1'],
+      tenantIds: ['marketing', 'sales'],
+    },
+  ];
+
+  const node = shallow(
+    <NodeSelection {...props} definitions={definitions} filterData={filterData} />
+  );
+
+  node.find(FilterSingleDefinitionSelection).prop('setApplyTo')(definitions[1]);
+
+  runAllEffects();
+  await flushPromises();
+
+  expect(node.find('ClickBehavior').prop('selectedNodes')).toEqual(['a', 'b', 'c']);
 });

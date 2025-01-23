@@ -16,7 +16,6 @@ import io.camunda.operate.JacksonConfig;
 import io.camunda.operate.OperateProfileService;
 import io.camunda.operate.conditions.DatabaseInfo;
 import io.camunda.operate.connect.OperateDateTimeFormatter;
-import io.camunda.operate.entities.listview.ProcessInstanceForListViewEntity;
 import io.camunda.operate.property.OperateProperties;
 import io.camunda.operate.util.OperateAbstractIT;
 import io.camunda.operate.util.apps.nobeans.TestApplicationWithNoBeans;
@@ -27,7 +26,8 @@ import io.camunda.operate.webapp.rest.dto.activity.FlowNodeInstanceQueryDto;
 import io.camunda.operate.webapp.rest.dto.activity.FlowNodeInstanceRequestDto;
 import io.camunda.operate.webapp.rest.dto.activity.FlowNodeInstanceResponseDto;
 import io.camunda.operate.webapp.security.identity.IdentityPermission;
-import io.camunda.operate.webapp.security.identity.PermissionsService;
+import io.camunda.operate.webapp.security.permission.PermissionsService;
+import io.camunda.webapps.schema.entities.operate.listview.ProcessInstanceForListViewEntity;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -69,7 +69,10 @@ public class FlowNodeInstanceRestServiceIT extends OperateAbstractIT {
     // when
     when(processInstanceReader.getProcessInstanceByKey(Long.valueOf(processInstanceId)))
         .thenReturn(new ProcessInstanceForListViewEntity().setBpmnProcessId(bpmnProcessId));
-    when(permissionsService.hasPermissionForProcess(bpmnProcessId, IdentityPermission.READ))
+
+    when(permissionsService.permissionsEnabled()).thenReturn(true);
+    when(permissionsService.hasPermissionForProcess(
+            bpmnProcessId, IdentityPermission.READ_PROCESS_INSTANCE))
         .thenReturn(false);
     final MvcResult mvcResult =
         postRequestShouldFailWithNoAuthorization(FLOW_NODE_INSTANCE_URL, requestDto);
@@ -93,7 +96,9 @@ public class FlowNodeInstanceRestServiceIT extends OperateAbstractIT {
     // when
     when(processInstanceReader.getProcessInstanceByKey(Long.valueOf(processInstanceId)))
         .thenReturn(new ProcessInstanceForListViewEntity().setBpmnProcessId(bpmnProcessId));
-    when(permissionsService.hasPermissionForProcess(bpmnProcessId, IdentityPermission.READ))
+    when(permissionsService.permissionsEnabled()).thenReturn(true);
+    when(permissionsService.hasPermissionForProcess(
+            bpmnProcessId, IdentityPermission.READ_PROCESS_INSTANCE))
         .thenReturn(true);
     when(flowNodeInstanceReader.getFlowNodeInstances(requestDto)).thenReturn(new LinkedHashMap<>());
     final MvcResult mvcResult = postRequest(FLOW_NODE_INSTANCE_URL, requestDto);

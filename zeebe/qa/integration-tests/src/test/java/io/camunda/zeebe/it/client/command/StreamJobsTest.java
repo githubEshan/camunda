@@ -9,10 +9,10 @@ package io.camunda.zeebe.it.client.command;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import io.camunda.zeebe.client.ZeebeClient;
-import io.camunda.zeebe.client.api.ZeebeFuture;
-import io.camunda.zeebe.client.api.response.ActivatedJob;
-import io.camunda.zeebe.client.api.response.StreamJobsResponse;
+import io.camunda.client.CamundaClient;
+import io.camunda.client.api.CamundaFuture;
+import io.camunda.client.api.response.ActivatedJob;
+import io.camunda.client.api.response.StreamJobsResponse;
 import io.camunda.zeebe.model.bpmn.Bpmn;
 import io.camunda.zeebe.model.bpmn.BpmnModelInstance;
 import io.camunda.zeebe.protocol.record.Record;
@@ -25,8 +25,6 @@ import io.camunda.zeebe.qa.util.jobstream.JobStreamActuatorAssert;
 import io.camunda.zeebe.qa.util.junit.ZeebeIntegration;
 import io.camunda.zeebe.qa.util.junit.ZeebeIntegration.TestZeebe;
 import io.camunda.zeebe.test.util.Strings;
-import io.camunda.zeebe.test.util.junit.AutoCloseResources;
-import io.camunda.zeebe.test.util.junit.AutoCloseResources.AutoCloseResource;
 import io.camunda.zeebe.test.util.record.RecordingExporter;
 import io.grpc.Status;
 import io.grpc.Status.Code;
@@ -46,18 +44,22 @@ import org.assertj.core.api.InstanceOfAssertFactories;
 import org.assertj.core.data.Offset;
 import org.awaitility.Awaitility;
 import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.AutoClose;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 
-@AutoCloseResources
 @ZeebeIntegration
 final class StreamJobsTest {
-  @TestZeebe
-  private static final TestStandaloneBroker ZEEBE =
-      new TestStandaloneBroker().withRecordingExporter(true);
+  @TestZeebe(initMethod = "initTestStandaloneBroker")
+  private static TestStandaloneBroker zeebe;
 
-  @AutoCloseResource private final ZeebeClient client = ZEEBE.newClientBuilder().build();
+  @AutoClose private final CamundaClient client = zeebe.newClientBuilder().build();
+
+  @SuppressWarnings("unused")
+  static void initTestStandaloneBroker() {
+    zeebe = new TestStandaloneBroker().withRecordingExporter(true);
+  }
 
   @Test
   void shouldStreamJobs() {
@@ -200,7 +202,7 @@ final class StreamJobsTest {
             .workerName("stream")
             .send();
     awaitStreamRegistered(uniqueId);
-    ZEEBE.stop().start().awaitCompleteTopology();
+    zeebe.stop().start().awaitCompleteTopology();
 
     // then
     assertThat((Future<?>) stream)
@@ -214,7 +216,7 @@ final class StreamJobsTest {
   }
 
   private void awaitStreamRegistered(final String jobType) {
-    final var actuator = JobStreamActuator.of(ZEEBE);
+    final var actuator = JobStreamActuator.of(zeebe);
     Awaitility.await("until stream with type '%s' is registered".formatted(jobType))
         .untilAsserted(
             () ->
@@ -272,7 +274,7 @@ final class StreamJobsTest {
     private final Map<String, Object> payload =
         Map.of("foo", "bar".repeat(TransportState.DEFAULT_ONREADY_THRESHOLD));
 
-    private ZeebeFuture<StreamJobsResponse> stream;
+    private CamundaFuture<StreamJobsResponse> stream;
 
     @BeforeEach
     void beforeEach() {

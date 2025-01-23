@@ -7,19 +7,19 @@
  */
 package io.camunda.operate.webapp.zeebe.operation;
 
-import static io.camunda.operate.schema.templates.ListViewTemplate.KEY;
-import static io.camunda.operate.schema.templates.ListViewTemplate.PROCESS_KEY;
+import static io.camunda.webapps.schema.descriptors.operate.template.ListViewTemplate.KEY;
+import static io.camunda.webapps.schema.descriptors.operate.template.ListViewTemplate.PROCESS_KEY;
 
-import io.camunda.operate.entities.OperateZeebeEntity;
-import io.camunda.operate.entities.OperationEntity;
-import io.camunda.operate.entities.OperationType;
-import io.camunda.operate.entities.listview.ProcessInstanceForListViewEntity;
-import io.camunda.operate.entities.listview.ProcessInstanceState;
 import io.camunda.operate.exceptions.PersistenceException;
-import io.camunda.operate.schema.templates.ListViewTemplate;
 import io.camunda.operate.store.ProcessStore;
 import io.camunda.operate.util.OperationsManager;
 import io.camunda.operate.webapp.reader.ProcessReader;
+import io.camunda.webapps.schema.descriptors.operate.template.ListViewTemplate;
+import io.camunda.webapps.schema.entities.operate.OperateZeebeEntity;
+import io.camunda.webapps.schema.entities.operate.listview.ProcessInstanceForListViewEntity;
+import io.camunda.webapps.schema.entities.operate.listview.ProcessInstanceState;
+import io.camunda.webapps.schema.entities.operation.OperationEntity;
+import io.camunda.webapps.schema.entities.operation.OperationType;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
@@ -70,7 +70,10 @@ public class DeleteProcessDefinitionHandler extends AbstractOperationHandler
         String.format(
             "Operation [%s]: Sending Zeebe delete command for processDefinitionKey [%s]...",
             operation.getId(), processDefinitionKey));
-    zeebeClient.newDeleteResourceCommand(processDefinitionKey).send().join();
+    final var deleteResourceCommand =
+        withOperationReference(
+            camundaClient.newDeleteResourceCommand(processDefinitionKey), operation.getId());
+    deleteResourceCommand.send().join();
     markAsSent(operation);
     LOGGER.info(
         String.format(

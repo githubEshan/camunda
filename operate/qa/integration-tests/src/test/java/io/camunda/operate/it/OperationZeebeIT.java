@@ -21,16 +21,6 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import io.camunda.operate.entities.BatchOperationEntity;
-import io.camunda.operate.entities.FlowNodeInstanceEntity;
-import io.camunda.operate.entities.IncidentEntity;
-import io.camunda.operate.entities.OperationEntity;
-import io.camunda.operate.entities.OperationState;
-import io.camunda.operate.entities.OperationType;
-import io.camunda.operate.entities.dmn.DecisionInstanceEntity;
-import io.camunda.operate.entities.listview.ProcessInstanceForListViewEntity;
-import io.camunda.operate.schema.templates.DecisionInstanceTemplate;
-import io.camunda.operate.schema.templates.OperationTemplate;
 import io.camunda.operate.util.*;
 import io.camunda.operate.webapp.elasticsearch.reader.ProcessInstanceReader;
 import io.camunda.operate.webapp.reader.*;
@@ -48,6 +38,16 @@ import io.camunda.operate.webapp.rest.dto.operation.BatchOperationRequestDto;
 import io.camunda.operate.webapp.rest.dto.operation.CreateOperationRequestDto;
 import io.camunda.operate.webapp.rest.dto.operation.OperationTypeDto;
 import io.camunda.operate.webapp.zeebe.operation.*;
+import io.camunda.webapps.schema.descriptors.operate.template.DecisionInstanceTemplate;
+import io.camunda.webapps.schema.descriptors.operate.template.OperationTemplate;
+import io.camunda.webapps.schema.entities.operate.FlowNodeInstanceEntity;
+import io.camunda.webapps.schema.entities.operate.IncidentEntity;
+import io.camunda.webapps.schema.entities.operate.dmn.DecisionInstanceEntity;
+import io.camunda.webapps.schema.entities.operate.listview.ProcessInstanceForListViewEntity;
+import io.camunda.webapps.schema.entities.operation.BatchOperationEntity;
+import io.camunda.webapps.schema.entities.operation.OperationEntity;
+import io.camunda.webapps.schema.entities.operation.OperationState;
+import io.camunda.webapps.schema.entities.operation.OperationType;
 import io.camunda.zeebe.model.bpmn.Bpmn;
 import io.camunda.zeebe.model.bpmn.BpmnModelInstance;
 import java.net.HttpURLConnection;
@@ -101,15 +101,16 @@ public class OperationZeebeIT extends OperateZeebeAbstractIT {
   @Before
   public void before() {
     super.before();
-    cancelProcessInstanceHandler.setZeebeClient(super.getClient());
-    updateRetriesHandler.setZeebeClient(super.getClient());
-    updateVariableHandler.setZeebeClient(super.getClient());
-    deleteProcessDefinitionHandler.setZeebeClient(super.getClient());
-    deleteDecisionDefinitionHandler.setZeebeClient(super.getClient());
+    cancelProcessInstanceHandler.setCamundaClient(super.getClient());
+    updateRetriesHandler.setCamundaClient(super.getClient());
+    updateVariableHandler.setCamundaClient(super.getClient());
+    deleteProcessDefinitionHandler.setCamundaClient(super.getClient());
+    deleteDecisionDefinitionHandler.setCamundaClient(super.getClient());
 
     mockMvc = mockMvcTestRule.getMockMvc();
     initialBatchOperationMaxSize = operateProperties.getBatchOperationMaxSize();
     tester.deployProcess("demoProcess_v_2.bpmn");
+    tester.deployProcess("execution-listener.bpmn");
   }
 
   @Override
@@ -365,6 +366,38 @@ public class OperationZeebeIT extends OperateZeebeAbstractIT {
     assertThat(operation.getId()).isNotNull();
     // assert that incident is resolved
     assertThat(processInstance.getState()).isEqualTo(ProcessInstanceStateDto.ACTIVE);
+  }
+
+  @Test
+  public void testResolveIncidentForExecutionListener() throws Exception {
+
+    // given
+    final Long processInstanceKey =
+        tester
+            .startProcessInstance("execution-listener-process")
+            .waitUntil()
+            .flowNodeIsActive("script-task")
+            .getProcessInstanceKey();
+    failTaskWithNoRetriesLeft("listener1", processInstanceKey, "Some error");
+
+    // we call RESOLVE_INCIDENT operation on instance
+    postOperationWithOKResponse(
+        processInstanceKey, new CreateOperationRequestDto(OperationType.RESOLVE_INCIDENT));
+
+    // when
+    // we execute the operation
+    executeOneBatch();
+
+    // then
+    // process all Zeebe records
+    searchTestRule.processAllRecordsAndWait(noActivitiesHaveIncident, processInstanceKey);
+
+    final List<IncidentDto> incidents =
+        incidentReader
+            .getIncidentsByProcessInstanceId(String.valueOf(processInstanceKey))
+            .getIncidents();
+    // the incident has been resolved
+    assertThat(incidents).isEmpty();
   }
 
   @Test
@@ -857,7 +890,7 @@ public class OperationZeebeIT extends OperateZeebeAbstractIT {
     // resolve the incident before the operation is executed
     final IncidentEntity incident =
         incidentReader.getAllIncidentsByProcessInstanceKey(processInstanceKey).get(0);
-    ZeebeTestUtil.resolveIncident(zeebeClient, incident.getJobKey(), incident.getKey());
+    ZeebeTestUtil.resolveIncident(camundaClient, incident.getJobKey(), incident.getKey());
 
     // when
     // and execute the operation

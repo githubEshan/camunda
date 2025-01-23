@@ -12,6 +12,7 @@ import static io.camunda.zeebe.util.buffer.BufferUtil.wrapString;
 import io.camunda.zeebe.engine.EngineConfiguration;
 import io.camunda.zeebe.engine.processing.common.ExpressionProcessor;
 import io.camunda.zeebe.engine.processing.common.Failure;
+import io.camunda.zeebe.engine.processing.deployment.ChecksumGenerator;
 import io.camunda.zeebe.engine.processing.deployment.model.BpmnFactory;
 import io.camunda.zeebe.engine.processing.deployment.model.transformation.BpmnTransformer;
 import io.camunda.zeebe.engine.processing.deployment.model.validation.StraightThroughProcessingLoopValidator;
@@ -34,7 +35,6 @@ import io.camunda.zeebe.util.buffer.BufferUtil;
 import java.time.InstantSource;
 import java.util.List;
 import java.util.Optional;
-import java.util.function.Function;
 import org.agrona.DirectBuffer;
 import org.agrona.io.DirectBufferInputStream;
 import org.camunda.bpm.model.xml.ModelParseException;
@@ -45,7 +45,7 @@ public final class BpmnResourceTransformer implements DeploymentResourceTransfor
 
   private final KeyGenerator keyGenerator;
   private final StateWriter stateWriter;
-  private final Function<byte[], DirectBuffer> checksumGenerator;
+  private final ChecksumGenerator checksumGenerator;
 
   private final BpmnValidator validator;
   private final ProcessState processState;
@@ -54,7 +54,7 @@ public final class BpmnResourceTransformer implements DeploymentResourceTransfor
   public BpmnResourceTransformer(
       final KeyGenerator keyGenerator,
       final StateWriter stateWriter,
-      final Function<byte[], DirectBuffer> checksumGenerator,
+      final ChecksumGenerator checksumGenerator,
       final ProcessState processState,
       final ExpressionProcessor expressionProcessor,
       final boolean enableStraightThroughProcessingLoopDetector,
@@ -73,7 +73,9 @@ public final class BpmnResourceTransformer implements DeploymentResourceTransfor
 
   @Override
   public Either<Failure, Void> createMetadata(
-      final DeploymentResource resource, final DeploymentRecord deployment) {
+      final DeploymentResource resource,
+      final DeploymentRecord deployment,
+      final DeploymentResourceContext context) {
 
     return readProcessDefinition(resource)
         .flatMap(
@@ -100,7 +102,7 @@ public final class BpmnResourceTransformer implements DeploymentResourceTransfor
                         })
                     .map(
                         ok -> {
-                          createProcessMetadata(deployment, resource, definition);
+                          createProcessMetadata(deployment, resource, definition, context);
                           return null;
                         });
 
@@ -113,12 +115,11 @@ public final class BpmnResourceTransformer implements DeploymentResourceTransfor
   }
 
   @Override
-  public Either<Failure, Void> writeRecords(
-      final DeploymentResource resource, final DeploymentRecord deployment) {
+  public void writeRecords(final DeploymentResource resource, final DeploymentRecord deployment) {
     if (deployment.hasDuplicatesOnly()) {
-      return Either.right(null);
+      return;
     }
-    final var checksum = checksumGenerator.apply(resource.getResource());
+    final var checksum = checksumGenerator.checksum(resource.getResourceBuffer());
     deployment.processesMetadata().stream()
         .filter(metadata -> checksum.equals(metadata.getChecksumBuffer()))
         .forEach(
@@ -133,14 +134,14 @@ public final class BpmnResourceTransformer implements DeploymentResourceTransfor
                     .setVersion(
                         processState.getNextProcessVersion(
                             metadata.getBpmnProcessId(), deployment.getTenantId()))
-                    .setDuplicate(false);
+                    .setDuplicate(false)
+                    .setDeploymentKey(deployment.getDeploymentKey());
               }
               stateWriter.appendFollowUpEvent(
                   key,
                   ProcessIntent.CREATED,
                   new ProcessRecord().wrap(metadata, resource.getResource()));
             });
-    return Either.right(null);
   }
 
   private Either<Failure, BpmnModelInstance> readProcessDefinition(
@@ -184,7 +185,8 @@ public final class BpmnResourceTransformer implements DeploymentResourceTransfor
   private void createProcessMetadata(
       final DeploymentRecord deploymentEvent,
       final DeploymentResource deploymentResource,
-      final BpmnModelInstance definition) {
+      final BpmnModelInstance definition,
+      final DeploymentResourceContext context) {
     for (final Process process : getExecutableProcesses(definition)) {
       final String bpmnProcessId = process.getId();
       final String tenantId = deploymentEvent.getTenantId();
@@ -194,7 +196,8 @@ public final class BpmnResourceTransformer implements DeploymentResourceTransfor
 
       final DirectBuffer lastDigest =
           processState.getLatestVersionDigest(wrapString(bpmnProcessId), tenantId);
-      final DirectBuffer resourceDigest = checksumGenerator.apply(deploymentResource.getResource());
+      final DirectBuffer resourceDigest =
+          checksumGenerator.checksum(deploymentResource.getResourceBuffer());
 
       // adds process record to deployment record
       final var processMetadata = deploymentEvent.processesMetadata().add();
@@ -202,21 +205,26 @@ public final class BpmnResourceTransformer implements DeploymentResourceTransfor
           .setBpmnProcessId(BufferUtil.wrapString(bpmnProcessId))
           .setChecksum(resourceDigest)
           .setResourceName(deploymentResource.getResourceNameBuffer())
-          .setTenantId(tenantId)
-          .setDeploymentKey(deploymentEvent.getDeploymentKey());
+          .setTenantId(tenantId);
       getOptionalVersionTag(process).ifPresent(processMetadata::setVersionTag);
 
       final var isDuplicate =
           isDuplicateOfLatest(deploymentResource, resourceDigest, lastProcess, lastDigest);
       if (isDuplicate) {
         processMetadata
-            .setVersion(lastProcess.getVersion())
             .setKey(lastProcess.getKey())
+            .setVersion(lastProcess.getVersion())
+            .setDeploymentKey(lastProcess.getDeploymentKey())
             .setDuplicate(true);
       } else {
         processMetadata
             .setKey(keyGenerator.nextKey())
-            .setVersion(processState.getNextProcessVersion(bpmnProcessId, tenantId));
+            .setVersion(processState.getNextProcessVersion(bpmnProcessId, tenantId))
+            .setDeploymentKey(deploymentEvent.getDeploymentKey());
+      }
+
+      if (context instanceof final BpmnElementsWithDeploymentBinding elements) {
+        elements.addFromProcess(process);
       }
     }
   }

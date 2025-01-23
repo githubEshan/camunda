@@ -7,50 +7,76 @@
  */
 package io.camunda.service;
 
-import io.camunda.search.clients.CamundaSearchClient;
-import io.camunda.service.entities.UserEntity;
+import io.camunda.search.clients.UserSearchClient;
+import io.camunda.search.entities.UserEntity;
+import io.camunda.search.query.SearchQueryResult;
+import io.camunda.search.query.UserQuery;
+import io.camunda.security.auth.Authentication;
+import io.camunda.security.auth.Authorization;
 import io.camunda.service.search.core.SearchQueryService;
-import io.camunda.service.search.query.SearchQueryResult;
-import io.camunda.service.search.query.UserQuery;
-import io.camunda.service.security.auth.Authentication;
-import io.camunda.service.transformers.ServiceTransformers;
+import io.camunda.service.security.SecurityContextProvider;
 import io.camunda.zeebe.broker.client.api.BrokerClient;
 import io.camunda.zeebe.gateway.impl.broker.request.BrokerUserCreateRequest;
+import io.camunda.zeebe.gateway.impl.broker.request.BrokerUserDeleteRequest;
+import io.camunda.zeebe.gateway.impl.broker.request.BrokerUserUpdateRequest;
 import io.camunda.zeebe.protocol.impl.record.value.user.UserRecord;
 import java.util.concurrent.CompletableFuture;
+import org.springframework.security.crypto.password.PasswordEncoder;
 
 public class UserServices extends SearchQueryService<UserServices, UserQuery, UserEntity> {
 
-  public UserServices(final BrokerClient brokerClient, final CamundaSearchClient dataStoreClient) {
-    this(brokerClient, dataStoreClient, null, null);
-  }
+  private final UserSearchClient userSearchClient;
+  private final PasswordEncoder passwordEncoder;
 
   public UserServices(
       final BrokerClient brokerClient,
-      final CamundaSearchClient searchClient,
-      final ServiceTransformers transformers,
-      final Authentication authentication) {
-    super(brokerClient, searchClient, transformers, authentication);
+      final SecurityContextProvider securityContextProvider,
+      final UserSearchClient userSearchClient,
+      final Authentication authentication,
+      final PasswordEncoder passwordEncoder) {
+    super(brokerClient, securityContextProvider, authentication);
+    this.userSearchClient = userSearchClient;
+    this.passwordEncoder = passwordEncoder;
   }
 
   @Override
   public SearchQueryResult<UserEntity> search(final UserQuery query) {
-    return executor.search(query, UserEntity.class);
+    return userSearchClient
+        .withSecurityContext(
+            securityContextProvider.provideSecurityContext(
+                authentication, Authorization.of(a -> a.user().read())))
+        .searchUsers(query);
   }
 
   @Override
   public UserServices withAuthentication(final Authentication authentication) {
-    return new UserServices(brokerClient, searchClient, transformers, authentication);
+    return new UserServices(
+        brokerClient, securityContextProvider, userSearchClient, authentication, passwordEncoder);
   }
 
-  public CompletableFuture<UserRecord> createUser(final CreateUserRequest request) {
+  public CompletableFuture<UserRecord> createUser(final UserDTO request) {
+    final String encodedPassword = passwordEncoder.encode(request.password());
     return sendBrokerRequest(
         new BrokerUserCreateRequest()
             .setUsername(request.username())
             .setName(request.name())
             .setEmail(request.email())
-            .setPassword(request.password()));
+            .setPassword(encodedPassword));
   }
 
-  public record CreateUserRequest(String username, String name, String email, String password) {}
+  public CompletableFuture<UserRecord> updateUser(final UserDTO request) {
+    final String encodedPassword = passwordEncoder.encode(request.password());
+    return sendBrokerRequest(
+        new BrokerUserUpdateRequest()
+            .setUsername(request.username())
+            .setName(request.name())
+            .setEmail(request.email())
+            .setPassword(encodedPassword));
+  }
+
+  public CompletableFuture<UserRecord> deleteUser(final String username) {
+    return sendBrokerRequest(new BrokerUserDeleteRequest().setUsername(username));
+  }
+
+  public record UserDTO(String username, String name, String email, String password) {}
 }

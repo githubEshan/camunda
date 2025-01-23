@@ -10,32 +10,39 @@ package io.camunda.optimize.service.db.schema;
 import static io.camunda.optimize.service.db.DatabaseConstants.DEFAULT_SHARD_NUMBER;
 import static io.camunda.optimize.service.db.DatabaseConstants.NUMBER_OF_SHARDS_SETTING;
 
+import co.elastic.clients.elasticsearch._types.mapping.DynamicMapping;
+import co.elastic.clients.elasticsearch._types.mapping.DynamicTemplate;
+import co.elastic.clients.elasticsearch._types.mapping.IndexOptions;
+import co.elastic.clients.elasticsearch._types.mapping.TypeMapping;
 import io.camunda.optimize.service.db.es.schema.PropertiesAppender;
 import io.camunda.optimize.service.util.configuration.ConfigurationService;
 import java.io.IOException;
-import lombok.Setter;
-import org.elasticsearch.xcontent.XContentBuilder;
-import org.elasticsearch.xcontent.XContentFactory;
+import java.util.Map;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 public abstract class DefaultIndexMappingCreator<TBuilder>
     implements PropertiesAppender, IndexMappingCreator<TBuilder> {
 
-  private final Logger logger = LoggerFactory.getLogger(getClass());
-  private static final String DYNAMIC_MAPPINGS_VALUE_DEFAULT = "strict";
   public static final String LOWERCASE = "lowercase";
   protected static final String ANALYZER = "analyzer";
   protected static final String NORMALIZER = "normalizer";
+  private static final String DYNAMIC_MAPPINGS_VALUE_DEFAULT = "strict";
 
-  @Setter private String dynamic = DYNAMIC_MAPPINGS_VALUE_DEFAULT;
+  private final Logger logger = LoggerFactory.getLogger(getClass());
+  private DynamicMapping dynamic = DynamicMapping.Strict;
 
-  public abstract TBuilder addStaticSetting(
-      final String key, final int value, TBuilder contentBuilder) throws IOException;
+  public abstract TBuilder addStaticSetting(final String key, final int value, TBuilder builder)
+      throws IOException;
 
   @Override
-  public XContentBuilder getSource() {
-    XContentBuilder source = null;
+  public boolean required() {
+    return false;
+  }
+
+  @Override
+  public TypeMapping getSource() {
+    TypeMapping source = null;
     try {
       source = createMapping();
     } catch (final IOException e) {
@@ -47,39 +54,26 @@ public abstract class DefaultIndexMappingCreator<TBuilder>
 
   @Override
   public TBuilder getStaticSettings(
-      final TBuilder xContentBuilder, final ConfigurationService configurationService)
-      throws IOException {
-    return addStaticSetting(NUMBER_OF_SHARDS_SETTING, DEFAULT_SHARD_NUMBER, xContentBuilder);
+      final TBuilder builder, final ConfigurationService configurationService) throws IOException {
+    return addStaticSetting(NUMBER_OF_SHARDS_SETTING, DEFAULT_SHARD_NUMBER, builder);
   }
 
-  protected XContentBuilder createMapping() throws IOException {
-    // @formatter:off
-    XContentBuilder content = XContentFactory.jsonBuilder().startObject().field("dynamic", dynamic);
-
-    content = content.startObject("properties");
-    addProperties(content).endObject();
-
-    content = content.startArray("dynamic_templates");
-    addDynamicTemplates(content).endArray();
-
-    content = content.endObject();
-    // @formatter:on
-    return content;
+  protected TypeMapping createMapping() throws IOException {
+    return TypeMapping.of(m -> addDynamicTemplates(addProperties(m.dynamic(dynamic))));
   }
 
-  protected XContentBuilder addDynamicTemplates(final XContentBuilder builder) throws IOException {
-    // @formatter:off
-    return builder
-        .startObject()
-        .startObject("string_template")
-        .field("match_mapping_type", "string")
-        .field("path_match", "*")
-        .startObject("mapping")
-        .field("type", "keyword")
-        .field("index_options", "docs")
-        .endObject()
-        .endObject()
-        .endObject();
-    // @formatter:on
+  protected TypeMapping.Builder addDynamicTemplates(final TypeMapping.Builder builder) {
+    return builder.dynamicTemplates(
+        Map.of(
+            "string_template",
+            DynamicTemplate.of(
+                t ->
+                    t.matchMappingType("string")
+                        .mapping(m -> m.keyword(k -> k.indexOptions(IndexOptions.Docs)))
+                        .pathMatch("*"))));
+  }
+
+  public void setDynamic(final DynamicMapping dynamic) {
+    this.dynamic = dynamic;
   }
 }

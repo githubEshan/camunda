@@ -7,9 +7,9 @@
  */
 package io.camunda.exporter.handlers;
 
-import io.camunda.exporter.entities.ExporterEntity;
 import io.camunda.exporter.exceptions.PersistenceException;
 import io.camunda.exporter.store.BatchRequest;
+import io.camunda.webapps.schema.entities.ExporterEntity;
 import io.camunda.zeebe.protocol.record.Record;
 import io.camunda.zeebe.protocol.record.RecordValue;
 import io.camunda.zeebe.protocol.record.ValueType;
@@ -75,4 +75,9 @@ public interface ExportHandler<T extends ExporterEntity<T>, R extends RecordValu
    * @throws PersistenceException if the handler fails to flush the entity to the batch request
    */
   void flush(T entity, BatchRequest batchRequest) throws PersistenceException;
+
+  /**
+   * @return the index name that the handler entities are flushed to.
+   */
+  String getIndexName();
 }

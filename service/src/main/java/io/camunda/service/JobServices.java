@@ -7,9 +7,8 @@
  */
 package io.camunda.service;
 
-import io.camunda.search.clients.CamundaSearchClient;
-import io.camunda.service.security.auth.Authentication;
-import io.camunda.service.transformers.ServiceTransformers;
+import io.camunda.security.auth.Authentication;
+import io.camunda.service.security.SecurityContextProvider;
 import io.camunda.zeebe.broker.client.api.BrokerClient;
 import io.camunda.zeebe.gateway.impl.broker.request.BrokerActivateJobsRequest;
 import io.camunda.zeebe.gateway.impl.broker.request.BrokerCompleteJobRequest;
@@ -19,6 +18,7 @@ import io.camunda.zeebe.gateway.impl.broker.request.BrokerUpdateJobRequest;
 import io.camunda.zeebe.gateway.impl.job.ActivateJobsHandler;
 import io.camunda.zeebe.gateway.impl.job.ResponseObserver;
 import io.camunda.zeebe.protocol.impl.record.value.job.JobRecord;
+import io.camunda.zeebe.protocol.impl.record.value.job.JobResult;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
@@ -30,25 +30,17 @@ public final class JobServices<T> extends ApiServices<JobServices<T>> {
 
   public JobServices(
       final BrokerClient brokerClient,
+      final SecurityContextProvider securityContextProvider,
       final ActivateJobsHandler<T> activateJobsHandler,
-      final CamundaSearchClient dataStoreClient) {
-    this(brokerClient, activateJobsHandler, dataStoreClient, null, null);
-  }
-
-  public JobServices(
-      final BrokerClient brokerClient,
-      final ActivateJobsHandler<T> activateJobsHandler,
-      final CamundaSearchClient searchClient,
-      final ServiceTransformers transformers,
       final Authentication authentication) {
-    super(brokerClient, searchClient, transformers, authentication);
+    super(brokerClient, securityContextProvider, authentication);
     this.activateJobsHandler = activateJobsHandler;
   }
 
   @Override
   public JobServices<T> withAuthentication(final Authentication authentication) {
     return new JobServices<>(
-        brokerClient, activateJobsHandler, searchClient, transformers, authentication);
+        brokerClient, securityContextProvider, activateJobsHandler, authentication);
   }
 
   public void activateJobs(
@@ -62,6 +54,7 @@ public final class JobServices<T> extends ApiServices<JobServices<T>> {
             .setTimeout(request.timeout())
             .setWorker(request.worker())
             .setVariables(request.fetchVariable());
+    brokerRequest.setAuthorization(authentication.claims());
     activateJobsHandler.activateJobs(
         brokerRequest, responseObserver, cancelationHandlerConsumer, request.requestTimeout());
   }
@@ -92,8 +85,9 @@ public final class JobServices<T> extends ApiServices<JobServices<T>> {
   }
 
   public CompletableFuture<JobRecord> completeJob(
-      final long jobKey, final Map<String, Object> variables) {
-    return sendBrokerRequest(new BrokerCompleteJobRequest(jobKey, getDocumentOrEmpty(variables)));
+      final long jobKey, final Map<String, Object> variables, final JobResult result) {
+    return sendBrokerRequest(
+        new BrokerCompleteJobRequest(jobKey, getDocumentOrEmpty(variables), result));
   }
 
   public CompletableFuture<JobRecord> updateJob(

@@ -15,11 +15,10 @@ import java.util.Date;
 import java.util.HashMap;
 import java.util.Locale;
 import java.util.Map;
-import lombok.AccessLevel;
-import lombok.NoArgsConstructor;
 
-@NoArgsConstructor(access = AccessLevel.PRIVATE)
-public class VariableTestUtil {
+public final class VariableTestUtil {
+
+  private VariableTestUtil() {}
 
   public static Map<String, Object> createAllPrimitiveTypeVariables() {
     final Map<String, Object> variables = new HashMap<>();
@@ -38,7 +37,10 @@ public class VariableTestUtil {
     final Map<String, Object> variables = new HashMap<>();
     for (final VariableType type : ALL_PRIMITIVE_PROCESS_VARIABLE_TYPES) {
       final String varName = String.format("%sVar", type.getId().toLowerCase(Locale.ENGLISH));
-      variables.put(varName, new VariableDto().setType(type.getId()).setValue(null));
+      final VariableDto variableDto = new VariableDto();
+      variableDto.setType(type.getId());
+      variableDto.setValue(null);
+      variables.put(varName, variableDto);
     }
     return variables;
   }

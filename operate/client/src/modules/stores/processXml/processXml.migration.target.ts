@@ -8,6 +8,9 @@
 
 import {computed, makeObservable, override} from 'mobx';
 import {ProcessXmlBase} from './processXml.base';
+import {isMigratableFlowNode} from './utils/isMigratableFlowNode';
+import {processesStore} from '../processes/processes.migration';
+import {hasParentProcess} from 'modules/bpmn-js/utils/hasParentProcess';
 
 class ProcessesXml extends ProcessXmlBase {
   constructor() {
@@ -21,13 +24,18 @@ class ProcessesXml extends ProcessXmlBase {
 
   get selectableFlowNodes() {
     return super.selectableFlowNodes
-      .filter((flowNode) => {
-        return [
-          'bpmn:ServiceTask',
-          'bpmn:UserTask',
-          'bpmn:SubProcess',
-          'bpmn:CallActivity',
-        ].includes(flowNode.$type);
+      .filter(isMigratableFlowNode)
+      .filter((targetFlowNodes) => {
+        const targetBpmnProcessId =
+          processesStore.migrationState.selectedTargetProcess?.bpmnProcessId;
+
+        return (
+          targetBpmnProcessId !== undefined &&
+          hasParentProcess({
+            flowNode: this.getFlowNode(targetFlowNodes.id),
+            bpmnProcessId: targetBpmnProcessId,
+          })
+        );
       })
       .map((flowNode) => {
         return {...flowNode, name: flowNode.name ?? flowNode.id};

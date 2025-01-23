@@ -13,6 +13,8 @@ import static org.mockito.Mockito.RETURNS_DEEP_STUBS;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 
+import io.camunda.security.configuration.SecurityConfiguration;
+import io.camunda.service.UserServices;
 import io.camunda.zeebe.broker.SpringBrokerBridge;
 import io.camunda.zeebe.broker.client.api.BrokerClient;
 import io.camunda.zeebe.broker.clustering.ClusterServicesImpl;
@@ -32,6 +34,7 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
+import org.springframework.security.crypto.password.PasswordEncoder;
 
 class EmbeddedGatewayServiceStepTest {
   private static final TestConcurrencyControl CONCURRENCY_CONTROL = new TestConcurrencyControl();
@@ -80,7 +83,10 @@ class EmbeddedGatewayServiceStepTest {
               mock(ClusterServicesImpl.class, RETURNS_DEEP_STUBS),
               mock(BrokerClient.class),
               Collections.emptyList(),
-              TEST_SHUTDOWN_TIMEOUT);
+              TEST_SHUTDOWN_TIMEOUT,
+              new SecurityConfiguration(),
+              mock(UserServices.class),
+              mock(PasswordEncoder.class));
 
       final var port = SocketUtil.getNextAddress().getPort();
       final var commandApiCfg = TEST_BROKER_CONFIG.getGateway().getNetwork();
@@ -149,7 +155,10 @@ class EmbeddedGatewayServiceStepTest {
               mock(ClusterServicesImpl.class, RETURNS_DEEP_STUBS),
               mock(BrokerClient.class),
               Collections.emptyList(),
-              TEST_SHUTDOWN_TIMEOUT);
+              TEST_SHUTDOWN_TIMEOUT,
+              new SecurityConfiguration(),
+              mock(UserServices.class),
+              mock(PasswordEncoder.class));
 
       testBrokerStartupContext.setEmbeddedGatewayService(mockEmbeddedGatewayService);
       shutdownFuture = CONCURRENCY_CONTROL.createFuture();

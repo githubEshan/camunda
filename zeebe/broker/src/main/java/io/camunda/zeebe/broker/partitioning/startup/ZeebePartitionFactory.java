@@ -8,6 +8,7 @@
 package io.camunda.zeebe.broker.partitioning.startup;
 
 import io.atomix.raft.partition.RaftPartition;
+import io.camunda.security.configuration.SecurityConfiguration;
 import io.camunda.zeebe.broker.PartitionListener;
 import io.camunda.zeebe.broker.PartitionRaftListener;
 import io.camunda.zeebe.broker.clustering.ClusterServices;
@@ -15,6 +16,7 @@ import io.camunda.zeebe.broker.exporter.repo.ExporterRepository;
 import io.camunda.zeebe.broker.logstreams.state.StatePositionSupplier;
 import io.camunda.zeebe.broker.partitioning.topology.TopologyManagerImpl;
 import io.camunda.zeebe.broker.system.configuration.BrokerCfg;
+import io.camunda.zeebe.broker.system.monitoring.BrokerHealthCheckService;
 import io.camunda.zeebe.broker.system.monitoring.DiskSpaceUsageMonitor;
 import io.camunda.zeebe.broker.system.partitions.PartitionStartupAndTransitionContextImpl;
 import io.camunda.zeebe.broker.system.partitions.PartitionStartupContext;
@@ -44,6 +46,7 @@ import io.camunda.zeebe.broker.system.partitions.impl.steps.SnapshotDirectorPart
 import io.camunda.zeebe.broker.system.partitions.impl.steps.StreamProcessorTransitionStep;
 import io.camunda.zeebe.broker.system.partitions.impl.steps.ZeebeDbPartitionTransitionStep;
 import io.camunda.zeebe.broker.transport.commandapi.CommandApiService;
+import io.camunda.zeebe.broker.transport.commandapi.CommandApiServiceTransitionStep;
 import io.camunda.zeebe.db.AccessMetricsConfiguration;
 import io.camunda.zeebe.db.impl.rocksdb.ZeebeRocksDbFactory;
 import io.camunda.zeebe.dynamic.config.state.DynamicPartitionConfig;
@@ -84,6 +87,7 @@ public final class ZeebePartitionFactory {
           new BackupServiceTransitionStep(),
           new InterPartitionCommandServiceStep(),
           new StreamProcessorTransitionStep(),
+          new CommandApiServiceTransitionStep(),
           new SnapshotDirectorPartitionTransitionStep(),
           new ExporterDirectorPartitionTransitionStep(),
           new BackupApiRequestHandlerStep(),
@@ -103,6 +107,7 @@ public final class ZeebePartitionFactory {
   private final FeatureFlags featureFlags;
   private final List<PartitionRaftListener> partitionRaftListeners;
   private final MeterRegistry meterRegistry;
+  private final SecurityConfiguration securityConfig;
 
   public ZeebePartitionFactory(
       final ActorSchedulingService actorSchedulingService,
@@ -118,7 +123,8 @@ public final class ZeebePartitionFactory {
       final List<PartitionRaftListener> partitionRaftListeners,
       final TopologyManagerImpl topologyManager,
       final FeatureFlags featureFlags,
-      final MeterRegistry meterRegistry) {
+      final MeterRegistry meterRegistry,
+      final SecurityConfiguration securityConfig) {
     this.actorSchedulingService = actorSchedulingService;
     this.brokerCfg = brokerCfg;
     this.localBroker = localBroker;
@@ -133,12 +139,14 @@ public final class ZeebePartitionFactory {
     this.topologyManager = topologyManager;
     this.featureFlags = featureFlags;
     this.meterRegistry = meterRegistry;
+    this.securityConfig = securityConfig;
   }
 
   public ZeebePartition constructPartition(
       final RaftPartition raftPartition,
       final FileBasedSnapshotStore snapshotStore,
-      final DynamicPartitionConfig initialPartitionConfig) {
+      final DynamicPartitionConfig initialPartitionConfig,
+      final BrokerHealthCheckService brokerHealthCheckService) {
     final var communicationService = clusterServices.getCommunicationService();
     final var membershipService = clusterServices.getMembershipService();
     final var typedRecordProcessorsFactory = createFactory(localBroker, featureFlags);
@@ -167,7 +175,9 @@ public final class ZeebePartitionFactory {
             diskSpaceUsageMonitor,
             gatewayBrokerTransport,
             topologyManager,
-            meterRegistry);
+            meterRegistry,
+            brokerHealthCheckService,
+            securityConfig);
     context.setDynamicPartitionConfig(initialPartitionConfig);
 
     final PartitionTransition newTransitionBehavior = new PartitionTransitionImpl(TRANSITION_STEPS);

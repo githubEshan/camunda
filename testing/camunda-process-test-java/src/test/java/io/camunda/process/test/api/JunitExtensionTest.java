@@ -20,17 +20,18 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import io.camunda.client.CamundaClient;
+import io.camunda.client.CamundaClientConfiguration;
+import io.camunda.process.test.impl.containers.CamundaContainer;
 import io.camunda.process.test.impl.containers.ConnectorsContainer;
-import io.camunda.process.test.impl.containers.OperateContainer;
-import io.camunda.process.test.impl.containers.ZeebeContainer;
 import io.camunda.process.test.impl.runtime.CamundaContainerRuntime;
 import io.camunda.process.test.impl.runtime.CamundaContainerRuntimeBuilder;
-import io.camunda.zeebe.client.ZeebeClient;
-import io.camunda.zeebe.client.ZeebeClientConfiguration;
 import java.net.URI;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Optional;
+import java.util.function.Consumer;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -47,12 +48,13 @@ public class JunitExtensionTest {
   private static final URI GRPC_API_ADDRESS = URI.create("http://my-host:100");
   private static final URI REST_API_ADDRESS = URI.create("http://my-host:200");
 
+  private static final Consumer<String> NOOP = s -> {};
+
   @Mock(answer = Answers.RETURNS_SELF)
   private CamundaContainerRuntimeBuilder camundaContainerRuntimeBuilder;
 
   @Mock private CamundaContainerRuntime camundaContainerRuntime;
-  @Mock private ZeebeContainer zeebeContainer;
-  @Mock private OperateContainer operateContainer;
+  @Mock private CamundaContainer camundaContainer;
   @Mock private ConnectorsContainer connectorsContainer;
 
   @Mock private ExtensionContext extensionContext;
@@ -60,19 +62,15 @@ public class JunitExtensionTest {
   @Mock private Store store;
 
   // to be injected
-  private ZeebeClient client;
+  private CamundaClient client;
   private CamundaProcessTestContext camundaProcessTestContext;
 
   @BeforeEach
   void configureMocks() {
     when(camundaContainerRuntimeBuilder.build()).thenReturn(camundaContainerRuntime);
-    when(camundaContainerRuntime.getZeebeContainer()).thenReturn(zeebeContainer);
-    when(zeebeContainer.getGrpcApiAddress()).thenReturn(GRPC_API_ADDRESS);
-    when(zeebeContainer.getRestApiAddress()).thenReturn(REST_API_ADDRESS);
-
-    when(camundaContainerRuntime.getOperateContainer()).thenReturn(operateContainer);
-    when(operateContainer.getHost()).thenReturn("my-host");
-    when(operateContainer.getRestApiPort()).thenReturn(100);
+    when(camundaContainerRuntime.getCamundaContainer()).thenReturn(camundaContainer);
+    when(camundaContainer.getGrpcApiAddress()).thenReturn(GRPC_API_ADDRESS);
+    when(camundaContainer.getRestApiAddress()).thenReturn(REST_API_ADDRESS);
 
     when(camundaContainerRuntime.getConnectorsContainer()).thenReturn(connectorsContainer);
 
@@ -85,7 +83,7 @@ public class JunitExtensionTest {
   void shouldInjectZeebeClient() throws Exception {
     // given
     final CamundaProcessTestExtension extension =
-        new CamundaProcessTestExtension(camundaContainerRuntimeBuilder);
+        new CamundaProcessTestExtension(camundaContainerRuntimeBuilder, NOOP);
 
     // when
     extension.beforeEach(extensionContext);
@@ -93,7 +91,7 @@ public class JunitExtensionTest {
     // then
     assertThat(client).isNotNull();
 
-    final ZeebeClientConfiguration configuration = client.getConfiguration();
+    final CamundaClientConfiguration configuration = client.getConfiguration();
     assertThat(configuration.getGrpcAddress()).isEqualTo(GRPC_API_ADDRESS);
     assertThat(configuration.getRestAddress()).isEqualTo(REST_API_ADDRESS);
   }
@@ -105,15 +103,15 @@ public class JunitExtensionTest {
     when(connectorsContainer.getRestApiAddress()).thenReturn(connectorsRestApiAddress);
 
     final CamundaProcessTestExtension extension =
-        new CamundaProcessTestExtension(camundaContainerRuntimeBuilder);
+        new CamundaProcessTestExtension(camundaContainerRuntimeBuilder, NOOP);
 
     // when
     extension.beforeEach(extensionContext);
 
     // then
     assertThat(camundaProcessTestContext).isNotNull();
-    assertThat(camundaProcessTestContext.getZeebeGrpcAddress()).isEqualTo(GRPC_API_ADDRESS);
-    assertThat(camundaProcessTestContext.getZeebeRestAddress()).isEqualTo(REST_API_ADDRESS);
+    assertThat(camundaProcessTestContext.getCamundaGrpcAddress()).isEqualTo(GRPC_API_ADDRESS);
+    assertThat(camundaProcessTestContext.getCamundaRestAddress()).isEqualTo(REST_API_ADDRESS);
     assertThat(camundaProcessTestContext.getConnectorsAddress())
         .isEqualTo(connectorsRestApiAddress);
   }
@@ -122,16 +120,16 @@ public class JunitExtensionTest {
   void shouldCreateZeebeClientFromContext() throws Exception {
     // given
     final CamundaProcessTestExtension extension =
-        new CamundaProcessTestExtension(camundaContainerRuntimeBuilder);
+        new CamundaProcessTestExtension(camundaContainerRuntimeBuilder, NOOP);
 
     // when
     extension.beforeEach(extensionContext);
 
     // then
-    final ZeebeClient newZeebeClient = camundaProcessTestContext.createClient();
-    assertThat(newZeebeClient).isNotNull();
+    final CamundaClient newCamundaClient = camundaProcessTestContext.createClient();
+    assertThat(newCamundaClient).isNotNull();
 
-    final ZeebeClientConfiguration configuration = newZeebeClient.getConfiguration();
+    final CamundaClientConfiguration configuration = newCamundaClient.getConfiguration();
     assertThat(configuration.getGrpcAddress()).isEqualTo(GRPC_API_ADDRESS);
     assertThat(configuration.getRestAddress()).isEqualTo(REST_API_ADDRESS);
   }
@@ -140,17 +138,17 @@ public class JunitExtensionTest {
   void shouldCreateCustomZeebeClientFromContext() throws Exception {
     // given
     final CamundaProcessTestExtension extension =
-        new CamundaProcessTestExtension(camundaContainerRuntimeBuilder);
+        new CamundaProcessTestExtension(camundaContainerRuntimeBuilder, NOOP);
 
     // when
     extension.beforeEach(extensionContext);
 
     // then
-    final ZeebeClient newZeebeClient =
+    final CamundaClient newCamundaClient =
         camundaProcessTestContext.createClient(builder -> builder.defaultJobWorkerName("test"));
-    assertThat(newZeebeClient).isNotNull();
+    assertThat(newCamundaClient).isNotNull();
 
-    final ZeebeClientConfiguration configuration = newZeebeClient.getConfiguration();
+    final CamundaClientConfiguration configuration = newCamundaClient.getConfiguration();
     assertThat(configuration.getGrpcAddress()).isEqualTo(GRPC_API_ADDRESS);
     assertThat(configuration.getRestAddress()).isEqualTo(REST_API_ADDRESS);
     assertThat(configuration.getDefaultJobWorkerName()).isEqualTo("test");
@@ -160,7 +158,7 @@ public class JunitExtensionTest {
   void shouldStartAndCloseRuntime() throws Exception {
     // given
     final CamundaProcessTestExtension extension =
-        new CamundaProcessTestExtension(camundaContainerRuntimeBuilder);
+        new CamundaProcessTestExtension(camundaContainerRuntimeBuilder, NOOP);
 
     // when
     extension.beforeEach(extensionContext);
@@ -175,7 +173,7 @@ public class JunitExtensionTest {
   void shouldStoreRuntimeAndContext() throws Exception {
     // given
     final CamundaProcessTestExtension extension =
-        new CamundaProcessTestExtension(camundaContainerRuntimeBuilder);
+        new CamundaProcessTestExtension(camundaContainerRuntimeBuilder, NOOP);
 
     // when
     extension.beforeEach(extensionContext);
@@ -189,36 +187,34 @@ public class JunitExtensionTest {
   void shouldConfigureRuntime() throws Exception {
     // given
     final String camundaVersion = "camunda-version";
-    final String zeebeDockerImageName = "zeebe-docker-image-name";
-    final Map<String, String> zeebeEnvVars = new HashMap<>();
-    zeebeEnvVars.put("env-1", "test-1");
-    zeebeEnvVars.put("env-2", "test-2");
+    final String camundaDockerImageName = "camunda-docker-image-name";
+    final Map<String, String> camundaEnvVars = new HashMap<>();
+    camundaEnvVars.put("env-1", "test-1");
+    camundaEnvVars.put("env-2", "test-2");
 
     final CamundaProcessTestExtension extension =
-        new CamundaProcessTestExtension(camundaContainerRuntimeBuilder)
+        new CamundaProcessTestExtension(camundaContainerRuntimeBuilder, NOOP)
             .withCamundaVersion(camundaVersion)
-            .withZeebeDockerImageName(zeebeDockerImageName)
-            .withZeebeEnv(zeebeEnvVars)
-            .withZeebeEnv("env-3", "test-3")
-            .withZeebeExposedPort(100)
-            .withZeebeExposedPort(200);
+            .withCamundaDockerImageName(camundaDockerImageName)
+            .withCamundaEnv(camundaEnvVars)
+            .withCamundaEnv("env-3", "test-3")
+            .withCamundaExposedPort(100)
+            .withCamundaExposedPort(200);
 
     // when
     extension.beforeEach(extensionContext);
 
     // then
-    verify(camundaContainerRuntimeBuilder).withZeebeDockerImageVersion(camundaVersion);
-    verify(camundaContainerRuntimeBuilder).withOperateDockerImageVersion(camundaVersion);
-    verify(camundaContainerRuntimeBuilder).withTasklistDockerImageVersion(camundaVersion);
+    verify(camundaContainerRuntimeBuilder).withCamundaDockerImageVersion(camundaVersion);
     verify(camundaContainerRuntimeBuilder).withConnectorsDockerImageVersion(camundaVersion);
 
-    verify(camundaContainerRuntimeBuilder).withZeebeDockerImageName(zeebeDockerImageName);
+    verify(camundaContainerRuntimeBuilder).withCamundaDockerImageName(camundaDockerImageName);
 
-    verify(camundaContainerRuntimeBuilder).withZeebeEnv(zeebeEnvVars);
-    verify(camundaContainerRuntimeBuilder).withZeebeEnv("env-3", "test-3");
+    verify(camundaContainerRuntimeBuilder).withCamundaEnv(camundaEnvVars);
+    verify(camundaContainerRuntimeBuilder).withCamundaEnv("env-3", "test-3");
 
-    verify(camundaContainerRuntimeBuilder).withZeebeExposedPort(100);
-    verify(camundaContainerRuntimeBuilder).withZeebeExposedPort(200);
+    verify(camundaContainerRuntimeBuilder).withCamundaExposedPort(100);
+    verify(camundaContainerRuntimeBuilder).withCamundaExposedPort(200);
   }
 
   @Test
@@ -231,7 +227,7 @@ public class JunitExtensionTest {
     connectorsEnvVars.put("env-2", "test-2");
 
     final CamundaProcessTestExtension extension =
-        new CamundaProcessTestExtension(camundaContainerRuntimeBuilder)
+        new CamundaProcessTestExtension(camundaContainerRuntimeBuilder, NOOP)
             .withConnectorsEnabled(true)
             .withConnectorsDockerImageName(connectorsDockerImageName)
             .withConnectorsDockerImageVersion(connectorsVersion)
@@ -254,5 +250,40 @@ public class JunitExtensionTest {
 
     verify(camundaContainerRuntimeBuilder).withConnectorsSecret("secret-1", "1");
     verify(camundaContainerRuntimeBuilder).withConnectorsSecret("secret-2", "2");
+  }
+
+  @Test
+  void shouldPrintResultIfTestFailed() throws Exception {
+    // given
+    final StringBuilder outputBuilder = new StringBuilder();
+    final CamundaProcessTestExtension extension =
+        new CamundaProcessTestExtension(camundaContainerRuntimeBuilder, outputBuilder::append);
+
+    // when
+    extension.beforeEach(extensionContext);
+
+    when(extensionContext.getExecutionException())
+        .thenReturn(Optional.of(new AssertionError("test failure (expected)")));
+    extension.afterEach(extensionContext);
+
+    // then
+    assertThat(outputBuilder.toString()).startsWith("Process test results");
+  }
+
+  @Test
+  void shouldNotPrintResultIfTestSuccessful() throws Exception {
+    // given
+    final StringBuilder outputBuilder = new StringBuilder();
+    final CamundaProcessTestExtension extension =
+        new CamundaProcessTestExtension(camundaContainerRuntimeBuilder, outputBuilder::append);
+
+    // when
+    extension.beforeEach(extensionContext);
+
+    when(extensionContext.getExecutionException()).thenReturn(Optional.empty());
+    extension.afterEach(extensionContext);
+
+    // then
+    assertThat(outputBuilder.toString()).isEmpty();
   }
 }

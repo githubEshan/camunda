@@ -7,10 +7,10 @@
  */
 package io.camunda.zeebe.test;
 
-import io.camunda.zeebe.client.ZeebeClient;
+import io.camunda.client.CamundaClient;
 import io.camunda.zeebe.qa.util.actuator.PartitionsActuator;
-import io.camunda.zeebe.qa.util.testcontainers.RemoteDebugger;
 import io.camunda.zeebe.qa.util.testcontainers.ZeebeTestContainerDefaults;
+import io.camunda.zeebe.test.testcontainers.RemoteDebugger;
 import io.camunda.zeebe.util.VersionUtil;
 import io.zeebe.containers.ZeebeContainer;
 import io.zeebe.containers.ZeebeGatewayContainer;
@@ -62,7 +62,7 @@ final class ContainerState implements CloseableResource {
   private Network network = Network.SHARED;
   private ZeebeContainer broker;
   private ZeebeGatewayContainer gateway;
-  private ZeebeClient client;
+  private CamundaClient client;
   private PartitionsActuator partitionsActuator;
 
   private DockerImageName brokerImage;
@@ -72,7 +72,7 @@ final class ContainerState implements CloseableResource {
   private String withUser;
   private String withVersionOverride;
 
-  ZeebeClient client() {
+  CamundaClient client() {
     return client;
   }
 
@@ -180,7 +180,7 @@ final class ContainerState implements CloseableResource {
       contactPoint = gateway.getExternalGatewayAddress();
     }
 
-    client = ZeebeClient.newClientBuilder().gatewayAddress(contactPoint).usePlaintext().build();
+    client = CamundaClient.newClientBuilder().gatewayAddress(contactPoint).usePlaintext().build();
     partitionsActuator = PartitionsActuator.of(broker);
   }
 

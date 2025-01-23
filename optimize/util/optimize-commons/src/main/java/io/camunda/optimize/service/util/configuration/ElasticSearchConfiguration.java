@@ -16,12 +16,12 @@ import io.camunda.optimize.service.util.configuration.db.DatabaseConnection;
 import io.camunda.optimize.service.util.configuration.db.DatabaseSecurity;
 import io.camunda.optimize.service.util.configuration.db.DatabaseSettings;
 import io.camunda.optimize.service.util.configuration.elasticsearch.DatabaseConnectionNodeConfiguration;
+import io.camunda.search.connect.plugin.PluginConfiguration;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
-import lombok.Data;
 
-@Data
 public class ElasticSearchConfiguration {
 
   private DatabaseConnection connection;
@@ -33,6 +33,10 @@ public class ElasticSearchConfiguration {
   private int scrollTimeoutInSeconds;
 
   private DatabaseSettings settings;
+
+  private Map<String, PluginConfiguration> interceptorPlugins;
+
+  public ElasticSearchConfiguration() {}
 
   @JsonIgnore
   public Integer getConnectionTimeout() {
@@ -46,7 +50,7 @@ public class ElasticSearchConfiguration {
 
   @JsonIgnore
   public ProxyConfiguration getProxyConfig() {
-    ProxyConfiguration proxyConfiguration = connection.getProxy();
+    final ProxyConfiguration proxyConfiguration = connection.getProxy();
     if (proxyConfiguration != null) {
       proxyConfiguration.validate();
     }
@@ -69,6 +73,11 @@ public class ElasticSearchConfiguration {
   }
 
   @JsonIgnore
+  public void setRefreshInterval(final String refreshInterval) {
+    settings.getIndex().setRefreshInterval(refreshInterval);
+  }
+
+  @JsonIgnore
   public Integer getNumberOfShards() {
     return settings.getIndex().getNumberOfShards();
   }
@@ -79,10 +88,20 @@ public class ElasticSearchConfiguration {
   }
 
   @JsonIgnore
+  public void setNumberOfReplicas(final int replicaCount) {
+    settings.getIndex().setNumberOfReplicas(replicaCount);
+  }
+
+  @JsonIgnore
   public Integer getNestedDocumentsLimit() {
-    Integer values = settings.getIndex().getNestedDocumentsLimit();
+    final Integer values = settings.getIndex().getNestedDocumentsLimit();
     ensureGreaterThanZero(values);
     return values;
+  }
+
+  @JsonIgnore
+  public void setNestedDocumentsLimit(final int nestedDocumentLimit) {
+    settings.getIndex().setNestedDocumentsLimit(nestedDocumentLimit);
   }
 
   @JsonIgnore
@@ -121,7 +140,7 @@ public class ElasticSearchConfiguration {
 
   @JsonIgnore
   public List<String> getSecuritySSLCertificateAuthorities() {
-    List<String> securitySSLCertificateAuthorities =
+    final List<String> securitySSLCertificateAuthorities =
         security.getSsl().getCertificateAuthorities().stream()
             .map(a -> resolvePathAsAbsoluteUrl(a).getPath())
             .toList();
@@ -139,6 +158,11 @@ public class ElasticSearchConfiguration {
   }
 
   @JsonIgnore
+  public void setAggregationBucketLimit(final int bucketLimit) {
+    settings.setAggregationBucketLimit(bucketLimit);
+  }
+
+  @JsonIgnore
   public DatabaseConnectionNodeConfiguration getFirstConnectionNode() {
     return getConnectionNodes().get(0);
   }
@@ -149,27 +173,83 @@ public class ElasticSearchConfiguration {
   }
 
   @JsonIgnore
-  public void setAggregationBucketLimit(final int bucketLimit) {
-    settings.setAggregationBucketLimit(bucketLimit);
-  }
-
-  @JsonIgnore
   public void setIndexPrefix(final String prefix) {
     settings.getIndex().setPrefix(prefix);
   }
 
-  @JsonIgnore
-  public void setRefreshInterval(final String refreshInterval) {
-    settings.getIndex().setRefreshInterval(refreshInterval);
+  public DatabaseConnection getConnection() {
+    return this.connection;
   }
 
-  @JsonIgnore
-  public void setNumberOfReplicas(final int replicaCount) {
-    settings.getIndex().setNumberOfReplicas(replicaCount);
+  public DatabaseBackup getBackup() {
+    return this.backup;
   }
 
-  @JsonIgnore
-  public void setNestedDocumentsLimit(final int nestedDocumentLimit) {
-    settings.getIndex().setNestedDocumentsLimit(nestedDocumentLimit);
+  public DatabaseSecurity getSecurity() {
+    return this.security;
+  }
+
+  public int getScrollTimeoutInSeconds() {
+    return this.scrollTimeoutInSeconds;
+  }
+
+  public DatabaseSettings getSettings() {
+    return this.settings;
+  }
+
+  public Map<String, PluginConfiguration> getInterceptorPlugins() {
+    return this.interceptorPlugins;
+  }
+
+  public void setConnection(final DatabaseConnection connection) {
+    this.connection = connection;
+  }
+
+  public void setBackup(final DatabaseBackup backup) {
+    this.backup = backup;
+  }
+
+  public void setSecurity(final DatabaseSecurity security) {
+    this.security = security;
+  }
+
+  public void setScrollTimeoutInSeconds(final int scrollTimeoutInSeconds) {
+    this.scrollTimeoutInSeconds = scrollTimeoutInSeconds;
+  }
+
+  public void setSettings(final DatabaseSettings settings) {
+    this.settings = settings;
+  }
+
+  public void setInterceptorPlugins(final Map<String, PluginConfiguration> interceptorPlugins) {
+    this.interceptorPlugins = interceptorPlugins;
+  }
+
+  public boolean equals(final Object o) {
+    return org.apache.commons.lang3.builder.EqualsBuilder.reflectionEquals(this, o);
+  }
+
+  protected boolean canEqual(final Object other) {
+    return other instanceof ElasticSearchConfiguration;
+  }
+
+  public int hashCode() {
+    return org.apache.commons.lang3.builder.HashCodeBuilder.reflectionHashCode(this);
+  }
+
+  public String toString() {
+    return "ElasticSearchConfiguration(connection="
+        + this.getConnection()
+        + ", backup="
+        + this.getBackup()
+        + ", security="
+        + this.getSecurity()
+        + ", scrollTimeoutInSeconds="
+        + this.getScrollTimeoutInSeconds()
+        + ", settings="
+        + this.getSettings()
+        + ", interceptorPlugins="
+        + this.getInterceptorPlugins()
+        + ")";
   }
 }

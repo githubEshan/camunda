@@ -7,22 +7,18 @@
  */
 package io.camunda.operate.webapp.opensearch.reader;
 
-import static io.camunda.operate.entities.dmn.DecisionInstanceState.EVALUATED;
-import static io.camunda.operate.entities.dmn.DecisionInstanceState.FAILED;
-import static io.camunda.operate.schema.templates.DecisionInstanceTemplate.*;
 import static io.camunda.operate.store.opensearch.dsl.QueryDSL.*;
 import static io.camunda.operate.store.opensearch.dsl.RequestDSL.searchRequestBuilder;
 import static io.camunda.operate.util.CollectionUtil.toSafeListOfStrings;
 import static io.camunda.operate.webapp.rest.dto.dmn.list.DecisionInstanceListRequestDto.SORT_BY_PROCESS_INSTANCE_ID;
+import static io.camunda.webapps.schema.descriptors.operate.template.DecisionInstanceTemplate.*;
+import static io.camunda.webapps.schema.entities.operate.dmn.DecisionInstanceState.EVALUATED;
+import static io.camunda.webapps.schema.entities.operate.dmn.DecisionInstanceState.FAILED;
 import static java.util.stream.Collectors.groupingBy;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.camunda.operate.conditions.OpensearchCondition;
-import io.camunda.operate.entities.dmn.DecisionInstanceEntity;
-import io.camunda.operate.entities.dmn.DecisionInstanceState;
 import io.camunda.operate.property.OperateProperties;
-import io.camunda.operate.schema.indices.DecisionIndex;
-import io.camunda.operate.schema.templates.DecisionInstanceTemplate;
 import io.camunda.operate.store.NotFoundException;
 import io.camunda.operate.store.opensearch.client.sync.RichOpenSearchClient;
 import io.camunda.operate.util.CollectionUtil;
@@ -36,7 +32,11 @@ import io.camunda.operate.webapp.rest.dto.dmn.list.DecisionInstanceListQueryDto;
 import io.camunda.operate.webapp.rest.dto.dmn.list.DecisionInstanceListRequestDto;
 import io.camunda.operate.webapp.rest.dto.dmn.list.DecisionInstanceListResponseDto;
 import io.camunda.operate.webapp.security.identity.IdentityPermission;
-import io.camunda.operate.webapp.security.identity.PermissionsService;
+import io.camunda.operate.webapp.security.permission.PermissionsService;
+import io.camunda.webapps.schema.descriptors.operate.index.DecisionIndex;
+import io.camunda.webapps.schema.descriptors.operate.template.DecisionInstanceTemplate;
+import io.camunda.webapps.schema.entities.operate.dmn.DecisionInstanceEntity;
+import io.camunda.webapps.schema.entities.operate.dmn.DecisionInstanceState;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -52,7 +52,6 @@ import org.opensearch.client.opensearch.core.SearchRequest;
 import org.opensearch.client.opensearch.core.search.Hit;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Conditional;
 import org.springframework.stereotype.Component;
 
@@ -80,7 +79,7 @@ public class OpensearchDecisionInstanceReader implements DecisionInstanceReader 
       final DateTimeFormatter dateTimeFormatter,
       final ObjectMapper objectMapper,
       final OperateProperties operateProperties,
-      @Autowired(required = false) final PermissionsService permissionsService,
+      final PermissionsService permissionsService,
       final RichOpenSearchClient richOpenSearchClient) {
     this.decisionInstanceTemplate = decisionInstanceTemplate;
     this.dateTimeFormatter = dateTimeFormatter;
@@ -241,7 +240,7 @@ public class OpensearchDecisionInstanceReader implements DecisionInstanceReader 
   }
 
   private Query createReadPermissionQuery() {
-    if (permissionsService == null) {
+    if (!permissionsService.permissionsEnabled()) {
       return null;
     }
     final var allowed = permissionsService.getDecisionsWithPermission(IdentityPermission.READ);

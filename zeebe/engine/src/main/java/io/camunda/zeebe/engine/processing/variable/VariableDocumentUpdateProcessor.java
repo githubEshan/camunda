@@ -7,7 +7,8 @@
  */
 package io.camunda.zeebe.engine.processing.variable;
 
-import io.camunda.zeebe.auth.impl.TenantAuthorizationCheckerImpl;
+import io.camunda.zeebe.engine.processing.identity.AuthorizationCheckBehavior;
+import io.camunda.zeebe.engine.processing.identity.AuthorizationCheckBehavior.AuthorizationRequest;
 import io.camunda.zeebe.engine.processing.streamprocessor.TypedRecordProcessor;
 import io.camunda.zeebe.engine.processing.streamprocessor.writers.Writers;
 import io.camunda.zeebe.engine.state.immutable.ElementInstanceState;
@@ -16,6 +17,8 @@ import io.camunda.zeebe.msgpack.spec.MsgpackReaderException;
 import io.camunda.zeebe.protocol.impl.record.value.variable.VariableDocumentRecord;
 import io.camunda.zeebe.protocol.record.RejectionType;
 import io.camunda.zeebe.protocol.record.intent.VariableDocumentIntent;
+import io.camunda.zeebe.protocol.record.value.AuthorizationResourceType;
+import io.camunda.zeebe.protocol.record.value.PermissionType;
 import io.camunda.zeebe.protocol.record.value.VariableDocumentUpdateSemantic;
 import io.camunda.zeebe.stream.api.records.TypedRecord;
 import io.camunda.zeebe.stream.api.state.KeyGenerator;
@@ -31,16 +34,19 @@ public final class VariableDocumentUpdateProcessor
   private final KeyGenerator keyGenerator;
   private final VariableBehavior variableBehavior;
   private final Writers writers;
+  private final AuthorizationCheckBehavior authCheckBehavior;
 
   public VariableDocumentUpdateProcessor(
       final ElementInstanceState elementInstanceState,
       final KeyGenerator keyGenerator,
       final VariableBehavior variableBehavior,
-      final Writers writers) {
+      final Writers writers,
+      final AuthorizationCheckBehavior authCheckBehavior) {
     this.elementInstanceState = elementInstanceState;
     this.keyGenerator = keyGenerator;
     this.variableBehavior = variableBehavior;
     this.writers = writers;
+    this.authCheckBehavior = authCheckBehavior;
   }
 
   @Override
@@ -55,11 +61,25 @@ public final class VariableDocumentUpdateProcessor
       return;
     }
 
-    if (!TenantAuthorizationCheckerImpl.fromAuthorizationMap(record.getAuthorizations())
-        .isAuthorized(scope.getValue().getTenantId())) {
-      final String reason = String.format(ERROR_MESSAGE_SCOPE_NOT_FOUND, value.getScopeKey());
-      writers.rejection().appendRejection(record, RejectionType.NOT_FOUND, reason);
-      writers.response().writeRejectionOnCommand(record, RejectionType.NOT_FOUND, reason);
+    final var authRequest =
+        new AuthorizationRequest(
+                record,
+                AuthorizationResourceType.PROCESS_DEFINITION,
+                PermissionType.UPDATE_PROCESS_INSTANCE,
+                scope.getValue().getTenantId())
+            .addResourceId(scope.getValue().getBpmnProcessId());
+    final var isAuthorized = authCheckBehavior.isAuthorized(authRequest);
+    if (isAuthorized.isLeft()) {
+      final var rejection = isAuthorized.getLeft();
+      final String errorMessage =
+          RejectionType.NOT_FOUND.equals(rejection.type())
+              ? AuthorizationCheckBehavior.NOT_FOUND_ERROR_MESSAGE.formatted(
+                  "update variables for element",
+                  scope.getValue().getProcessInstanceKey(),
+                  "such element")
+              : rejection.reason();
+      writers.rejection().appendRejection(record, rejection.type(), errorMessage);
+      writers.response().writeRejectionOnCommand(record, rejection.type(), errorMessage);
       return;
     }
 

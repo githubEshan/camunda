@@ -13,10 +13,10 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-import io.camunda.operate.schema.templates.SequenceFlowTemplate;
 import io.camunda.operate.util.OperateZeebeAbstractIT;
 import io.camunda.operate.util.ZeebeTestUtil;
 import io.camunda.operate.webapp.rest.dto.SequenceFlowDto;
+import io.camunda.webapps.schema.descriptors.operate.template.SequenceFlowTemplate;
 import io.camunda.zeebe.model.bpmn.Bpmn;
 import io.camunda.zeebe.model.bpmn.BpmnModelInstance;
 import java.util.List;
@@ -48,9 +48,9 @@ public class SequenceFlowZeebeImportIT extends OperateZeebeAbstractIT {
 
     final Long processInstanceKey =
         ZeebeTestUtil.startProcessInstance(
-            zeebeClient, processId, "{\"var1\": \"initialValue\", \"otherVar\": 123}");
+            camundaClient, processId, "{\"var1\": \"initialValue\", \"otherVar\": 123}");
     searchTestRule.processAllRecordsAndWait(flowNodeIsActiveCheck, processInstanceKey, "task1");
-    ZeebeTestUtil.completeTask(zeebeClient, "task1", getWorkerName(), null);
+    ZeebeTestUtil.completeTask(camundaClient, "task1", getWorkerName(), null);
     searchTestRule.processAllRecordsAndWait(flowNodeIsActiveCheck, processInstanceKey, "task2");
 
     // when

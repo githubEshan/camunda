@@ -7,44 +7,45 @@
  */
 package io.camunda.optimize.upgrade.steps.document;
 
+import io.camunda.optimize.service.db.DatabaseQueryWrapper;
 import io.camunda.optimize.service.db.schema.IndexMappingCreator;
-import io.camunda.optimize.upgrade.es.SchemaUpgradeClient;
+import io.camunda.optimize.service.exceptions.OptimizeRuntimeException;
+import io.camunda.optimize.upgrade.db.SchemaUpgradeClient;
 import io.camunda.optimize.upgrade.steps.UpgradeStep;
 import io.camunda.optimize.upgrade.steps.UpgradeStepType;
 import java.util.Map;
 import java.util.concurrent.Callable;
-import lombok.EqualsAndHashCode;
-import lombok.SneakyThrows;
-import org.elasticsearch.index.query.QueryBuilder;
 
-@EqualsAndHashCode(callSuper = true)
 public class UpdateDataStep extends UpgradeStep {
-  private final QueryBuilder query;
+
+  private final DatabaseQueryWrapper queryWrapper;
   private final String updateScript;
   private Map<String, Object> parameters;
   private final Callable<Map<String, Object>> paramMapProvider;
 
   public UpdateDataStep(
-      final IndexMappingCreator index, final QueryBuilder query, final String updateScript) {
-    this(index, query, updateScript, null, null);
+      final IndexMappingCreator index,
+      final DatabaseQueryWrapper queryWrapper,
+      final String updateScript) {
+    this(index, queryWrapper, updateScript, null, null);
   }
 
   public UpdateDataStep(
       final IndexMappingCreator index,
-      final QueryBuilder query,
+      final DatabaseQueryWrapper queryWrapper,
       final String updateScript,
       final Map<String, Object> parameters) {
-    this(index, query, updateScript, parameters, null);
+    this(index, queryWrapper, updateScript, parameters, null);
   }
 
   public UpdateDataStep(
       final IndexMappingCreator index,
-      final QueryBuilder query,
+      final DatabaseQueryWrapper queryWrapper,
       final String updateScript,
       final Map<String, Object> parameters,
       final Callable<Map<String, Object>> paramMapProvider) {
     super(index);
-    this.query = query;
+    this.queryWrapper = queryWrapper;
     this.updateScript = updateScript;
     this.parameters = parameters;
     this.paramMapProvider = paramMapProvider;
@@ -56,11 +57,29 @@ public class UpdateDataStep extends UpgradeStep {
   }
 
   @Override
-  @SneakyThrows
-  public void execute(SchemaUpgradeClient schemaUpgradeClient) {
+  public void performUpgradeStep(final SchemaUpgradeClient<?, ?, ?> schemaUpgradeClient) {
     if (paramMapProvider != null) {
-      parameters = paramMapProvider.call();
+      try {
+        parameters = paramMapProvider.call();
+      } catch (final Exception e) {
+        throw new OptimizeRuntimeException(e);
+      }
     }
-    schemaUpgradeClient.updateDataByIndexName(index, query, updateScript, parameters);
+    schemaUpgradeClient.updateDataByIndexName(index, queryWrapper, updateScript, parameters);
+  }
+
+  @Override
+  protected boolean canEqual(final Object other) {
+    return other instanceof UpdateDataStep;
+  }
+
+  @Override
+  public int hashCode() {
+    return org.apache.commons.lang3.builder.HashCodeBuilder.reflectionHashCode(this);
+  }
+
+  @Override
+  public boolean equals(final Object o) {
+    return org.apache.commons.lang3.builder.EqualsBuilder.reflectionEquals(this, o);
   }
 }

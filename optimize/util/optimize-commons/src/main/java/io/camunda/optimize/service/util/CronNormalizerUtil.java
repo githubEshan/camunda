@@ -7,14 +7,12 @@
  */
 package io.camunda.optimize.service.util;
 
-import lombok.AccessLevel;
-import lombok.NoArgsConstructor;
+public final class CronNormalizerUtil {
 
-@NoArgsConstructor(access = AccessLevel.PRIVATE)
-public class CronNormalizerUtil {
+  private CronNormalizerUtil() {}
 
-  public static String normalizeToSixParts(String cronTrigger) {
-    String[] cronParts = cronTrigger.split(" ");
+  public static String normalizeToSixParts(final String cronTrigger) {
+    final String[] cronParts = cronTrigger.split(" ");
     if (cronParts.length < 6) {
       return "0 " + cronTrigger;
     } else {

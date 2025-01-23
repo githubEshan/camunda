@@ -19,22 +19,23 @@ import org.springframework.stereotype.Component;
 @Component
 @Scope(value = ConfigurableBeanFactory.SCOPE_PROTOTYPE)
 public class BackoffCalculator {
+
   private static final double BACKOFF_MULTIPLIER = 1.5;
 
   private long currentTimeToWait;
-  private long initialBackoff;
+  private final long initialBackoff;
   private OffsetDateTime nextRetryTime = OffsetDateTime.now().minusMinutes(1L);
-  private long maximumBackoff;
+  private final long maximumBackoff;
 
   @Autowired
   public BackoffCalculator(final ConfigurationService configurationService) {
     this(configurationService.getMaximumBackoff(), configurationService.getInitialBackoff());
   }
 
-  public BackoffCalculator(long maximumBackoffSeconds, long initialBackoffMillis) {
-    this.maximumBackoff = maximumBackoffSeconds * 1000;
-    this.currentTimeToWait = initialBackoffMillis;
-    this.initialBackoff = initialBackoffMillis;
+  public BackoffCalculator(final long maximumBackoffSeconds, final long initialBackoffMillis) {
+    maximumBackoff = maximumBackoffSeconds * 1000;
+    currentTimeToWait = initialBackoffMillis;
+    initialBackoff = initialBackoffMillis;
   }
 
   public boolean isMaximumBackoffReached() {
@@ -43,8 +44,9 @@ public class BackoffCalculator {
 
   public long calculateSleepTime() {
     currentTimeToWait =
-        Math.min(Math.round(currentTimeToWait * BACKOFF_MULTIPLIER), maximumBackoff);
-    nextRetryTime = OffsetDateTime.now().plus(Math.round(currentTimeToWait), ChronoUnit.MILLIS);
+        Math.min(Math.round((double) currentTimeToWait * BACKOFF_MULTIPLIER), maximumBackoff);
+    nextRetryTime =
+        OffsetDateTime.now().plus(Math.round((double) currentTimeToWait), ChronoUnit.MILLIS);
     return currentTimeToWait;
   }
 

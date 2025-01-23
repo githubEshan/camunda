@@ -19,6 +19,7 @@ import io.camunda.identity.sdk.Identity;
 import io.camunda.identity.sdk.users.Users;
 import io.camunda.identity.sdk.users.dto.User;
 import io.camunda.optimize.dto.optimize.UserDto;
+import io.camunda.optimize.service.exceptions.OptimizeRuntimeException;
 import io.camunda.optimize.service.security.CCSMTokenService;
 import io.camunda.optimize.service.util.configuration.ConfigurationService;
 import java.lang.reflect.Field;
@@ -30,7 +31,6 @@ import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
-import lombok.SneakyThrows;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -45,6 +45,7 @@ import org.mockito.quality.Strictness;
 @ExtendWith(MockitoExtension.class)
 @MockitoSettings(strictness = Strictness.LENIENT)
 public class CCSMUserCacheTest {
+
   public static final String ACCESS_TOKEN = "testToken";
   public static final UserDto TEST_USER_1 =
       new UserDto("123", "Donna Noble", "donna@email.com", Collections.emptyList());
@@ -61,7 +62,6 @@ public class CCSMUserCacheTest {
 
   private CCSMUserCache underTest;
 
-  @SneakyThrows
   @BeforeEach
   public void setup() {
     when(configurationService.getCaches().getUsers().getMaxSize()).thenReturn(10000);
@@ -78,11 +78,15 @@ public class CCSMUserCacheTest {
                 HierarchyTraversalMode.TOP_DOWN)
             .get(0);
     ccsmUsersCacheField.setAccessible(true);
-    ccsmUsersCacheField.set(underTest, ccsmUsersCache);
+    try {
+      ccsmUsersCacheField.set(underTest, ccsmUsersCache);
+    } catch (final IllegalAccessException e) {
+      throw new OptimizeRuntimeException(e);
+    }
   }
 
   @Test
-  public void searchesUserCacheWithSearchString_oneMatch() {
+  public void searchesUserCacheWithSearchStringOneMatch() {
     // given
     when(ccsmUsersCache.asMap())
         .thenReturn(
@@ -101,7 +105,7 @@ public class CCSMUserCacheTest {
   }
 
   @Test
-  public void searchesUserCacheWithSearchString_multipleMatches() {
+  public void searchesUserCacheWithSearchStringMultipleMatches() {
     // given
     when(ccsmUsersCache.asMap())
         .thenReturn(
@@ -136,7 +140,7 @@ public class CCSMUserCacheTest {
   }
 
   @Test
-  public void searchForUsersInCacheUsingEmail_oneEmail() {
+  public void searchForUsersInCacheUsingEmailOneEmail() {
     // given
     when(ccsmUsersCache.asMap())
         .thenReturn(
@@ -155,7 +159,7 @@ public class CCSMUserCacheTest {
   }
 
   @Test
-  public void searchForUsersInCacheUsingEmail_multipleEmails_multipleMatches() {
+  public void searchForUsersInCacheUsingEmailMultipleEmailsMultipleMatches() {
     // given
     when(ccsmUsersCache.asMap())
         .thenReturn(
@@ -175,7 +179,7 @@ public class CCSMUserCacheTest {
   }
 
   @Test
-  public void searchForUsersInCacheUsingEmail_multipleEmails_oneMatch() {
+  public void searchForUsersInCacheUsingEmailMultipleEmailsOneMatch() {
     // given
     when(ccsmUsersCache.asMap())
         .thenReturn(
@@ -197,7 +201,7 @@ public class CCSMUserCacheTest {
   }
 
   @Test
-  public void searchForUsersInCacheUsingEmail_noPartialMatching() {
+  public void searchForUsersInCacheUsingEmailNoPartialMatching() {
     // given botch cache and identity contain users whose email matches the searchstring partially
     when(ccsmUsersCache.asMap())
         .thenReturn(

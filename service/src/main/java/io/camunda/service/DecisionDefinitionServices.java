@@ -7,47 +7,64 @@
  */
 package io.camunda.service;
 
-import static io.camunda.service.search.query.SearchQueryBuilders.decisionDefinitionSearchQuery;
-import static io.camunda.service.search.query.SearchQueryBuilders.decisionRequirementsSearchQuery;
+import static io.camunda.search.query.SearchQueryBuilders.decisionDefinitionSearchQuery;
+import static io.camunda.search.query.SearchQueryBuilders.decisionRequirementsSearchQuery;
 
-import io.camunda.search.clients.CamundaSearchClient;
-import io.camunda.service.entities.DecisionDefinitionEntity;
-import io.camunda.service.entities.DecisionRequirementsEntity;
-import io.camunda.service.exception.NotFoundException;
+import io.camunda.search.clients.DecisionDefinitionSearchClient;
+import io.camunda.search.clients.DecisionRequirementSearchClient;
+import io.camunda.search.entities.DecisionDefinitionEntity;
+import io.camunda.search.query.DecisionDefinitionQuery;
+import io.camunda.search.query.SearchQueryResult;
+import io.camunda.security.auth.Authentication;
+import io.camunda.security.auth.Authorization;
+import io.camunda.service.exception.ForbiddenException;
 import io.camunda.service.search.core.SearchQueryService;
-import io.camunda.service.search.query.DecisionDefinitionQuery;
-import io.camunda.service.search.query.SearchQueryResult;
-import io.camunda.service.security.auth.Authentication;
-import io.camunda.service.transformers.ServiceTransformers;
+import io.camunda.service.security.SecurityContextProvider;
 import io.camunda.util.ObjectBuilder;
 import io.camunda.zeebe.broker.client.api.BrokerClient;
+import io.camunda.zeebe.broker.client.api.dto.BrokerResponse;
+import io.camunda.zeebe.gateway.impl.broker.request.BrokerEvaluateDecisionRequest;
+import io.camunda.zeebe.protocol.impl.record.value.decision.DecisionEvaluationRecord;
+import java.util.Map;
+import java.util.concurrent.CompletableFuture;
 import java.util.function.Function;
 
 public final class DecisionDefinitionServices
     extends SearchQueryService<
         DecisionDefinitionServices, DecisionDefinitionQuery, DecisionDefinitionEntity> {
 
-  public DecisionDefinitionServices(
-      final BrokerClient brokerClient, final CamundaSearchClient dataStoreClient) {
-    this(brokerClient, dataStoreClient, null, null);
-  }
+  private final DecisionDefinitionSearchClient decisionDefinitionSearchClient;
+  private final DecisionRequirementSearchClient decisionRequirementSearchClient;
 
   public DecisionDefinitionServices(
       final BrokerClient brokerClient,
-      final CamundaSearchClient searchClient,
-      final ServiceTransformers transformers,
+      final SecurityContextProvider securityContextProvider,
+      final DecisionDefinitionSearchClient decisionDefinitionSearchClient,
+      final DecisionRequirementSearchClient decisionRequirementSearchClient,
       final Authentication authentication) {
-    super(brokerClient, searchClient, transformers, authentication);
+    super(brokerClient, securityContextProvider, authentication);
+    this.decisionDefinitionSearchClient = decisionDefinitionSearchClient;
+    this.decisionRequirementSearchClient = decisionRequirementSearchClient;
   }
 
   @Override
   public DecisionDefinitionServices withAuthentication(final Authentication authentication) {
-    return new DecisionDefinitionServices(brokerClient, searchClient, transformers, authentication);
+    return new DecisionDefinitionServices(
+        brokerClient,
+        securityContextProvider,
+        decisionDefinitionSearchClient,
+        decisionRequirementSearchClient,
+        authentication);
   }
 
   @Override
   public SearchQueryResult<DecisionDefinitionEntity> search(final DecisionDefinitionQuery query) {
-    return executor.search(query, DecisionDefinitionEntity.class);
+    return decisionDefinitionSearchClient
+        .withSecurityContext(
+            securityContextProvider.provideSecurityContext(
+                authentication,
+                Authorization.of(a -> a.decisionDefinition().readDecisionDefinition())))
+        .searchDecisionDefinitions(query);
   }
 
   public SearchQueryResult<DecisionDefinitionEntity> search(
@@ -55,34 +72,51 @@ public final class DecisionDefinitionServices
     return search(decisionDefinitionSearchQuery(fn));
   }
 
-  public String getDecisionDefinitionXml(final Long decisionKey) {
-    final var decisionDefinitionQuery =
-        decisionDefinitionSearchQuery(q -> q.filter(f -> f.decisionKeys(decisionKey)));
-    final var decisionDefinition =
-        search(decisionDefinitionQuery).items().stream()
-            .findFirst()
-            .orElseThrow(
-                () ->
-                    new NotFoundException(
-                        "DecisionDefinition with decisionKey=%d cannot be found"
-                            .formatted(decisionKey)));
+  public String getDecisionDefinitionXml(final long decisionKey) {
+    final var decisionDefinition = getByKey(decisionKey);
 
     final Long decisionRequirementsKey = decisionDefinition.decisionRequirementsKey();
     final var decisionRequirementsQuery =
         decisionRequirementsSearchQuery(
-            q ->
-                q.filter(f -> f.decisionRequirementsKeys(decisionRequirementsKey))
-                    .resultConfig(r -> r.xml().include()));
-    return executor
-        .search(decisionRequirementsQuery, DecisionRequirementsEntity.class)
-        .items()
-        .stream()
-        .findFirst()
-        .map(DecisionRequirementsEntity::xml)
-        .orElseThrow(
-            () ->
-                new NotFoundException(
-                    "DecisionRequirements with decisionRequirementsKey=%d cannot be found"
-                        .formatted(decisionRequirementsKey)));
+            q -> q.filter(f -> f.decisionRequirementsKeys(decisionRequirementsKey)));
+    final var decisionRequirements =
+        getSingleResultOrThrow(
+            decisionRequirementSearchClient
+                .withSecurityContext(securityContextProvider.provideSecurityContext(authentication))
+                .searchDecisionRequirements(decisionRequirementsQuery),
+            decisionRequirementsKey,
+            "Decision requirements");
+    return decisionRequirements.xml();
+  }
+
+  public DecisionDefinitionEntity getByKey(final long decisionKey) {
+    final var result =
+        decisionDefinitionSearchClient
+            .withSecurityContext(securityContextProvider.provideSecurityContext(authentication))
+            .searchDecisionDefinitions(
+                decisionDefinitionSearchQuery(
+                    q -> q.filter(f -> f.decisionDefinitionKeys(decisionKey))));
+    final var decisionDefinitionEntity =
+        getSingleResultOrThrow(result, decisionKey, "Decision definition");
+    final var authorization =
+        Authorization.of(a -> a.decisionDefinition().readDecisionDefinition());
+    if (!securityContextProvider.isAuthorized(
+        decisionDefinitionEntity.decisionDefinitionId(), authentication, authorization)) {
+      throw new ForbiddenException(authorization);
+    }
+    return decisionDefinitionEntity;
+  }
+
+  public CompletableFuture<BrokerResponse<DecisionEvaluationRecord>> evaluateDecision(
+      final String definitionId,
+      final Long definitionKey,
+      final Map<String, Object> variables,
+      final String tenantId) {
+    return sendBrokerRequestWithFullResponse(
+        new BrokerEvaluateDecisionRequest()
+            .setDecisionId(definitionId)
+            .setDecisionKey(definitionKey)
+            .setVariables(getDocumentOrEmpty(variables))
+            .setTenantId(tenantId));
   }
 }

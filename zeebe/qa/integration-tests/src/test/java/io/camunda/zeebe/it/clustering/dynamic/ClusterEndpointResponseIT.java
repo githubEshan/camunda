@@ -20,11 +20,16 @@ import org.junit.jupiter.api.Test;
 
 @ZeebeIntegration
 final class ClusterEndpointResponseIT {
-  @TestZeebe
-  static TestStandaloneBroker broker =
-      new TestStandaloneBroker()
-          .withBrokerConfig(
-              cfg -> cfg.getExperimental().getFeatures().setEnablePartitionScaling(true));
+  @TestZeebe(initMethod = "initTestStandaloneBroker")
+  static TestStandaloneBroker broker;
+
+  @SuppressWarnings("unused")
+  static void initTestStandaloneBroker() {
+    broker =
+        new TestStandaloneBroker()
+            .withBrokerConfig(
+                cfg -> cfg.getExperimental().getFeatures().setEnablePartitionScaling(true));
+  }
 
   @Test
   void shouldMatchExpectedSerialization() throws IOException, InterruptedException {
@@ -60,7 +65,10 @@ final class ClusterEndpointResponseIT {
             ],
             "routing": {
               "version": 1,
-              "activePartitions": [1],
+              "requestHandling": {
+                "strategy": "AllPartitions",
+                "partitionCount": 1
+              },
               "messageCorrelation": {
                 "strategy": "HashMod",
                 "partitionCount": 1

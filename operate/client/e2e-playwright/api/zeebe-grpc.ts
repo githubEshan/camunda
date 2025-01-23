@@ -108,7 +108,7 @@ class ZeebeGrpcApi {
     });
   };
 
-  completeTask = (
+  createWorker = (
     taskType: string,
     shouldFail: boolean,
     variables?: IOutputVariables,
@@ -130,6 +130,10 @@ class ZeebeGrpcApi {
 
   evaluateDecision = (evaluateDecisionRequest: EvaluateDecisionRequest) => {
     return this.zeebe.evaluateDecision(evaluateDecisionRequest);
+  };
+
+  broadcastSignal = (signalName: string) => {
+    return this.zeebe.broadcastSignal({signalName});
   };
 }
 

@@ -8,13 +8,65 @@
 package io.camunda.optimize.service.util.configuration;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
-import lombok.Data;
 
-@Data
 public class ExternalVariableConfiguration {
+
   private VariableIngestionConfiguration variableIngestion;
   private IndexRolloverConfiguration variableIndexRollover;
 
   @JsonProperty("import")
   private ExternalVariableImportConfiguration importConfiguration;
+
+  public ExternalVariableConfiguration() {}
+
+  public VariableIngestionConfiguration getVariableIngestion() {
+    return variableIngestion;
+  }
+
+  public void setVariableIngestion(final VariableIngestionConfiguration variableIngestion) {
+    this.variableIngestion = variableIngestion;
+  }
+
+  public IndexRolloverConfiguration getVariableIndexRollover() {
+    return variableIndexRollover;
+  }
+
+  public void setVariableIndexRollover(final IndexRolloverConfiguration variableIndexRollover) {
+    this.variableIndexRollover = variableIndexRollover;
+  }
+
+  public ExternalVariableImportConfiguration getImportConfiguration() {
+    return importConfiguration;
+  }
+
+  @JsonProperty("import")
+  public void setImportConfiguration(
+      final ExternalVariableImportConfiguration importConfiguration) {
+    this.importConfiguration = importConfiguration;
+  }
+
+  protected boolean canEqual(final Object other) {
+    return other instanceof ExternalVariableConfiguration;
+  }
+
+  @Override
+  public int hashCode() {
+    return org.apache.commons.lang3.builder.HashCodeBuilder.reflectionHashCode(this);
+  }
+
+  @Override
+  public boolean equals(final Object o) {
+    return org.apache.commons.lang3.builder.EqualsBuilder.reflectionEquals(this, o);
+  }
+
+  @Override
+  public String toString() {
+    return "ExternalVariableConfiguration(variableIngestion="
+        + getVariableIngestion()
+        + ", variableIndexRollover="
+        + getVariableIndexRollover()
+        + ", importConfiguration="
+        + getImportConfiguration()
+        + ")";
+  }
 }

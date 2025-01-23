@@ -71,10 +71,10 @@ public final class ActivatedJobImpl implements ActivatedJob {
   }
 
   public ActivatedJobImpl(
-      final JsonMapper jsonMapper, final io.camunda.zeebe.client.protocol.rest.ActivatedJob job) {
+      final JsonMapper jsonMapper, final io.camunda.client.protocol.rest.ActivatedJob job) {
     this.jsonMapper = jsonMapper;
 
-    key = getOrEmpty(job.getKey());
+    key = getOrEmpty(job.getJobKey());
     type = getOrEmpty(job.getType());
     customHeaders =
         job.getCustomHeaders() == null
@@ -93,7 +93,7 @@ public final class ActivatedJobImpl implements ActivatedJob {
     variablesAsMap = job.getVariables() == null ? new HashMap<>() : job.getVariables();
     variables = jsonMapper.toJson(variablesAsMap);
     processInstanceKey = getOrEmpty(job.getProcessInstanceKey());
-    bpmnProcessId = getOrEmpty(job.getBpmnProcessId());
+    bpmnProcessId = getOrEmpty(job.getProcessDefinitionId());
     processDefinitionVersion = getOrEmpty(job.getProcessDefinitionVersion());
     processDefinitionKey = getOrEmpty(job.getProcessDefinitionKey());
     elementId = getOrEmpty(job.getElementId());

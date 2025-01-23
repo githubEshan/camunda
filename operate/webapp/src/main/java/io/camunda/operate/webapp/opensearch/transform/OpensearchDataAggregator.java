@@ -7,23 +7,23 @@
  */
 package io.camunda.operate.webapp.opensearch.transform;
 
-import static io.camunda.operate.schema.templates.OperationTemplate.BATCH_OPERATION_ID;
-import static io.camunda.operate.schema.templates.OperationTemplate.BATCH_OPERATION_ID_AGGREGATION;
 import static io.camunda.operate.store.opensearch.dsl.QueryDSL.stringTerms;
 import static io.camunda.operate.store.opensearch.dsl.QueryDSL.term;
 import static io.camunda.operate.store.opensearch.dsl.RequestDSL.QueryType.ALL;
 import static io.camunda.operate.store.opensearch.dsl.RequestDSL.searchRequestBuilder;
+import static io.camunda.webapps.schema.descriptors.operate.template.OperationTemplate.BATCH_OPERATION_ID;
+import static io.camunda.webapps.schema.descriptors.operate.template.OperationTemplate.BATCH_OPERATION_ID_AGGREGATION;
 
 import io.camunda.operate.conditions.OpensearchCondition;
-import io.camunda.operate.entities.OperationEntity;
-import io.camunda.operate.entities.OperationState;
 import io.camunda.operate.exceptions.OperateRuntimeException;
-import io.camunda.operate.schema.templates.BatchOperationTemplate;
-import io.camunda.operate.schema.templates.OperationTemplate;
 import io.camunda.operate.store.opensearch.client.sync.RichOpenSearchClient;
 import io.camunda.operate.store.opensearch.dsl.AggregationDSL;
 import io.camunda.operate.webapp.rest.dto.operation.BatchOperationDto;
 import io.camunda.operate.webapp.transform.DataAggregator;
+import io.camunda.webapps.schema.descriptors.operate.template.BatchOperationTemplate;
+import io.camunda.webapps.schema.descriptors.operate.template.OperationTemplate;
+import io.camunda.webapps.schema.entities.operation.OperationEntity;
+import io.camunda.webapps.schema.entities.operation.OperationState;
 import java.util.List;
 import java.util.Map;
 import org.opensearch.client.opensearch._types.aggregations.Aggregate;

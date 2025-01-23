@@ -10,21 +10,24 @@ package io.camunda.optimize.dto.optimize.alert;
 import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonValue;
 import java.util.Locale;
-import lombok.AllArgsConstructor;
-import lombok.Getter;
 
-@AllArgsConstructor
-@Getter
 public enum AlertNotificationType {
   NEW("alert_new_triggered"),
   REMINDER("alert_reminder"),
-  RESOLVED("alert_resolved"),
-  ;
+  RESOLVED("alert_resolved");
 
   @JsonIgnore private final String utmSource;
+
+  private AlertNotificationType(final String utmSource) {
+    this.utmSource = utmSource;
+  }
 
   @JsonValue
   public String getId() {
     return name().toLowerCase(Locale.ENGLISH);
+  }
+
+  public String getUtmSource() {
+    return utmSource;
   }
 }

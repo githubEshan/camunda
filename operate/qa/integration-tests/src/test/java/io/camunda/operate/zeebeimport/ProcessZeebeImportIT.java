@@ -17,14 +17,14 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-import io.camunda.operate.entities.ProcessEntity;
-import io.camunda.operate.schema.indices.ProcessIndex;
+import io.camunda.client.CamundaClient;
 import io.camunda.operate.util.OperateZeebeAbstractIT;
 import io.camunda.operate.util.ZeebeTestUtil;
 import io.camunda.operate.webapp.reader.ProcessReader;
 import io.camunda.operate.webapp.rest.dto.ProcessGroupDto;
-import io.camunda.operate.webapp.security.identity.PermissionsService;
-import io.camunda.zeebe.client.ZeebeClient;
+import io.camunda.operate.webapp.security.permission.PermissionsService;
+import io.camunda.webapps.schema.descriptors.operate.index.ProcessIndex;
+import io.camunda.webapps.schema.entities.operate.ProcessEntity;
 import io.camunda.zeebe.model.bpmn.Bpmn;
 import io.camunda.zeebe.model.bpmn.BpmnModelInstance;
 import io.camunda.zeebe.model.bpmn.builder.ProcessBuilder;
@@ -49,6 +49,7 @@ public class ProcessZeebeImportIT extends OperateZeebeAbstractIT {
   @Before
   public void before() {
     super.before();
+    when(permissionsService.permissionsEnabled()).thenReturn(true);
     when(permissionsService.hasPermissionForProcess(any(), any())).thenReturn(true);
   }
 
@@ -171,16 +172,16 @@ public class ProcessZeebeImportIT extends OperateZeebeAbstractIT {
     assertThat(loanProcessProcessGroup.getProcesses().get(0).getId())
         .isEqualTo(loanProcessV1Id.toString());
 
-    verify(permissionsService, times(3)).getProcessDefinitionPermission(anyString());
+    verify(permissionsService, times(3)).getProcessDefinitionPermissions(anyString());
   }
 
   private Long createAndDeployProcess(
-      final ZeebeClient zeebeClient, final String bpmnProcessId, final String name) {
+      final CamundaClient camundaClient, final String bpmnProcessId, final String name) {
     ProcessBuilder executableProcess = Bpmn.createExecutableProcess(bpmnProcessId);
     if (name != null) {
       executableProcess = executableProcess.name(name);
     }
     final BpmnModelInstance demoProcess = executableProcess.startEvent().endEvent().done();
-    return ZeebeTestUtil.deployProcess(zeebeClient, null, demoProcess, "resource.bpmn");
+    return ZeebeTestUtil.deployProcess(camundaClient, null, demoProcess, "resource.bpmn");
   }
 }

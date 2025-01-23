@@ -8,10 +8,9 @@
 package io.camunda.optimize.service.util.configuration.security;
 
 import java.util.Optional;
-import lombok.Data;
 
-@Data
 public class CloudAuthConfiguration {
+
   // oauth client id to use by Optimize
   private String clientId;
   // oauth client secret to use by Optimize
@@ -35,7 +34,134 @@ public class CloudAuthConfiguration {
   // URL to request access tokens
   private String tokenUrl;
 
+  public CloudAuthConfiguration() {}
+
   public Optional<String> getUserAccessTokenAudience() {
     return Optional.ofNullable(userAccessTokenAudience);
+  }
+
+  public void setUserAccessTokenAudience(final String userAccessTokenAudience) {
+    this.userAccessTokenAudience = userAccessTokenAudience;
+  }
+
+  public String getClientId() {
+    return clientId;
+  }
+
+  public void setClientId(final String clientId) {
+    this.clientId = clientId;
+  }
+
+  public String getClientSecret() {
+    return clientSecret;
+  }
+
+  public void setClientSecret(final String clientSecret) {
+    this.clientSecret = clientSecret;
+  }
+
+  public String getDomain() {
+    return domain;
+  }
+
+  public void setDomain(final String domain) {
+    this.domain = domain;
+  }
+
+  public String getCustomDomain() {
+    return customDomain;
+  }
+
+  public void setCustomDomain(final String customDomain) {
+    this.customDomain = customDomain;
+  }
+
+  public String getUserIdAttributeName() {
+    return userIdAttributeName;
+  }
+
+  public void setUserIdAttributeName(final String userIdAttributeName) {
+    this.userIdAttributeName = userIdAttributeName;
+  }
+
+  public String getOrganizationClaimName() {
+    return organizationClaimName;
+  }
+
+  public void setOrganizationClaimName(final String organizationClaimName) {
+    this.organizationClaimName = organizationClaimName;
+  }
+
+  public String getOrganizationId() {
+    return organizationId;
+  }
+
+  public void setOrganizationId(final String organizationId) {
+    this.organizationId = organizationId;
+  }
+
+  public String getClusterId() {
+    return clusterId;
+  }
+
+  public void setClusterId(final String clusterId) {
+    this.clusterId = clusterId;
+  }
+
+  public String getAudience() {
+    return audience;
+  }
+
+  public void setAudience(final String audience) {
+    this.audience = audience;
+  }
+
+  public String getTokenUrl() {
+    return tokenUrl;
+  }
+
+  public void setTokenUrl(final String tokenUrl) {
+    this.tokenUrl = tokenUrl;
+  }
+
+  protected boolean canEqual(final Object other) {
+    return other instanceof CloudAuthConfiguration;
+  }
+
+  @Override
+  public int hashCode() {
+    return org.apache.commons.lang3.builder.HashCodeBuilder.reflectionHashCode(this);
+  }
+
+  @Override
+  public boolean equals(final Object o) {
+    return org.apache.commons.lang3.builder.EqualsBuilder.reflectionEquals(this, o);
+  }
+
+  @Override
+  public String toString() {
+    return "CloudAuthConfiguration(clientId="
+        + getClientId()
+        + ", clientSecret="
+        + getClientSecret()
+        + ", domain="
+        + getDomain()
+        + ", customDomain="
+        + getCustomDomain()
+        + ", userIdAttributeName="
+        + getUserIdAttributeName()
+        + ", organizationClaimName="
+        + getOrganizationClaimName()
+        + ", organizationId="
+        + getOrganizationId()
+        + ", clusterId="
+        + getClusterId()
+        + ", audience="
+        + getAudience()
+        + ", userAccessTokenAudience="
+        + getUserAccessTokenAudience()
+        + ", tokenUrl="
+        + getTokenUrl()
+        + ")";
   }
 }

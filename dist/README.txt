@@ -3,12 +3,16 @@ This is a distribution of Camunda ${project.version}
 How to run
 ==========
 
-Prerequisites:
+# With Elasticsearch:
+
+## Prerequisites:
+
 1. Download Elasticsearch ${version.elasticsearch} (from https://www.elastic.co/downloads/elasticsearch)
 2. For non-production cases, disable Elasticsearch's security packages by adding the configuration "xpack.security.enabled: false" in $ELASTICSEARCH_HOME/config/elasticsearch.yml
 3. Start Elasticsearch by running $ELASTICSEARCH_HOME/bin/elasticsearch (or $ELASTICSEARCH_HOME\bin\elasticsearch.bat on Windows)
 
-Start Camunda:
+## Start Camunda:
+
 1. Add the Elasticsearch exporter configuration in the configuration file config/application.yml
 
 zeebe:
@@ -20,3 +24,56 @@ zeebe:
           url: http://localhost:9200
 
 2. Run bin/camunda (or bin\camunda.bat on Windows)
+
+# With H2:
+
+## Prerequisites:
+
+No prerequisites needed
+
+## Start Camunda:
+
+Run camunda with `rdbmsH2` profile
+
+# With Postgres:
+
+## Prerequisites:
+
+Start Postgres docker container (docker compose file in db/rdbms):
+
+```
+docker-compose up -d postgres
+```
+
+## Start Camunda:
+
+Run camunda with `rdbmsPostgres` profile
+
+# With MariaDB:
+
+## Prerequisites:
+
+Start Postgres docker container (docker compose file in db/rdbms):
+
+```
+docker-compose up -d mariadb
+```
+
+## Start Camunda:
+
+Run camunda with `rdbmsMariaDB` profile
+
+# With Oracle:
+
+## Prerequisites:
+
+Start Oracle docker container (docker compose file in db/rdbms):
+
+```
+docker-compose up -d oracle
+```
+
+## Start Camunda:
+
+Run camunda with `rdbmsOracle` profile
+

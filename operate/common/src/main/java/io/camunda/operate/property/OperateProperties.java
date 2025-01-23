@@ -8,6 +8,7 @@
 package io.camunda.operate.property;
 
 import io.camunda.operate.conditions.DatabaseInfo;
+import io.camunda.operate.conditions.DatabaseType;
 import java.util.List;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.context.properties.ConfigurationProperties;
@@ -30,7 +31,6 @@ public class OperateProperties {
   private static final String UNKNOWN_VERSION = "unknown-version";
 
   private boolean importerEnabled = true;
-  private boolean archiverEnabled = true;
   private boolean webappEnabled = true;
 
   private boolean rfc3339ApiDateFormat = false;
@@ -60,7 +60,7 @@ public class OperateProperties {
   private String version = UNKNOWN_VERSION;
 
   @NestedConfigurationProperty
-  private final OperateElasticsearchProperties elasticsearch = new OperateElasticsearchProperties();
+  private OperateElasticsearchProperties elasticsearch = new OperateElasticsearchProperties();
 
   @NestedConfigurationProperty
   private OperateOpensearchProperties opensearch = new OperateOpensearchProperties();
@@ -77,8 +77,6 @@ public class OperateProperties {
   private OperationExecutorProperties operationExecutor = new OperationExecutorProperties();
 
   @NestedConfigurationProperty private ImportProperties importer = new ImportProperties();
-
-  @NestedConfigurationProperty private ArchiverProperties archiver = new ArchiverProperties();
 
   @NestedConfigurationProperty
   private ClusterNodeProperties clusterNode = new ClusterNodeProperties();
@@ -100,23 +98,12 @@ public class OperateProperties {
   @NestedConfigurationProperty
   private WebSecurityProperties webSecurity = new WebSecurityProperties();
 
-  @NestedConfigurationProperty
-  private MultiTenancyProperties multiTenancy = new MultiTenancyProperties();
-
   public boolean isImporterEnabled() {
     return importerEnabled;
   }
 
   public void setImporterEnabled(final boolean importerEnabled) {
     this.importerEnabled = importerEnabled;
-  }
-
-  public boolean isArchiverEnabled() {
-    return archiverEnabled;
-  }
-
-  public void setArchiverEnabled(final boolean archiverEnabled) {
-    this.archiverEnabled = archiverEnabled;
   }
 
   public boolean isWebappEnabled() {
@@ -145,6 +132,10 @@ public class OperateProperties {
 
   public OperateElasticsearchProperties getElasticsearch() {
     return elasticsearch;
+  }
+
+  public void setElasticsearch(final OperateElasticsearchProperties elasticsearch) {
+    this.elasticsearch = elasticsearch;
   }
 
   public OperateOpensearchProperties getOpensearch() {
@@ -225,14 +216,6 @@ public class OperateProperties {
 
   public void setImporter(final ImportProperties importer) {
     this.importer = importer;
-  }
-
-  public ArchiverProperties getArchiver() {
-    return archiver;
-  }
-
-  public void setArchiver(final ArchiverProperties archiver) {
-    this.archiver = archiver;
   }
 
   public ClusterNodeProperties getClusterNode() {
@@ -348,15 +331,6 @@ public class OperateProperties {
     return this;
   }
 
-  public MultiTenancyProperties getMultiTenancy() {
-    return multiTenancy;
-  }
-
-  public OperateProperties setMultiTenancy(final MultiTenancyProperties multiTenancy) {
-    this.multiTenancy = multiTenancy;
-    return this;
-  }
-
   public boolean isRfc3339ApiDateFormat() {
     return rfc3339ApiDateFormat;
   }
@@ -365,19 +339,15 @@ public class OperateProperties {
     this.rfc3339ApiDateFormat = rfc3339ApiDateFormat;
   }
 
+  public String getIndexPrefix(final DatabaseType databaseType) {
+    return switch (databaseType) {
+      case Elasticsearch -> getElasticsearch() == null ? null : getElasticsearch().getIndexPrefix();
+      case Opensearch -> getOpensearch() == null ? null : getOpensearch().getIndexPrefix();
+      default -> null;
+    };
+  }
+
   public String getIndexPrefix() {
-    if (DatabaseInfo.isElasticsearch()) {
-      if (getElasticsearch() != null) {
-        return getElasticsearch().getIndexPrefix();
-      } else {
-        return null;
-      }
-    } else {
-      if (getOpensearch() != null) {
-        return getOpensearch().getIndexPrefix();
-      } else {
-        return null;
-      }
-    }
+    return getIndexPrefix(DatabaseInfo.getCurrent());
   }
 }

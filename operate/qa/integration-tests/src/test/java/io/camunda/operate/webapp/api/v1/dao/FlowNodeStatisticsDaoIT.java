@@ -7,26 +7,30 @@
  */
 package io.camunda.operate.webapp.api.v1.dao;
 
-import static io.camunda.operate.schema.indices.IndexDescriptor.DEFAULT_TENANT_ID;
+import static io.camunda.webapps.schema.entities.AbstractExporterEntity.DEFAULT_TENANT_ID;
 import static org.assertj.core.api.Assertions.assertThat;
 
-import io.camunda.operate.entities.FlowNodeInstanceEntity;
-import io.camunda.operate.entities.FlowNodeState;
-import io.camunda.operate.entities.FlowNodeType;
-import io.camunda.operate.schema.templates.FlowNodeInstanceTemplate;
 import io.camunda.operate.util.j5templates.OperateSearchAbstractIT;
 import io.camunda.operate.webapp.api.v1.entities.FlowNodeStatistics;
+import io.camunda.webapps.schema.descriptors.operate.template.FlowNodeInstanceTemplate;
+import io.camunda.webapps.schema.entities.operate.FlowNodeInstanceEntity;
+import io.camunda.webapps.schema.entities.operate.FlowNodeState;
+import io.camunda.webapps.schema.entities.operate.FlowNodeType;
 import java.time.OffsetDateTime;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Qualifier;
 
 public class FlowNodeStatisticsDaoIT extends OperateSearchAbstractIT {
 
   private static final Long PROCESS_INSTANCE_KEY = 2251799813685251L;
   private static final Long PROCESS_DEFINITION_KEY = 2251799813685249L;
   @Autowired private FlowNodeStatisticsDao dao;
-  @Autowired private FlowNodeInstanceTemplate flowNodeInstanceIndex;
+
+  @Autowired
+  @Qualifier("operateFlowNodeInstanceTemplate")
+  private FlowNodeInstanceTemplate flowNodeInstanceIndex;
 
   @Override
   public void runAdditionalBeforeAllSetup() throws Exception {

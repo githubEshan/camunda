@@ -9,7 +9,9 @@ package io.camunda.zeebe.engine.processing.job;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import io.camunda.security.configuration.SecurityConfiguration;
 import io.camunda.zeebe.engine.EngineConfiguration;
+import io.camunda.zeebe.engine.processing.identity.AuthorizationCheckBehavior;
 import io.camunda.zeebe.engine.processing.job.JobBatchCollector.TooLargeJob;
 import io.camunda.zeebe.engine.state.mutable.MutableProcessingState;
 import io.camunda.zeebe.engine.util.MockTypedRecord;
@@ -57,8 +59,9 @@ final class JobBatchCollectorTest {
 
   @BeforeEach
   void beforeEach() {
-    collector =
-        new JobBatchCollector(state.getJobState(), state.getVariableState(), lengthEvaluator);
+    final var authorizationCheckBehavior =
+        new AuthorizationCheckBehavior(state, new SecurityConfiguration());
+    collector = new JobBatchCollector(state, lengthEvaluator, authorizationCheckBehavior);
   }
 
   @Test
@@ -316,7 +319,7 @@ final class JobBatchCollectorTest {
   }
 
   @Test
-  public void shouldCollectOnlyAuthorizedTenantJobs() {
+  public void shouldCollectOnlyProvidedTenantJobs() {
     // given
     final String tenantA = "tenant-a";
     final String tenantB = "tenant-b";

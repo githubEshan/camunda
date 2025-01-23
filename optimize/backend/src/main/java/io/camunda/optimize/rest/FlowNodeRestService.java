@@ -8,6 +8,7 @@
 package io.camunda.optimize.rest;
 
 import static io.camunda.optimize.service.util.BpmnModelUtil.extractFlowNodeNames;
+import static io.camunda.optimize.tomcat.OptimizeResourceConstants.REST_API_PATH;
 
 import io.camunda.optimize.dto.optimize.DefinitionType;
 import io.camunda.optimize.dto.optimize.ProcessDefinitionOptimizeDto;
@@ -15,35 +16,33 @@ import io.camunda.optimize.dto.optimize.rest.FlowNodeIdsToNamesRequestDto;
 import io.camunda.optimize.dto.optimize.rest.FlowNodeNamesResponseDto;
 import io.camunda.optimize.rest.providers.CacheRequest;
 import io.camunda.optimize.service.DefinitionService;
-import jakarta.ws.rs.Consumes;
-import jakarta.ws.rs.POST;
-import jakarta.ws.rs.Path;
-import jakarta.ws.rs.Produces;
-import jakarta.ws.rs.core.MediaType;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
-import lombok.AllArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
-import org.springframework.stereotype.Component;
+import org.slf4j.Logger;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RestController;
 
-@AllArgsConstructor
-@Path(FlowNodeRestService.FLOW_NODE_PATH)
-@Component
-@Slf4j
+@RestController
+@RequestMapping(REST_API_PATH + FlowNodeRestService.FLOW_NODE_PATH)
 public class FlowNodeRestService {
 
   public static final String FLOW_NODE_PATH = "/flow-node";
   public static final String FLOW_NODE_NAMES_SUB_PATH = "/flowNodeNames";
+  private static final Logger LOG = org.slf4j.LoggerFactory.getLogger(FlowNodeRestService.class);
 
   private final DefinitionService definitionService;
 
-  @POST
-  @Path(FLOW_NODE_NAMES_SUB_PATH)
-  @Produces(MediaType.APPLICATION_JSON)
-  @Consumes(MediaType.APPLICATION_JSON)
+  public FlowNodeRestService(final DefinitionService definitionService) {
+    this.definitionService = definitionService;
+  }
+
+  @PostMapping(FLOW_NODE_NAMES_SUB_PATH)
   @CacheRequest
-  public FlowNodeNamesResponseDto getFlowNodeNames(final FlowNodeIdsToNamesRequestDto request) {
+  public FlowNodeNamesResponseDto getFlowNodeNames(
+      @RequestBody final FlowNodeIdsToNamesRequestDto request) {
     final FlowNodeNamesResponseDto result = new FlowNodeNamesResponseDto();
 
     final Optional<ProcessDefinitionOptimizeDto> processDefinitionXmlDto =
@@ -54,18 +53,18 @@ public class FlowNodeRestService {
             request.getTenantId());
 
     if (processDefinitionXmlDto.isPresent()) {
-      List<String> nodeIds = request.getNodeIds();
-      Map<String, String> flowNodeIdsToNames =
+      final List<String> nodeIds = request.getNodeIds();
+      final Map<String, String> flowNodeIdsToNames =
           extractFlowNodeNames(processDefinitionXmlDto.get().getFlowNodeData());
       if (nodeIds != null && !nodeIds.isEmpty()) {
-        for (String id : nodeIds) {
+        for (final String id : nodeIds) {
           result.getFlowNodeNames().put(id, flowNodeIdsToNames.get(id));
         }
       } else {
         result.setFlowNodeNames(flowNodeIdsToNames);
       }
     } else {
-      log.debug(
+      LOG.debug(
           "No process definition found for key {} and version {}, returning empty result.",
           request.getProcessDefinitionKey(),
           request.getProcessDefinitionVersion());

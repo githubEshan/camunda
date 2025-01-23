@@ -7,7 +7,9 @@
  */
 package io.camunda.operate.schema.opensearch;
 
-import static io.camunda.operate.schema.indices.AbstractIndexDescriptor.SCHEMA_FOLDER_OPENSEARCH;
+import static io.camunda.webapps.schema.descriptors.AbstractIndexDescriptor.SCHEMA_FOLDER_OPENSEARCH;
+import static io.camunda.webapps.schema.descriptors.AbstractIndexDescriptor.formatIndexPrefix;
+import static io.camunda.webapps.schema.descriptors.ComponentNames.OPERATE;
 import static java.lang.String.format;
 
 import com.fasterxml.jackson.core.type.TypeReference;
@@ -20,10 +22,10 @@ import io.camunda.operate.property.OperateProperties;
 import io.camunda.operate.schema.IndexMapping;
 import io.camunda.operate.schema.IndexMapping.IndexMappingProperty;
 import io.camunda.operate.schema.SchemaManager;
-import io.camunda.operate.schema.indices.IndexDescriptor;
-import io.camunda.operate.schema.templates.TemplateDescriptor;
 import io.camunda.operate.store.opensearch.client.sync.RichOpenSearchClient;
 import io.camunda.operate.util.LambdaExceptionUtil;
+import io.camunda.webapps.schema.descriptors.IndexDescriptor;
+import io.camunda.webapps.schema.descriptors.IndexTemplateDescriptor;
 import jakarta.json.spi.JsonProvider;
 import jakarta.json.stream.JsonParser;
 import java.io.IOException;
@@ -70,7 +72,7 @@ public class OpensearchSchemaManager implements SchemaManager {
   private final ObjectMapper objectMapper;
   private final JsonbJsonpMapper jsonpMapper = new JsonbJsonpMapper();
 
-  private final List<TemplateDescriptor> templateDescriptors;
+  private final List<IndexTemplateDescriptor> templateDescriptors;
 
   private final List<IndexDescriptor> indexDescriptors;
 
@@ -78,7 +80,7 @@ public class OpensearchSchemaManager implements SchemaManager {
   public OpensearchSchemaManager(
       final OperateProperties operateProperties,
       final RichOpenSearchClient richOpenSearchClient,
-      final List<TemplateDescriptor> templateDescriptors,
+      final List<IndexTemplateDescriptor> templateDescriptors,
       final List<IndexDescriptor> indexDescriptors,
       @Qualifier("operateObjectMapper") final ObjectMapper objectMapper) {
     super();
@@ -88,15 +90,12 @@ public class OpensearchSchemaManager implements SchemaManager {
     this.objectMapper = objectMapper;
     this.indexDescriptors =
         indexDescriptors.stream()
-            .filter(indexDescriptor -> !(indexDescriptor instanceof TemplateDescriptor))
+            .filter(indexDescriptor -> !(indexDescriptor instanceof IndexTemplateDescriptor))
             .toList();
   }
 
   @Override
   public void createSchema() {
-    if (operateProperties.getArchiver().isIlmEnabled()) {
-      createIsmPolicy();
-    }
     createDefaults();
     createTemplates();
     createIndices();
@@ -144,7 +143,7 @@ public class OpensearchSchemaManager implements SchemaManager {
 
   @Override
   public void createTemplate(
-      final TemplateDescriptor templateDescriptor, final String templateClasspathResource) {
+      final IndexTemplateDescriptor templateDescriptor, final String templateClasspathResource) {
     final String json =
         templateClasspathResource != null
             ? readTemplateJson(templateClasspathResource)
@@ -193,7 +192,12 @@ public class OpensearchSchemaManager implements SchemaManager {
 
   @Override
   public boolean isHealthy() {
-    return richOpenSearchClient.cluster().isHealthy();
+    if (operateProperties.getOpensearch().isHealthCheckEnabled()) {
+      return richOpenSearchClient.cluster().isHealthy();
+    } else {
+      LOGGER.warn("OpenSearch cluster health check is disabled.");
+      return true;
+    }
   }
 
   @Override
@@ -258,14 +262,20 @@ public class OpensearchSchemaManager implements SchemaManager {
     return richOpenSearchClient.index().getIndexMappings(indexNamePattern);
   }
 
+  /**
+   * @deprecated schema manager is happening in Zeebe exporter now
+   */
+  @Deprecated
   @Override
   public void updateSchema(final Map<IndexDescriptor, Set<IndexMappingProperty>> newFields) {
     for (final Map.Entry<IndexDescriptor, Set<IndexMappingProperty>> indexNewFields :
         newFields.entrySet()) {
-      if (indexNewFields.getKey() instanceof TemplateDescriptor) {
+      if (indexNewFields.getKey() instanceof IndexTemplateDescriptor) {
         LOGGER.info(
-            "Update template: " + ((TemplateDescriptor) indexNewFields.getKey()).getTemplateName());
-        final TemplateDescriptor templateDescriptor = (TemplateDescriptor) indexNewFields.getKey();
+            "Update template: "
+                + ((IndexTemplateDescriptor) indexNewFields.getKey()).getTemplateName());
+        final IndexTemplateDescriptor templateDescriptor =
+            (IndexTemplateDescriptor) indexNewFields.getKey();
         final String json = readTemplateJson(templateDescriptor.getSchemaClasspathFilename());
         final PutIndexTemplateRequest indexTemplateRequest =
             prepareIndexTemplateRequest(templateDescriptor, json);
@@ -352,15 +362,14 @@ public class OpensearchSchemaManager implements SchemaManager {
   }
 
   private String settingsTemplateName() {
-    final OperateOpensearchProperties osConfig = operateProperties.getOpensearch();
-    return format("%s_template", osConfig.getIndexPrefix());
+    return String.format("%s%s_template", formatIndexPrefix(getIndexPrefix()), OPERATE);
   }
 
   private void createTemplates() {
     templateDescriptors.forEach(this::createTemplate);
   }
 
-  private IndexSettings templateSettings(final TemplateDescriptor indexDescriptor) {
+  private IndexSettings templateSettings(final IndexTemplateDescriptor indexDescriptor) {
     final var shards =
         operateProperties
             .getOpensearch()
@@ -389,7 +398,7 @@ public class OpensearchSchemaManager implements SchemaManager {
     return null;
   }
 
-  private void createTemplate(final TemplateDescriptor templateDescriptor) {
+  private void createTemplate(final IndexTemplateDescriptor templateDescriptor) {
 
     final String json = readTemplateJson(templateDescriptor.getSchemaClasspathFilename());
 
@@ -423,7 +432,7 @@ public class OpensearchSchemaManager implements SchemaManager {
   }
 
   private PutIndexTemplateRequest prepareIndexTemplateRequest(
-      final TemplateDescriptor templateDescriptor, final String json) {
+      final IndexTemplateDescriptor templateDescriptor, final String json) {
     final var templateSettings = templateSettings(templateDescriptor);
     final var templateBuilder =
         new IndexTemplateMapping.Builder()
@@ -537,38 +546,5 @@ public class OpensearchSchemaManager implements SchemaManager {
       }
       return Optional.empty();
     }
-  }
-
-  private String loadIsmPolicy() throws IOException {
-    final var policyFilename =
-        format(SCHEMA_OPENSEARCH_CREATE_POLICY_JSON, OPERATE_DELETE_ARCHIVED_INDICES);
-    final var inputStream = OpensearchSchemaManager.class.getResourceAsStream(policyFilename);
-    final var policyContent = StreamUtils.copyToString(inputStream, StandardCharsets.UTF_8);
-    return policyContent.replace(
-        "$MIN_INDEX_AGE", operateProperties.getArchiver().getIlmMinAgeForDeleteArchivedIndices());
-  }
-
-  private void createIsmPolicy() {
-    fetchIsmPolicy()
-        .ifPresentOrElse(
-            ismPolicy ->
-                LOGGER.warn(
-                    "ISM policy {} already exists: {}.",
-                    OPERATE_DELETE_ARCHIVED_INDICES,
-                    ismPolicy),
-            () -> {
-              try {
-                richOpenSearchClient
-                    .ism()
-                    .createPolicy(OPERATE_DELETE_ARCHIVED_INDICES, loadIsmPolicy());
-                LOGGER.info(
-                    "Created ISM policy {} for min age of {}.",
-                    OPERATE_DELETE_ARCHIVED_INDICES,
-                    operateProperties.getArchiver().getIlmMinAgeForDeleteArchivedIndices());
-              } catch (final Exception e) {
-                throw new OperateRuntimeException(
-                    "Failed to create ISM policy " + OPERATE_DELETE_ARCHIVED_INDICES, e);
-              }
-            });
   }
 }

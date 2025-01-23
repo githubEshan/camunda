@@ -10,12 +10,9 @@ import {Selector} from 'testcafe';
 
 import {overflowMenuOption, listItem} from './Common.elements';
 
-export const navItem = Selector('.NavItem a').withText('Collections');
-export const collectionTitle = Selector('.Collection .header .text');
+export const collectionTitle = Selector('.Collection h2');
 export const collectionBreadcrumb = Selector('.cds--header__menu-bar .breadcrumb');
-export const collectionContextMenu = Selector(
-  '.Collection .header .cds--overflow-menu__wrapper button'
-);
+export const collectionContextMenu = Selector('.Collection .cds--overflow-menu__wrapper button');
 export const editCollectionNameButton = overflowMenuOption('Edit');
 export const copyCollectionButton = overflowMenuOption('Copy');
 export const deleteCollectionButton = overflowMenuOption('Delete');
@@ -27,14 +24,11 @@ export const userTab = tabButton.withText('Users');
 export const alertTab = tabButton.withText('Alerts');
 export const sourcesTab = tabButton.withText('Data sources');
 export const activeTab = Selector('.Collection .cds--tab-content:not([hidden])');
-export const addButton = activeTab.find('.cds--toolbar-content .cds--btn--primary');
+export const addButton = activeTab.find('.cds--toolbar-content > .cds--btn--primary');
 export const emptyStateAdd = activeTab.find('.EmptyState .cds--btn--primary');
-export const typeaheadInput = Selector('.Typeahead input');
 export const checkbox = (text) => Selector('.Checklist tr').withText(text);
 export const processItem = listItem('process');
 export const userName = (entity) => entity.find('td:nth-child(2) .cds--stack-vertical').child(0);
-export const roleOption = (text) =>
-  Selector('.Modal.is-visible .LabeledInput .label.after').withText(text);
 export const carbonRoleOption = (text) =>
   Selector('.Modal.is-visible .cds--radio-button-wrapper').withText(text);
 export const userList = Selector('.UserList');

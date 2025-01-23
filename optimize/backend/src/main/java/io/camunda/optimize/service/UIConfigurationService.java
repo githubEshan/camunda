@@ -24,20 +24,23 @@ import io.camunda.optimize.service.tenant.TenantService;
 import io.camunda.optimize.service.util.configuration.ConfigurationService;
 import io.camunda.optimize.service.util.configuration.OptimizeProfile;
 import io.camunda.optimize.service.util.configuration.engine.EngineConfiguration;
+import java.time.OffsetDateTime;
+import java.time.ZoneOffset;
+import java.time.format.DateTimeFormatter;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
-import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
+import org.slf4j.Logger;
 import org.springframework.core.env.Environment;
 import org.springframework.stereotype.Component;
 
 @Component
-@Slf4j
-@RequiredArgsConstructor
 public class UIConfigurationService {
 
+  public static final DateTimeFormatter DATE_TIME_FORMATTER =
+      DateTimeFormatter.ofPattern("uuuu-MM-dd'T'HH:mm:ss'Z'").withZone(ZoneOffset.UTC);
+  private static final Logger LOG = org.slf4j.LoggerFactory.getLogger(UIConfigurationService.class);
   private final ConfigurationService configurationService;
   private final OptimizeVersionService versionService;
   private final TenantService tenantService;
@@ -47,6 +50,25 @@ public class UIConfigurationService {
   // optional as it is only available conditionally, see implementations of the interface
   private final Optional<CloudSaasMetaInfoService> cloudSaasMetaInfoService;
   private final Identity identity;
+
+  public UIConfigurationService(
+      final ConfigurationService configurationService,
+      final OptimizeVersionService versionService,
+      final TenantService tenantService,
+      final SettingsService settingService,
+      final CamundaLicenseService camundaLicenseService,
+      final Environment environment,
+      final Optional<CloudSaasMetaInfoService> cloudSaasMetaInfoService,
+      final Identity identity) {
+    this.configurationService = configurationService;
+    this.versionService = versionService;
+    this.tenantService = tenantService;
+    this.settingService = settingService;
+    this.camundaLicenseService = camundaLicenseService;
+    this.environment = environment;
+    this.cloudSaasMetaInfoService = cloudSaasMetaInfoService;
+    this.identity = identity;
+  }
 
   public UIConfigurationResponseDto getUIConfiguration() {
     final UIConfigurationResponseDto uiConfigurationDto = new UIConfigurationResponseDto();
@@ -72,6 +94,10 @@ public class UIConfigurationService {
     uiConfigurationDto.setOptimizeDatabase(ConfigurationService.getDatabaseType(environment));
     uiConfigurationDto.setValidLicense(isCamundaLicenseValid());
     uiConfigurationDto.setLicenseType(getLicenseType().getName());
+    uiConfigurationDto.setCommercial(isCommercialCamundaLicense());
+    final OffsetDateTime expirationDate = getCamundaLicenseExpiresAt();
+    uiConfigurationDto.setExpiresAt(
+        expirationDate == null ? null : DATE_TIME_FORMATTER.format(getCamundaLicenseExpiresAt()));
 
     final MixpanelConfigResponseDto mixpanel = uiConfigurationDto.getMixpanel();
     mixpanel.setEnabled(configurationService.getAnalytics().isEnabled());
@@ -110,6 +136,14 @@ public class UIConfigurationService {
 
   private LicenseType getLicenseType() {
     return camundaLicenseService.getCamundaLicenseType();
+  }
+
+  private boolean isCommercialCamundaLicense() {
+    return camundaLicenseService.isCommercialCamundaLicense();
+  }
+
+  private OffsetDateTime getCamundaLicenseExpiresAt() {
+    return camundaLicenseService.getCamundaLicenseExpiresAt();
   }
 
   private boolean isEnterpriseMode(final OptimizeProfile optimizeProfile) {

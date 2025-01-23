@@ -7,13 +7,7 @@
  */
 package io.camunda.optimize.rest.constants;
 
-import lombok.AccessLevel;
-import lombok.NoArgsConstructor;
-
-@NoArgsConstructor(access = AccessLevel.PRIVATE)
-public class RestConstants {
-
-  public static final String BACKUP_ENDPOINT = "/backups";
+public final class RestConstants {
 
   public static final String X_OPTIMIZE_CLIENT_TIMEZONE = "X-Optimize-Client-Timezone";
   public static final String X_OPTIMIZE_CLIENT_LOCALE = "X-Optimize-Client-Locale";
@@ -30,4 +24,6 @@ public class RestConstants {
   public static final String HTTPS_SCHEME = "https";
   public static final String HTTPS_PREFIX = "https://";
   public static final String HTTP_PREFIX = "http://";
+
+  private RestConstants() {}
 }

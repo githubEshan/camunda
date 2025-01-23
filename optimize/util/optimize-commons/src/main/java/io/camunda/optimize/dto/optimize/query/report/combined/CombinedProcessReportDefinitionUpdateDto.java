@@ -9,13 +9,39 @@ package io.camunda.optimize.dto.optimize.query.report.combined;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
 import io.camunda.optimize.dto.optimize.query.report.ReportDefinitionUpdateDto;
-import lombok.Data;
-import lombok.EqualsAndHashCode;
 
 @JsonInclude(JsonInclude.Include.NON_NULL)
-@Data
-@EqualsAndHashCode(callSuper = true)
 public class CombinedProcessReportDefinitionUpdateDto extends ReportDefinitionUpdateDto {
 
   protected CombinedReportDataDto data;
+
+  public CombinedProcessReportDefinitionUpdateDto() {}
+
+  public CombinedReportDataDto getData() {
+    return data;
+  }
+
+  public void setData(final CombinedReportDataDto data) {
+    this.data = data;
+  }
+
+  @Override
+  protected boolean canEqual(final Object other) {
+    return other instanceof CombinedProcessReportDefinitionUpdateDto;
+  }
+
+  @Override
+  public int hashCode() {
+    return org.apache.commons.lang3.builder.HashCodeBuilder.reflectionHashCode(this);
+  }
+
+  @Override
+  public boolean equals(final Object o) {
+    return org.apache.commons.lang3.builder.EqualsBuilder.reflectionEquals(this, o);
+  }
+
+  @Override
+  public String toString() {
+    return "CombinedProcessReportDefinitionUpdateDto(data=" + getData() + ")";
+  }
 }

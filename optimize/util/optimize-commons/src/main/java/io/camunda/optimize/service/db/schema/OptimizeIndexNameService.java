@@ -7,11 +7,13 @@
  */
 package io.camunda.optimize.service.db.schema;
 
+import static io.camunda.optimize.service.db.DatabaseConstants.COMPONENT_NAME;
+
 import io.camunda.optimize.service.util.configuration.ConfigurationReloadable;
 import io.camunda.optimize.service.util.configuration.ConfigurationService;
 import io.camunda.optimize.service.util.configuration.DatabaseType;
+import io.camunda.zeebe.util.VisibleForTesting;
 import java.util.Locale;
-import lombok.Getter;
 import org.apache.commons.lang3.StringUtils;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.ApplicationContext;
@@ -21,7 +23,9 @@ import org.springframework.stereotype.Component;
 @Component
 public class OptimizeIndexNameService implements ConfigurationReloadable {
 
-  @Getter private String indexPrefix;
+  public static String defaultIndexPrefix = "";
+  private String indexPrefix;
+  private String completeIndexPrefix;
 
   @Autowired
   public OptimizeIndexNameService(
@@ -30,25 +34,24 @@ public class OptimizeIndexNameService implements ConfigurationReloadable {
   }
 
   public OptimizeIndexNameService(
-      final ConfigurationService configurationService, final DatabaseType databaseProfile) {
-    setIndexPrefix(configurationService, databaseProfile);
+      final ConfigurationService configurationService, final DatabaseType databaseType) {
+    setIndexPrefix(configurationService, databaseType);
   }
 
   public OptimizeIndexNameService(final String indexPrefix) {
-    this.indexPrefix = indexPrefix;
+    setIndexPrefix(indexPrefix);
   }
 
-  public String getOptimizeIndexAliasForIndex(String index) {
-    return getOptimizeIndexAliasForIndexNameAndPrefix(index, indexPrefix);
+  public String getOptimizeIndexAliasForIndex(final String index) {
+    return getOptimizeIndexAliasForIndexNameAndPrefix(index);
   }
 
-  public String getOptimizeIndexAliasForIndex(final IndexMappingCreator indexMappingCreator) {
-    return getOptimizeIndexAliasForIndexNameAndPrefix(
-        indexMappingCreator.getIndexName(), indexPrefix);
+  public String getOptimizeIndexAliasForIndex(final IndexMappingCreator<?> indexMappingCreator) {
+    return getOptimizeIndexAliasForIndexNameAndPrefix(indexMappingCreator.getIndexName());
   }
 
   public String getOptimizeIndexTemplateNameWithVersion(
-      final IndexMappingCreator indexMappingCreator) {
+      final IndexMappingCreator<?> indexMappingCreator) {
     if (!indexMappingCreator.isCreateFromTemplate()) {
       throw new IllegalArgumentException("Given indexMappingCreator is not templated!");
     }
@@ -56,7 +59,7 @@ public class OptimizeIndexNameService implements ConfigurationReloadable {
   }
 
   /** This will suffix the indices that are created from templates with their initial suffix */
-  public String getOptimizeIndexNameWithVersion(final IndexMappingCreator indexMappingCreator) {
+  public String getOptimizeIndexNameWithVersion(final IndexMappingCreator<?> indexMappingCreator) {
     return getOptimizeIndexNameWithVersionWithoutSuffix(indexMappingCreator)
         + indexMappingCreator.getIndexNameInitialSuffix();
   }
@@ -67,7 +70,7 @@ public class OptimizeIndexNameService implements ConfigurationReloadable {
    * prohibited from ES8+
    */
   public String getOptimizeIndexNameWithVersionForAllIndicesOf(
-      final IndexMappingCreator indexMappingCreator) {
+      final IndexMappingCreator<?> indexMappingCreator) {
     if (StringUtils.isNotEmpty(indexMappingCreator.getIndexNameInitialSuffix())) {
       return getOptimizeIndexNameWithVersionWithWildcardSuffix(indexMappingCreator);
     }
@@ -75,7 +78,7 @@ public class OptimizeIndexNameService implements ConfigurationReloadable {
   }
 
   public String getOptimizeIndexNameWithVersionWithWildcardSuffix(
-      final IndexMappingCreator indexMappingCreator) {
+      final IndexMappingCreator<?> indexMappingCreator) {
     return getOptimizeIndexNameWithVersionWithoutSuffix(indexMappingCreator)
         // match all indices of that version with this wildcard, which also catches potentially
         // rolled over indices
@@ -83,7 +86,7 @@ public class OptimizeIndexNameService implements ConfigurationReloadable {
   }
 
   public String getOptimizeIndexNameWithVersionWithoutSuffix(
-      final IndexMappingCreator indexMappingCreator) {
+      final IndexMappingCreator<?> indexMappingCreator) {
     return getOptimizeIndexOrTemplateNameForAliasAndVersion(
         getOptimizeIndexAliasForIndex(indexMappingCreator.getIndexName()),
         String.valueOf(indexMappingCreator.getVersion()));
@@ -91,18 +94,19 @@ public class OptimizeIndexNameService implements ConfigurationReloadable {
 
   @Override
   public void reloadConfiguration(final ApplicationContext context) {
-    ConfigurationService configurationService = context.getBean(ConfigurationService.class);
+    final ConfigurationService configurationService = context.getBean(ConfigurationService.class);
     setIndexPrefix(
         configurationService, ConfigurationService.getDatabaseType(context.getEnvironment()));
   }
 
   private void setIndexPrefix(
-      ConfigurationService configurationService, DatabaseType databaseProfile) {
-    if (databaseProfile.equals(DatabaseType.OPENSEARCH)) {
-      this.indexPrefix = configurationService.getOpenSearchConfiguration().getIndexPrefix();
+      final ConfigurationService configurationService, final DatabaseType databaseType) {
+    if (databaseType.equals(DatabaseType.OPENSEARCH)) {
+      indexPrefix = configurationService.getOpenSearchConfiguration().getIndexPrefix();
     } else {
-      this.indexPrefix = configurationService.getElasticSearchConfiguration().getIndexPrefix();
+      indexPrefix = configurationService.getElasticSearchConfiguration().getIndexPrefix();
     }
+    setIndexPrefix(indexPrefix);
   }
 
   public static String getOptimizeIndexOrTemplateNameForAliasAndVersion(
@@ -114,16 +118,57 @@ public class OptimizeIndexNameService implements ConfigurationReloadable {
   public String getOptimizeIndexOrTemplateNameForAliasAndVersionWithPrefix(
       final String indexOrTemplateNameWithoutPrefix, final String version) {
     return getOptimizeIndexAliasForIndexNameAndPrefix(
-        getOptimizeIndexOrTemplateNameForAliasAndVersion(indexOrTemplateNameWithoutPrefix, version),
-        indexPrefix);
+        getOptimizeIndexOrTemplateNameForAliasAndVersion(
+            indexOrTemplateNameWithoutPrefix, version));
   }
 
-  public static String getOptimizeIndexAliasForIndexNameAndPrefix(
-      final String indexName, final String indexPrefix) {
-    String original = indexName;
-    if (!indexName.startsWith(indexPrefix)) {
-      original = String.join("-", indexPrefix, indexName);
+  /**
+   * Adds the "optimize" prefix and the indexPrefix separated by a dash. The format if indexPrefix
+   * is "" is: 'optimize-{indexName}' The format if indexPrefix is not blank is:
+   * '{indexPrefix}-optimize-{indexName}'.
+   *
+   * <p>This function is idempotent because it is sometime called on an string that's already been
+   * "fixed", such as in {@link
+   * io.camunda.optimize.service.db.os.client.sync.OpenSearchDocumentOperations}
+   *
+   * @param indexName the name of the index, potentially already "escaped"
+   * @return the escaped index name
+   */
+  public String getOptimizeIndexAliasForIndexNameAndPrefix(String indexName) {
+    if (!indexPrefix.isEmpty() && indexName.startsWith(indexPrefix)) {
+      return indexName;
     }
-    return original.toLowerCase(Locale.ENGLISH);
+    if (!indexName.startsWith(COMPONENT_NAME)) {
+      indexName = String.join("-", COMPONENT_NAME, indexName);
+    }
+    if (!indexPrefix.isEmpty() && !indexName.startsWith(indexPrefix)) {
+      indexName = String.join("-", indexPrefix, indexName);
+    }
+    return indexName.toLowerCase(Locale.ENGLISH);
+  }
+
+  private static String makeCompleteIndexPrefix(final String indexPrefix) {
+    if (indexPrefix == null || indexPrefix.isEmpty()) {
+      return COMPONENT_NAME;
+    } else {
+      return String.format("%s-%s", indexPrefix, COMPONENT_NAME);
+    }
+  }
+
+  public String getIndexPrefix() {
+    // the completePrefix is return for "backward-compatibility:
+    // this method is used to search all optimize indices, by returning the complete prefix
+    // we avoid returning just "", which could potentially return all indices in the DB if it's used
+    // as getIndexPrefix + "*".
+    return completeIndexPrefix;
+  }
+
+  @VisibleForTesting
+  void setIndexPrefix(final String indexPrefix) {
+    if (indexPrefix.equals(COMPONENT_NAME)) {
+      throw new IllegalArgumentException("Invalid prefix " + indexPrefix);
+    }
+    this.indexPrefix = indexPrefix;
+    completeIndexPrefix = makeCompleteIndexPrefix(indexPrefix);
   }
 }

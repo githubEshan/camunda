@@ -40,7 +40,7 @@ const List: FC = () => {
   const [editUser, editUserModal] = useEntityModal(EditModal, reload);
   const [deleteUser, deleteUserModal] = useEntityModal(DeleteModal, reload);
 
-  const showDetails = ({ id }: User) => navigate(`${id}`);
+  const showDetails = ({ username }: User) => navigate(`${username}`);
 
   if (success && !userSearchResults?.items.length) {
     return (
@@ -73,8 +73,8 @@ const List: FC = () => {
         title={t("Users")}
         data={userSearchResults == null ? [] : userSearchResults.items}
         headers={[
-          { header: t("Username"), key: "username" },
           { header: t("Name"), key: "name" },
+          { header: t("Username"), key: "username" },
           { header: t("Email"), key: "email" },
         ]}
         menuItems={[

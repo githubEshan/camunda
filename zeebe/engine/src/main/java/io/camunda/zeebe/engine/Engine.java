@@ -7,6 +7,7 @@
  */
 package io.camunda.zeebe.engine;
 
+import io.camunda.security.configuration.SecurityConfiguration;
 import io.camunda.zeebe.engine.processing.streamprocessor.RecordProcessorMap;
 import io.camunda.zeebe.engine.processing.streamprocessor.TypedRecordProcessor;
 import io.camunda.zeebe.engine.processing.streamprocessor.TypedRecordProcessor.ProcessingError;
@@ -23,7 +24,10 @@ import io.camunda.zeebe.protocol.impl.record.value.error.ErrorRecord;
 import io.camunda.zeebe.protocol.record.RejectionType;
 import io.camunda.zeebe.protocol.record.ValueType;
 import io.camunda.zeebe.protocol.record.intent.ErrorIntent;
+import io.camunda.zeebe.protocol.record.intent.Intent;
+import io.camunda.zeebe.protocol.record.intent.ProcessInstanceBatchIntent;
 import io.camunda.zeebe.protocol.record.intent.ProcessInstanceCreationIntent;
+import io.camunda.zeebe.protocol.record.intent.ProcessInstanceIntent;
 import io.camunda.zeebe.protocol.record.intent.ProcessInstanceRelatedIntent;
 import io.camunda.zeebe.protocol.record.value.ProcessInstanceRelated;
 import io.camunda.zeebe.stream.api.ProcessingResult;
@@ -46,7 +50,7 @@ public class Engine implements RecordProcessor {
       "Expected to process record '%s' without errors, but exception occurred with message '%s'.";
 
   private static final EnumSet<ValueType> SUPPORTED_VALUETYPES =
-      EnumSet.range(ValueType.JOB, ValueType.AUTHORIZATION);
+      EnumSet.range(ValueType.JOB, ValueType.SCALE);
 
   private EventApplier eventApplier;
   private RecordProcessorMap recordProcessorMap;
@@ -60,12 +64,15 @@ public class Engine implements RecordProcessor {
   private Writers writers;
   private final TypedRecordProcessorFactory typedRecordProcessorFactory;
   private final EngineConfiguration config;
+  private final SecurityConfiguration securityConfig;
 
   public Engine(
       final TypedRecordProcessorFactory typedRecordProcessorFactory,
-      final EngineConfiguration config) {
+      final EngineConfiguration config,
+      final SecurityConfiguration securityConfig) {
     this.typedRecordProcessorFactory = typedRecordProcessorFactory;
     this.config = config;
+    this.securityConfig = securityConfig;
   }
 
   @Override
@@ -74,7 +81,8 @@ public class Engine implements RecordProcessor {
     writers = new Writers(resultBuilderMutex, eventApplier);
 
     final var typedProcessorContext =
-        new TypedRecordProcessorContextImpl(recordProcessorContext, writers, config);
+        new TypedRecordProcessorContextImpl(
+            recordProcessorContext, writers, config, securityConfig);
     processingState = typedProcessorContext.getProcessingState();
 
     ((EventAppliers) eventApplier).registerEventAppliers(processingState);
@@ -122,12 +130,7 @@ public class Engine implements RecordProcessor {
         return processingResultBuilder.build();
       }
 
-      // There is no ban check needed if the intent is not instance related
-      // nor if the intent is to create new instances, which can't be banned yet
-      final boolean noBanCheckNeeded =
-          !(record.getIntent() instanceof ProcessInstanceRelatedIntent)
-              || record.getIntent() instanceof ProcessInstanceCreationIntent;
-      if (noBanCheckNeeded || !processingState.getBannedInstanceState().isBanned(typedCommand)) {
+      if (shouldProcessCommand(typedCommand)) {
         currentProcessor.processRecord(record);
       }
     }
@@ -164,6 +167,30 @@ public class Engine implements RecordProcessor {
       }
     }
     return processingResultBuilder.build();
+  }
+
+  private boolean shouldProcessCommand(final TypedRecord<?> typedCommand) {
+    // There is no ban check needed if the intent is not instance related
+    // nor if the intent is to create new instances, which can't be banned yet
+    final Intent intent = typedCommand.getIntent();
+    final boolean noBanCheckNeeded =
+        !(intent instanceof ProcessInstanceRelatedIntent)
+            || intent instanceof ProcessInstanceCreationIntent;
+
+    if (noBanCheckNeeded) {
+      return true;
+    }
+
+    final boolean banned = processingState.getBannedInstanceState().isBanned(typedCommand);
+
+    if (!banned) {
+      return true;
+    }
+
+    // Commands allowed to be processed on banned instances
+    return intent == ProcessInstanceIntent.CANCEL
+        || intent == ProcessInstanceIntent.TERMINATE_ELEMENT
+        || intent == ProcessInstanceBatchIntent.TERMINATE;
   }
 
   private void handleUnexpectedError(

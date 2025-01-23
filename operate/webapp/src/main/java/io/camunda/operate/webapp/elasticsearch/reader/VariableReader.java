@@ -7,28 +7,28 @@
  */
 package io.camunda.operate.webapp.elasticsearch.reader;
 
-import static io.camunda.operate.schema.templates.ProcessInstanceDependant.PROCESS_INSTANCE_KEY;
-import static io.camunda.operate.schema.templates.VariableTemplate.FULL_VALUE;
-import static io.camunda.operate.schema.templates.VariableTemplate.NAME;
-import static io.camunda.operate.schema.templates.VariableTemplate.SCOPE_KEY;
 import static io.camunda.operate.util.ElasticsearchUtil.QueryType.ALL;
 import static io.camunda.operate.util.ElasticsearchUtil.fromSearchHit;
 import static io.camunda.operate.util.ElasticsearchUtil.joinWithAnd;
+import static io.camunda.webapps.schema.descriptors.operate.ProcessInstanceDependant.PROCESS_INSTANCE_KEY;
+import static io.camunda.webapps.schema.descriptors.operate.template.VariableTemplate.FULL_VALUE;
+import static io.camunda.webapps.schema.descriptors.operate.template.VariableTemplate.NAME;
+import static io.camunda.webapps.schema.descriptors.operate.template.VariableTemplate.SCOPE_KEY;
 import static org.elasticsearch.index.query.QueryBuilders.constantScoreQuery;
 import static org.elasticsearch.index.query.QueryBuilders.idsQuery;
 import static org.elasticsearch.index.query.QueryBuilders.termQuery;
 
 import io.camunda.operate.conditions.ElasticsearchCondition;
-import io.camunda.operate.entities.OperationEntity;
-import io.camunda.operate.entities.VariableEntity;
 import io.camunda.operate.exceptions.OperateRuntimeException;
 import io.camunda.operate.property.OperateProperties;
-import io.camunda.operate.schema.templates.VariableTemplate;
 import io.camunda.operate.util.ElasticsearchUtil;
 import io.camunda.operate.webapp.reader.OperationReader;
 import io.camunda.operate.webapp.rest.dto.VariableDto;
 import io.camunda.operate.webapp.rest.dto.VariableRequestDto;
 import io.camunda.operate.webapp.rest.exception.NotFoundException;
+import io.camunda.webapps.schema.descriptors.operate.template.VariableTemplate;
+import io.camunda.webapps.schema.entities.operate.VariableEntity;
+import io.camunda.webapps.schema.entities.operation.OperationEntity;
 import java.io.IOException;
 import java.util.Collections;
 import java.util.List;
@@ -43,6 +43,7 @@ import org.elasticsearch.search.sort.SortOrder;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.context.annotation.Conditional;
 import org.springframework.stereotype.Component;
 
@@ -53,7 +54,9 @@ public class VariableReader extends AbstractReader
 
   private static final Logger LOGGER = LoggerFactory.getLogger(VariableReader.class);
 
-  @Autowired private VariableTemplate variableTemplate;
+  @Autowired
+  @Qualifier("operateVariableTemplate")
+  private VariableTemplate variableTemplate;
 
   @Autowired private OperationReader operationReader;
 
@@ -61,7 +64,7 @@ public class VariableReader extends AbstractReader
 
   @Override
   public List<VariableDto> getVariables(
-      final String processInstanceId, VariableRequestDto request) {
+      final String processInstanceId, final VariableRequestDto request) {
     final List<VariableDto> response = queryVariables(processInstanceId, request);
 
     // query one additional instance
@@ -101,7 +104,7 @@ public class VariableReader extends AbstractReader
           true,
           operateProperties.getImporter().getVariableSizeThreshold(),
           objectMapper);
-    } catch (IOException e) {
+    } catch (final IOException e) {
       final String message =
           String.format("Exception occurred, while obtaining variable: %s", e.getMessage());
       LOGGER.error(message, e);
@@ -142,7 +145,7 @@ public class VariableReader extends AbstractReader
       } else {
         return null;
       }
-    } catch (IOException e) {
+    } catch (final IOException e) {
       final String message =
           String.format(
               "Exception occurred, while obtaining variable for processInstanceId: %s, "
@@ -217,12 +220,12 @@ public class VariableReader extends AbstractReader
   }
 
   private List<VariableDto> queryVariables(
-      final String processInstanceId, VariableRequestDto variableRequest) {
+      final String processInstanceId, final VariableRequestDto variableRequest) {
     return queryVariables(processInstanceId, variableRequest, null);
   }
 
   private List<VariableDto> queryVariables(
-      final String processInstanceId, VariableRequestDto request, String varName) {
+      final String processInstanceId, final VariableRequestDto request, final String varName) {
     Long scopeKey = null;
     if (request.getScopeId() != null) {
       scopeKey = Long.valueOf(request.getScopeId());
@@ -285,7 +288,7 @@ public class VariableReader extends AbstractReader
         }
       }
       return variables;
-    } catch (IOException e) {
+    } catch (final IOException e) {
       final String message =
           String.format("Exception occurred, while obtaining variables: %s", e.getMessage());
       throw new OperateRuntimeException(message, e);

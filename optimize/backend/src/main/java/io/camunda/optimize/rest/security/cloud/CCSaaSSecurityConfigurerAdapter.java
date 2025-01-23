@@ -7,10 +7,7 @@
  */
 package io.camunda.optimize.rest.security.cloud;
 
-import static io.camunda.optimize.OptimizeJettyServerCustomizer.EXTERNAL_SUB_PATH;
-import static io.camunda.optimize.jetty.OptimizeResourceConstants.ACTUATOR_ENDPOINT;
-import static io.camunda.optimize.jetty.OptimizeResourceConstants.REST_API_PATH;
-import static io.camunda.optimize.jetty.OptimizeResourceConstants.STATIC_RESOURCE_PATH;
+import static io.camunda.optimize.OptimizeTomcatConfig.EXTERNAL_SUB_PATH;
 import static io.camunda.optimize.rest.HealthRestService.READYZ_PATH;
 import static io.camunda.optimize.rest.IngestionRestService.INGESTION_PATH;
 import static io.camunda.optimize.rest.IngestionRestService.VARIABLE_SUB_PATH;
@@ -19,6 +16,9 @@ import static io.camunda.optimize.rest.UIConfigurationRestService.UI_CONFIGURATI
 import static io.camunda.optimize.rest.security.cloud.CCSaasAuth0WebSecurityConfig.AUTH_0_CLIENT_REGISTRATION_ID;
 import static io.camunda.optimize.rest.security.cloud.CCSaasAuth0WebSecurityConfig.OAUTH_AUTH_ENDPOINT;
 import static io.camunda.optimize.rest.security.cloud.CCSaasAuth0WebSecurityConfig.OAUTH_REDIRECT_ENDPOINT;
+import static io.camunda.optimize.tomcat.OptimizeResourceConstants.ACTUATOR_ENDPOINT;
+import static io.camunda.optimize.tomcat.OptimizeResourceConstants.REST_API_PATH;
+import static io.camunda.optimize.tomcat.OptimizeResourceConstants.STATIC_RESOURCE_PATH;
 
 import io.camunda.optimize.rest.security.AbstractSecurityConfigurerAdapter;
 import io.camunda.optimize.rest.security.AuthenticationCookieFilter;
@@ -32,23 +32,26 @@ import io.camunda.optimize.service.security.SessionService;
 import io.camunda.optimize.service.util.configuration.ConfigurationService;
 import io.camunda.optimize.service.util.configuration.condition.CCSaaSCondition;
 import io.camunda.optimize.service.util.configuration.security.CloudAuthConfiguration;
+import io.camunda.optimize.tomcat.CCSaasRequestAdjustmentFilter;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
-import jakarta.ws.rs.core.MediaType;
-import jakarta.ws.rs.core.Response;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.stream.Stream;
-import lombok.SneakyThrows;
 import org.apache.commons.lang3.StringUtils;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.boot.web.servlet.FilterRegistrationBean;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Conditional;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.core.Ordered;
 import org.springframework.core.annotation.Order;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.security.config.annotation.authentication.builders.AuthenticationManagerBuilder;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
@@ -77,6 +80,8 @@ import org.springframework.web.util.UriComponentsBuilder;
 public class CCSaaSSecurityConfigurerAdapter extends AbstractSecurityConfigurerAdapter {
 
   public static final String CAMUNDA_CLUSTER_ID_CLAIM_NAME = "https://camunda.com/clusterId";
+
+  private static final Logger LOG = LoggerFactory.getLogger(CCSaaSSecurityConfigurerAdapter.class);
   private final ClientRegistrationRepository clientRegistrationRepository;
   private final OAuth2AuthorizedClientService oAuth2AuthorizedClientService;
 
@@ -106,7 +111,21 @@ public class CCSaaSSecurityConfigurerAdapter extends AbstractSecurityConfigurerA
             .build());
   }
 
-  @SneakyThrows
+  @Bean
+  @Order(Ordered.HIGHEST_PRECEDENCE) /* order of loading */
+  FilterRegistrationBean<CCSaasRequestAdjustmentFilter> requestAdjuster() {
+    LOG.debug("Registering filter 'requestAdjuster' (SaaS)...");
+    final CCSaasRequestAdjustmentFilter ccsaasRequestAdjustmentFilter =
+        new CCSaasRequestAdjustmentFilter(
+            configurationService.getAuthConfiguration().getCloudAuthConfiguration().getClusterId());
+    final FilterRegistrationBean<CCSaasRequestAdjustmentFilter> registration =
+        new FilterRegistrationBean<>();
+    registration.setOrder(Ordered.HIGHEST_PRECEDENCE); /* position in the chain */
+    registration.addUrlPatterns("/*");
+    registration.setFilter(ccsaasRequestAdjustmentFilter);
+    return registration;
+  }
+
   @Bean
   @Order(1)
   protected SecurityFilterChain configurePublicApi(final HttpSecurity http) {
@@ -119,72 +138,79 @@ public class CCSaaSSecurityConfigurerAdapter extends AbstractSecurityConfigurerA
     return applyPublicApiOptions(httpSecurityBuilder);
   }
 
-  @SneakyThrows
   @Bean
   @Order(2)
   protected SecurityFilterChain configureWebSecurity(final HttpSecurity http) {
-    return super.configureGenericSecurityOptions(http)
-        // Then we configure the specific web security for CCSaaS
-        .authorizeHttpRequests(
-            httpRequests ->
-                // ready endpoint is public for infra
-                httpRequests
-                    .requestMatchers(new AntPathRequestMatcher(createApiPath(READYZ_PATH)))
-                    .permitAll()
-                    // public share resources
-                    .requestMatchers(
-                        new AntPathRequestMatcher(EXTERNAL_SUB_PATH + "/"),
-                        new AntPathRequestMatcher(EXTERNAL_SUB_PATH + "/index*"),
-                        new AntPathRequestMatcher(EXTERNAL_SUB_PATH + STATIC_RESOURCE_PATH + "/**"),
-                        new AntPathRequestMatcher(EXTERNAL_SUB_PATH + "/*.js"),
-                        new AntPathRequestMatcher(EXTERNAL_SUB_PATH + "/*.ico"))
-                    .permitAll()
-                    // public share related resources (API)
-                    .requestMatchers(
-                        new AntPathRequestMatcher(
-                            createApiPath(EXTERNAL_SUB_PATH + DEEP_SUB_PATH_ANY)))
-                    .permitAll()
-                    // common public api resources
-                    .requestMatchers(
-                        new AntPathRequestMatcher(createApiPath(UI_CONFIGURATION_PATH)),
-                        new AntPathRequestMatcher(createApiPath(LOCALIZATION_PATH)))
-                    .permitAll()
-                    .requestMatchers(new AntPathRequestMatcher(ACTUATOR_ENDPOINT + "/**"))
-                    .permitAll()
-                    // everything else requires authentication
-                    .anyRequest()
-                    .authenticated())
-        .oauth2Login(
-            oauth2 ->
-                oauth2
-                    .clientRegistrationRepository(clientRegistrationRepository)
-                    .authorizedClientService(oAuth2AuthorizedClientService)
-                    .authorizationEndpoint(
-                        authorizationEndpointConfig ->
-                            authorizationEndpointConfig
-                                .baseUri(OAUTH_AUTH_ENDPOINT)
-                                .authorizationRequestRepository(
-                                    cookieOAuth2AuthorizationRequestRepository()))
-                    .redirectionEndpoint(
-                        redirectionEndpointConfig ->
-                            redirectionEndpointConfig.baseUri(OAUTH_REDIRECT_ENDPOINT))
-                    .successHandler(getAuthenticationSuccessHandler()))
-        .addFilterBefore(
-            authenticationCookieFilter(http), OAuth2AuthorizationRequestRedirectFilter.class)
-        .exceptionHandling(
-            exceptionHandling ->
-                exceptionHandling
-                    .defaultAuthenticationEntryPointFor(
-                        new HttpStatusEntryPoint(HttpStatus.UNAUTHORIZED),
-                        new AntPathRequestMatcher(REST_API_PATH + "/**"))
-                    .defaultAuthenticationEntryPointFor(
-                        new AddClusterIdSubPathToRedirectAuthenticationEntryPoint(
-                            OAUTH_AUTH_ENDPOINT + "/auth0"),
-                        new AntPathRequestMatcher("/**")))
-        .oauth2ResourceServer(
-            oauth2resourceServer ->
-                oauth2resourceServer.jwt(jwtConfigurer -> jwtConfigurer.decoder(jwtDecoder())))
-        .build();
+    try {
+      return super.configureGenericSecurityOptions(http)
+          // Then we configure the specific web security for CCSaaS
+          .authorizeHttpRequests(
+              httpRequests ->
+                  httpRequests
+                      // ready endpoint is public for infra
+                      .requestMatchers(new AntPathRequestMatcher(createApiPath(READYZ_PATH)))
+                      .permitAll()
+                      // public share resources
+                      .requestMatchers(
+                          new AntPathRequestMatcher(EXTERNAL_SUB_PATH + "/"),
+                          new AntPathRequestMatcher("/index*"),
+                          new AntPathRequestMatcher(EXTERNAL_SUB_PATH + "/index*"),
+                          new AntPathRequestMatcher(STATIC_RESOURCE_PATH + "/**"),
+                          new AntPathRequestMatcher(
+                              EXTERNAL_SUB_PATH + STATIC_RESOURCE_PATH + "/**"),
+                          new AntPathRequestMatcher(EXTERNAL_SUB_PATH + "/*.js"),
+                          new AntPathRequestMatcher(EXTERNAL_SUB_PATH + "/*.ico"))
+                      .permitAll()
+                      // public share related resources (API)
+                      .requestMatchers(
+                          new AntPathRequestMatcher(
+                              createApiPath(EXTERNAL_SUB_PATH + DEEP_SUB_PATH_ANY)),
+                          new AntPathRequestMatcher(EXTERNAL_SUB_PATH + REST_API_PATH + "/**"))
+                      .permitAll()
+                      // common public api resources
+                      .requestMatchers(
+                          new AntPathRequestMatcher(createApiPath(UI_CONFIGURATION_PATH)),
+                          new AntPathRequestMatcher(createApiPath(LOCALIZATION_PATH)))
+                      .permitAll()
+                      .requestMatchers(new AntPathRequestMatcher(ACTUATOR_ENDPOINT + "/**"))
+                      .permitAll()
+                      // everything else requires authentication
+                      .anyRequest()
+                      .authenticated())
+          .oauth2Login(
+              oauth2 ->
+                  oauth2
+                      .clientRegistrationRepository(clientRegistrationRepository)
+                      .authorizedClientService(oAuth2AuthorizedClientService)
+                      .authorizationEndpoint(
+                          authorizationEndpointConfig ->
+                              authorizationEndpointConfig
+                                  .baseUri(OAUTH_AUTH_ENDPOINT)
+                                  .authorizationRequestRepository(
+                                      cookieOAuth2AuthorizationRequestRepository()))
+                      .redirectionEndpoint(
+                          redirectionEndpointConfig ->
+                              redirectionEndpointConfig.baseUri(OAUTH_REDIRECT_ENDPOINT))
+                      .successHandler(getAuthenticationSuccessHandler()))
+          .addFilterBefore(
+              authenticationCookieFilter(http), OAuth2AuthorizationRequestRedirectFilter.class)
+          .exceptionHandling(
+              exceptionHandling ->
+                  exceptionHandling
+                      .defaultAuthenticationEntryPointFor(
+                          new HttpStatusEntryPoint(HttpStatus.UNAUTHORIZED),
+                          new AntPathRequestMatcher(REST_API_PATH + "/**"))
+                      .defaultAuthenticationEntryPointFor(
+                          new AddClusterIdSubPathToRedirectAuthenticationEntryPoint(
+                              OAUTH_AUTH_ENDPOINT + "/auth0"),
+                          new AntPathRequestMatcher("/**")))
+          .oauth2ResourceServer(
+              oauth2resourceServer ->
+                  oauth2resourceServer.jwt(jwtConfigurer -> jwtConfigurer.decoder(jwtDecoder())))
+          .build();
+    } catch (final Exception e) {
+      throw new OptimizeRuntimeException(e);
+    }
   }
 
   @Bean
@@ -275,7 +301,7 @@ public class CCSaaSSecurityConfigurerAdapter extends AbstractSecurityConfigurerA
         // authenticationCookieFilter granting the user access.
         // This is also a technique documented at w3.org
         // https://www.w3.org/TR/WCAG20-TECHS/H76.html
-        response.setContentType(MediaType.TEXT_HTML);
+        response.setContentType(MediaType.TEXT_HTML_VALUE);
         response
             .getWriter()
             // @formatter:off
@@ -300,7 +326,7 @@ public class CCSaaSSecurityConfigurerAdapter extends AbstractSecurityConfigurerA
                     getClusterIdPath(), getClusterIdPath(), getClusterIdPath()));
         // @formatter:on
       } else {
-        response.setStatus(Response.Status.FORBIDDEN.getStatusCode());
+        response.setStatus(HttpStatus.FORBIDDEN.value());
       }
     };
   }

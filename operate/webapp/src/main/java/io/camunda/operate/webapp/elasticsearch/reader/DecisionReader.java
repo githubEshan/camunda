@@ -7,24 +7,24 @@
  */
 package io.camunda.operate.webapp.elasticsearch.reader;
 
-import static io.camunda.operate.schema.indices.DecisionIndex.DECISION_REQUIREMENTS_KEY;
-import static io.camunda.operate.schema.indices.DecisionRequirementsIndex.XML;
 import static io.camunda.operate.util.ElasticsearchUtil.joinWithAnd;
+import static io.camunda.webapps.schema.descriptors.operate.index.DecisionIndex.DECISION_REQUIREMENTS_KEY;
+import static io.camunda.webapps.schema.descriptors.operate.index.DecisionRequirementsIndex.XML;
 import static org.elasticsearch.index.query.QueryBuilders.*;
 import static org.elasticsearch.search.aggregations.AggregationBuilders.terms;
 import static org.elasticsearch.search.aggregations.AggregationBuilders.topHits;
 
 import io.camunda.operate.conditions.ElasticsearchCondition;
-import io.camunda.operate.entities.dmn.definition.DecisionDefinitionEntity;
 import io.camunda.operate.exceptions.OperateRuntimeException;
-import io.camunda.operate.property.OperateProperties;
-import io.camunda.operate.schema.indices.DecisionIndex;
-import io.camunda.operate.schema.indices.DecisionRequirementsIndex;
 import io.camunda.operate.util.ElasticsearchUtil;
 import io.camunda.operate.webapp.rest.dto.DecisionRequestDto;
 import io.camunda.operate.webapp.rest.exception.NotFoundException;
 import io.camunda.operate.webapp.security.identity.IdentityPermission;
-import io.camunda.operate.webapp.security.identity.PermissionsService;
+import io.camunda.operate.webapp.security.permission.PermissionsService;
+import io.camunda.security.configuration.SecurityConfiguration;
+import io.camunda.webapps.schema.descriptors.operate.index.DecisionIndex;
+import io.camunda.webapps.schema.descriptors.operate.index.DecisionRequirementsIndex;
+import io.camunda.webapps.schema.entities.operate.dmn.definition.DecisionDefinitionEntity;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -57,12 +57,11 @@ public class DecisionReader extends AbstractReader
 
   @Autowired private DecisionRequirementsIndex decisionRequirementsIndex;
 
-  @Autowired(required = false)
-  private PermissionsService permissionsService;
+  @Autowired private PermissionsService permissionsService;
 
-  @Autowired private OperateProperties operateProperties;
+  @Autowired private SecurityConfiguration securityConfiguration;
 
-  private DecisionDefinitionEntity fromSearchHit(String processString) {
+  private DecisionDefinitionEntity fromSearchHit(final String processString) {
     return ElasticsearchUtil.fromSearchHit(
         processString, objectMapper, DecisionDefinitionEntity.class);
   }
@@ -74,7 +73,7 @@ public class DecisionReader extends AbstractReader
    * @return
    */
   @Override
-  public String getDiagram(Long decisionDefinitionKey) {
+  public String getDiagram(final Long decisionDefinitionKey) {
     // get decisionRequirementsId
     SearchRequest searchRequest =
         new SearchRequest(decisionIndex.getAlias())
@@ -111,7 +110,7 @@ public class DecisionReader extends AbstractReader
         throw new NotFoundException(
             String.format("Could not find DRD with id '%s'.", decisionRequirementsId));
       }
-    } catch (IOException e) {
+    } catch (final IOException e) {
       final String message =
           String.format(
               "Exception occurred, while obtaining the decision diagram: %s", e.getMessage());
@@ -127,7 +126,7 @@ public class DecisionReader extends AbstractReader
    * @return decision
    */
   @Override
-  public DecisionDefinitionEntity getDecision(Long decisionDefinitionKey) {
+  public DecisionDefinitionEntity getDecision(final Long decisionDefinitionKey) {
     final SearchRequest searchRequest =
         new SearchRequest(decisionIndex.getAlias())
             .source(
@@ -144,7 +143,7 @@ public class DecisionReader extends AbstractReader
         throw new NotFoundException(
             String.format("Could not find decision with key '%s'.", decisionDefinitionKey));
       }
-    } catch (IOException e) {
+    } catch (final IOException e) {
       final String message =
           String.format("Exception occurred, while obtaining the decision: %s", e.getMessage());
       LOGGER.error(message, e);
@@ -159,7 +158,7 @@ public class DecisionReader extends AbstractReader
    */
   @Override
   public Map<String, List<DecisionDefinitionEntity>> getDecisionsGrouped(
-      DecisionRequestDto request) {
+      final DecisionRequestDto request) {
     final String tenantsGroupsAggName = "group_by_tenantId";
     final String groupsAggName = "group_by_decisionId";
     final String decisionsAggName = "decisions";
@@ -213,7 +212,7 @@ public class DecisionReader extends AbstractReader
 
                           final TopHits processes = tenantB.getAggregations().get(decisionsAggName);
                           final SearchHit[] hits = processes.getHits().getHits();
-                          for (SearchHit searchHit : hits) {
+                          for (final SearchHit searchHit : hits) {
                             final DecisionDefinitionEntity decisionEntity =
                                 fromSearchHit(searchHit.getSourceAsString());
                             result.get(groupKey).add(decisionEntity);
@@ -222,7 +221,7 @@ public class DecisionReader extends AbstractReader
               });
 
       return result;
-    } catch (IOException e) {
+    } catch (final IOException e) {
       final String message =
           String.format(
               "Exception occurred, while obtaining grouped processes: %s", e.getMessage());
@@ -230,16 +229,16 @@ public class DecisionReader extends AbstractReader
     }
   }
 
-  private QueryBuilder buildQuery(String tenantId) {
+  private QueryBuilder buildQuery(final String tenantId) {
     QueryBuilder decisionIdQ = null;
-    if (permissionsService != null) {
+    if (permissionsService.permissionsEnabled()) {
       final var allowed = permissionsService.getDecisionsWithPermission(IdentityPermission.READ);
       if (allowed != null && !allowed.isAll()) {
         decisionIdQ = QueryBuilders.termsQuery(DecisionIndex.DECISION_ID, allowed.getIds());
       }
     }
     QueryBuilder tenantIdQ = null;
-    if (operateProperties.getMultiTenancy().isEnabled()) {
+    if (securityConfiguration.getMultiTenancy().isEnabled()) {
       tenantIdQ = tenantId != null ? termQuery(DecisionIndex.TENANT_ID, tenantId) : null;
     }
     QueryBuilder q = joinWithAnd(decisionIdQ, tenantIdQ);

@@ -49,6 +49,7 @@ public final class ClusterConfigurationRequestServer implements AutoCloseable {
     registerClusterScaleRequestHandler();
     registerClusterPatchRequestHandler();
     registerForceRemoveBrokersRequestHandler();
+    registerPurgeRequestHandler();
   }
 
   @Override
@@ -172,6 +173,14 @@ public final class ClusterConfigurationRequestServer implements AutoCloseable {
         this::encodeResponse);
   }
 
+  private void registerPurgeRequestHandler() {
+    communicationService.replyTo(
+        ClusterConfigurationRequestTopics.PURGE.topic(),
+        serializer::decodePurgeRequest,
+        request -> mapResponse(clusterConfigurationManagementApi.purge(request)),
+        this::encodeResponse);
+  }
+
   private void registerClusterPatchRequestHandler() {
     communicationService.replyTo(
         ClusterConfigurationRequestTopics.PATCH_CLUSTER.topic(),
@@ -208,7 +217,7 @@ public final class ClusterConfigurationRequestServer implements AutoCloseable {
     // throwable is always CompletionException
     return switch (throwable.getCause()) {
       case final ClusterConfigurationRequestFailedException.OperationNotAllowed
-                  operationNotAllowed ->
+              operationNotAllowed ->
           Either.left(
               new ErrorResponse(ErrorCode.OPERATION_NOT_ALLOWED, operationNotAllowed.getMessage()));
       case final ClusterConfigurationRequestFailedException.InvalidRequest invalidRequest ->

@@ -9,7 +9,6 @@
 import {SerializedEditorState} from 'lexical';
 
 export type GenericEntity<D extends object = Record<string, unknown>> = {
-  id: string | null;
   name: string;
   lastModified: string;
   created: string;
@@ -19,7 +18,19 @@ export type GenericEntity<D extends object = Record<string, unknown>> = {
   data: D;
 };
 
-export type EntityListEntity<D extends object = Record<string, unknown>> = GenericEntity<D> & {
+export type EntityListData = {
+  subEntityCounts: {
+    dashboard?: number;
+    report?: number;
+  };
+  roleCounts: {
+    group?: number;
+    user?: number;
+  };
+};
+
+export type EntityListEntity<D extends object = EntityListData> = GenericEntity<D> & {
+  id: string;
   entityType: string;
 };
 
@@ -109,18 +120,25 @@ interface ProcessView {
   properties: (ProcessViewProperty | string)[];
 }
 
-interface ProcessGroupBy<Value = unknown> {
-  type:
-    | 'assignee'
-    | 'duration'
-    | 'endDate'
-    | 'flowNodes'
-    | 'none'
-    | 'runningDate'
-    | 'startDate'
-    | 'userTasks'
-    | 'variable';
-  value: Value;
+type GroupByValue = {
+  unit?: string;
+  type?: string | null;
+};
+
+type GroupByType =
+  | 'assignee'
+  | 'duration'
+  | 'endDate'
+  | 'flowNodes'
+  | 'none'
+  | 'runningDate'
+  | 'startDate'
+  | 'userTasks'
+  | 'variable';
+
+interface ProcessGroupBy {
+  type: GroupByType;
+  value: GroupByValue | null;
 }
 
 type DistributedByType =
@@ -133,9 +151,9 @@ type DistributedByType =
   | 'userTask'
   | 'variable';
 
-interface DistributedBy<Value = unknown> {
+interface DistributedBy {
   type: DistributedByType;
-  value: Value;
+  value: GroupByValue | null;
 }
 
 type ProcessReportVisualization = 'number' | 'table' | 'bar' | 'barLine' | 'line' | 'pie' | 'heat';
@@ -278,16 +296,21 @@ interface SingleReportData {
   definitions: Definition[];
 }
 
-export interface SingleProcessReportData<GroupByValue = unknown, DistributedByValue = unknown>
-  extends SingleReportData {
+export interface SingleProcessReportData extends SingleReportData {
   filter: ProcessFilter[];
   view: ProcessView | null;
-  groupBy: ProcessGroupBy<GroupByValue> | null;
-  distributedBy: DistributedBy<DistributedByValue>;
+  groupBy: ProcessGroupBy | null;
+  distributedBy: DistributedBy;
   visualization: ProcessReportVisualization | null;
   managementReport: boolean;
   instantPreviewReport: boolean;
   userTaskReport: boolean;
+}
+
+export interface SingleProcessReportResultData {
+  key: string;
+  label: string;
+  value: string | number;
 }
 
 export type ReportType = 'process';
@@ -304,15 +327,13 @@ export interface Report<
   result: Result;
 }
 
-export type SingleProcessReport<GroupByValue = unknown, DistributedByValue = unknown> = Report<
+export type SingleProcessReport = Report<
   'process',
-  SingleProcessReportData<GroupByValue, DistributedByValue>
+  SingleProcessReportData,
+  {data: SingleProcessReportResultData[]}
 >;
 
-export type GenericReport<
-  GroupByValue = unknown,
-  DistributedByValue = unknown,
-> = SingleProcessReport<GroupByValue, DistributedByValue>;
+export type GenericReport = SingleProcessReport;
 
 type DashboardTileCommonProps = {
   id: string;

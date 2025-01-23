@@ -7,24 +7,29 @@
  */
 package io.camunda.optimize.upgrade.main;
 
+import static io.camunda.optimize.service.util.configuration.ConfigurationServiceConstants.CAMUNDA_OPTIMIZE_DATABASE;
+import static io.camunda.optimize.service.util.configuration.ConfigurationServiceConstants.ELASTICSEARCH_DATABASE_PROPERTY;
 import static io.camunda.optimize.upgrade.util.UpgradeUtil.createUpgradeDependencies;
 
 import io.camunda.optimize.service.metadata.Version;
+import io.camunda.optimize.service.util.configuration.ConfigurationService;
+import io.camunda.optimize.service.util.configuration.ConfigurationServiceBuilder;
+import io.camunda.optimize.service.util.configuration.DatabaseType;
 import io.camunda.optimize.upgrade.exception.UpgradeRuntimeException;
 import io.camunda.optimize.upgrade.plan.UpgradeExecutionDependencies;
 import io.camunda.optimize.upgrade.plan.UpgradePlan;
 import io.camunda.optimize.upgrade.plan.UpgradePlanRegistry;
-import io.camunda.optimize.util.jetty.LoggingConfigurationReader;
+import io.camunda.optimize.util.tomcat.LoggingConfigurationReader;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
+import java.util.Optional;
 import java.util.Scanner;
 import java.util.Set;
-import lombok.extern.slf4j.Slf4j;
+import org.slf4j.Logger;
 
-@Slf4j
 public class UpgradeMain {
 
   private static final Set<String> ANSWER_OPTIONS_YES =
@@ -32,14 +37,39 @@ public class UpgradeMain {
 
   private static final Set<String> ANSWER_OPTIONS_NO =
       Collections.unmodifiableSet(new HashSet<>(Arrays.asList("n", "no")));
+  private static final Logger LOG = org.slf4j.LoggerFactory.getLogger(UpgradeMain.class);
 
   static {
-    new LoggingConfigurationReader().defineLogbackLoggingConfiguration();
+    new LoggingConfigurationReader().defineLog4jLoggingConfiguration();
   }
 
-  public static void main(String... args) {
+  public static void main(final String... args) {
     try {
-      final UpgradeExecutionDependencies upgradeDependencies = createUpgradeDependencies();
+      final DatabaseType databaseType =
+          ConfigurationService.convertToDatabaseProperty(
+              Optional.ofNullable(System.getenv(CAMUNDA_OPTIMIZE_DATABASE))
+                  .orElse(ELASTICSEARCH_DATABASE_PROPERTY));
+      LOG.info("Identified {} Database configuration", databaseType.getId());
+
+      final boolean initSchemaEnabled =
+          ConfigurationServiceBuilder.createDefaultConfiguration()
+              .getElasticSearchConfiguration()
+              .getConnection()
+              .isInitSchemaEnabled();
+
+      final boolean clusterTaskCheckingEnabled =
+          ConfigurationServiceBuilder.createDefaultConfiguration()
+              .getElasticSearchConfiguration()
+              .getConnection()
+              .isClusterTaskCheckingEnabled();
+      if (databaseType == DatabaseType.ELASTICSEARCH
+          && (!initSchemaEnabled || !clusterTaskCheckingEnabled)) {
+        throw new UpgradeRuntimeException(
+            "Upgrade cannot be performed without cluster checking and schema initialization enabled");
+      }
+
+      final UpgradeExecutionDependencies upgradeDependencies =
+          createUpgradeDependencies(databaseType);
       final UpgradeProcedure upgradeProcedure = UpgradeProcedureFactory.create(upgradeDependencies);
       final String targetVersion =
           Arrays.stream(args)
@@ -52,7 +82,7 @@ public class UpgradeMain {
               .getSequentialUpgradePlansToTargetVersion(targetVersion);
 
       if (upgradePlans.isEmpty()) {
-        String errorMessage =
+        final String errorMessage =
             "It was not possible to update Optimize to version "
                 + targetVersion
                 + ".\n"
@@ -65,23 +95,24 @@ public class UpgradeMain {
         printWarning(upgradePlans.get(upgradePlans.size() - 1).getToVersion().getValue());
       }
 
-      log.info("Executing update...");
+      LOG.info("Executing update...");
 
-      for (UpgradePlan upgradePlan : upgradePlans) {
+      for (final UpgradePlan upgradePlan : upgradePlans) {
         upgradeProcedure.performUpgrade(upgradePlan);
       }
+
       upgradeProcedure.schemaUpgradeClient.initializeSchema();
 
-      log.info("Update finished successfully.");
+      LOG.info("Update finished successfully.");
 
       System.exit(0);
     } catch (final Exception e) {
-      log.error(e.getMessage(), e);
+      LOG.error(e.getMessage(), e);
       System.exit(1);
     }
   }
 
-  private static void printWarning(String toVersion) {
+  private static void printWarning(final String toVersion) {
     String message =
         "\n\n"
             + "================================ WARNING! ================================ \n\n"
@@ -103,13 +134,13 @@ public class UpgradeMain {
 
     String answer = "";
     while (!ANSWER_OPTIONS_YES.contains(answer)) {
-      Scanner console = new Scanner(System.in);
+      final Scanner console = new Scanner(System.in);
       answer = console.next().trim().toLowerCase(Locale.ENGLISH);
       if (ANSWER_OPTIONS_NO.contains(answer)) {
         System.out.println("The Optimize upgrade was aborted.");
         System.exit(1);
       } else if (!ANSWER_OPTIONS_YES.contains(answer)) {
-        String text =
+        final String text =
             "Your answer was '"
                 + answer
                 + "'. The only accepted answers are '(y)es' or '(n)o'. \n"

@@ -9,28 +9,27 @@ package io.camunda.optimize.rest.util;
 
 import static io.camunda.optimize.rest.constants.RestConstants.X_OPTIMIZE_CLIENT_TIMEZONE;
 
-import jakarta.ws.rs.container.ContainerRequestContext;
+import jakarta.servlet.http.HttpServletRequest;
 import java.time.OffsetDateTime;
 import java.time.ZoneId;
 import java.time.ZonedDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.Set;
-import lombok.AccessLevel;
-import lombok.NoArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
+import org.slf4j.Logger;
 
-@Slf4j
-@NoArgsConstructor(access = AccessLevel.PRIVATE)
-public class TimeZoneUtil {
+public final class TimeZoneUtil {
 
   private static final Set<String> AVAILABLE_ZONE_IDS = ZoneId.getAvailableZoneIds();
+  private static final Logger LOG = org.slf4j.LoggerFactory.getLogger(TimeZoneUtil.class);
 
-  public static ZoneId extractTimezone(ContainerRequestContext requestContext) {
-    final String headerString = requestContext.getHeaderString(X_OPTIMIZE_CLIENT_TIMEZONE);
+  private TimeZoneUtil() {}
+
+  public static ZoneId extractTimezone(final HttpServletRequest request) {
+    final String headerString = request.getHeader(X_OPTIMIZE_CLIENT_TIMEZONE);
     if (AVAILABLE_ZONE_IDS.contains(headerString)) {
       return ZoneId.of(headerString);
     } else if (headerString != null) {
-      log.warn(
+      LOG.warn(
           "The provided timezone [{}] was not recognized. Falling back to server timezone [{}] instead.",
           headerString,
           ZoneId.systemDefault().getId());
@@ -42,7 +41,8 @@ public class TimeZoneUtil {
   public static String formatToCorrectTimezone(
       final String dateAsString, final ZoneId timezone, final DateTimeFormatter dateTimeFormatter) {
     final OffsetDateTime date = OffsetDateTime.parse(dateAsString, dateTimeFormatter);
-    OffsetDateTime dateWithAdjustedTimezone = date.atZoneSameInstant(timezone).toOffsetDateTime();
+    final OffsetDateTime dateWithAdjustedTimezone =
+        date.atZoneSameInstant(timezone).toOffsetDateTime();
     return dateTimeFormatter.format(dateWithAdjustedTimezone);
   }
 

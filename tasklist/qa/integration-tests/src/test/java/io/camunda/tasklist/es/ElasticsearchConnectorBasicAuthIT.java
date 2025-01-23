@@ -46,6 +46,7 @@ import org.testcontainers.elasticsearch.ElasticsearchContainer;
       TasklistProperties.PREFIX + ".elasticsearch.createSchema = false",
       TasklistProperties.PREFIX + ".importer.startLoadingDataOnStartup = false",
       TasklistProperties.PREFIX + ".archiver.rolloverEnabled = false",
+      TasklistProperties.PREFIX + ".zeebe.compatibility.enabled = true"
     },
     webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @ContextConfiguration(initializers = {ElasticsearchConnectorBasicAuthIT.ElasticsearchStarter.class})
@@ -95,6 +96,7 @@ public class ElasticsearchConnectorBasicAuthIT extends TasklistIntegrationTest {
               "camunda.tasklist.elasticsearch.username=elastic",
               "camunda.tasklist.elasticsearch.password=changeme",
               "camunda.tasklist.elasticsearch.clusterName=docker-cluster",
+              "camunda.tasklist.elasticsearch.url=" + elsUrl,
               "camunda.tasklist.zeebeElasticsearch.url=" + elsUrl,
               "camunda.tasklist.zeebeElasticsearch.username=elastic",
               "camunda.tasklist.zeebeElasticsearch.password=changeme",

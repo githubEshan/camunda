@@ -9,18 +9,16 @@ package io.camunda.optimize.dto.optimize.rest.sorting;
 
 import io.camunda.optimize.dto.optimize.query.processoverview.ProcessOverviewResponseDto;
 import io.camunda.optimize.dto.optimize.query.sorting.SortOrder;
-import jakarta.ws.rs.BadRequestException;
+import io.camunda.optimize.rest.exceptions.BadRequestException;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
-import lombok.NoArgsConstructor;
 
-@NoArgsConstructor
 public class ProcessOverviewSorter extends Sorter<ProcessOverviewResponseDto> {
 
-  private static final Map<String, Comparator<ProcessOverviewResponseDto>> sortComparators =
+  private static final Map<String, Comparator<ProcessOverviewResponseDto>> SORT_COMPARATORS =
       Map.of(
           ProcessOverviewResponseDto.Fields.processDefinitionName.toLowerCase(Locale.ENGLISH),
           Comparator.comparing(ProcessOverviewResponseDto::getProcessDefinitionName),
@@ -30,13 +28,15 @@ public class ProcessOverviewSorter extends Sorter<ProcessOverviewResponseDto> {
               Comparator.nullsLast(Comparator.naturalOrder())));
 
   private static final Comparator<ProcessOverviewResponseDto> DEFAULT_PROCESS_OVERVIEW_COMPARATOR =
-      sortComparators
+      SORT_COMPARATORS
           .get(ProcessOverviewResponseDto.Fields.processDefinitionName.toLowerCase(Locale.ENGLISH))
           .thenComparing(ProcessOverviewResponseDto::getProcessDefinitionKey);
 
   public ProcessOverviewSorter(final String sortBy, final SortOrder sortOrder) {
-    this.sortRequestDto = new SortRequestDto(sortBy, sortOrder);
+    sortRequestDto = new SortRequestDto(sortBy, sortOrder);
   }
+
+  public ProcessOverviewSorter() {}
 
   @Override
   public List<ProcessOverviewResponseDto> applySort(
@@ -47,11 +47,11 @@ public class ProcessOverviewSorter extends Sorter<ProcessOverviewResponseDto> {
     if (sortByOpt.isPresent()) {
       final String sortBy = sortByOpt.get();
       Comparator<ProcessOverviewResponseDto> processOverviewSorterComparator;
-      if (!sortComparators.containsKey(sortBy.toLowerCase(Locale.ENGLISH))) {
+      if (!SORT_COMPARATORS.containsKey(sortBy.toLowerCase(Locale.ENGLISH))) {
         throw new BadRequestException(String.format("%s is not a sortable field", sortBy));
       } else {
         processOverviewSorterComparator =
-            sortComparators
+            SORT_COMPARATORS
                 .get(sortBy.toLowerCase(Locale.ENGLISH))
                 .thenComparing(DEFAULT_PROCESS_OVERVIEW_COMPARATOR);
         if (sortOrderOpt.isPresent() && SortOrder.DESC.equals(sortOrderOpt.get())) {

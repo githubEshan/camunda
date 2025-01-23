@@ -14,6 +14,7 @@ import com.auth0.jwt.exceptions.TokenExpiredException;
 import io.camunda.identity.sdk.authentication.AccessToken;
 import io.camunda.identity.sdk.authentication.Tokens;
 import io.camunda.identity.sdk.exception.IdentityException;
+import io.camunda.optimize.rest.exceptions.NotAuthorizedException;
 import io.camunda.optimize.service.security.AuthCookieService;
 import io.camunda.optimize.service.security.CCSMTokenService;
 import io.camunda.optimize.service.util.configuration.condition.CCSMCondition;
@@ -24,20 +25,17 @@ import jakarta.servlet.ServletResponse;
 import jakarta.servlet.http.Cookie;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
-import jakarta.ws.rs.NotAuthorizedException;
 import java.io.IOException;
 import java.util.Arrays;
 import java.util.Map;
 import java.util.Optional;
 import java.util.function.Function;
 import java.util.stream.Collectors;
-import lombok.AllArgsConstructor;
 import org.springframework.context.annotation.Conditional;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.web.authentication.preauth.AbstractPreAuthenticatedProcessingFilter;
 
 @Conditional(CCSMCondition.class)
-@AllArgsConstructor
 public class CCSMAuthenticationCookieFilter extends AbstractPreAuthenticatedProcessingFilter {
 
   private final CCSMTokenService ccsmTokenService;
@@ -48,8 +46,13 @@ public class CCSMAuthenticationCookieFilter extends AbstractPreAuthenticatedProc
     setAuthenticationManager(authenticationManager);
   }
 
+  public CCSMAuthenticationCookieFilter(final CCSMTokenService ccsmTokenService) {
+    this.ccsmTokenService = ccsmTokenService;
+  }
+
   @Override
-  public void doFilter(ServletRequest request, ServletResponse response, FilterChain chain)
+  public void doFilter(
+      final ServletRequest request, final ServletResponse response, final FilterChain chain)
       throws IOException, ServletException {
     final Cookie[] cookies = ((HttpServletRequest) request).getCookies();
     if (cookies != null) {
@@ -63,10 +66,10 @@ public class CCSMAuthenticationCookieFilter extends AbstractPreAuthenticatedProc
                 // If no access token cookie is present, we can try renewing the tokens using the
                 // refresh token
                 () -> tryCookieRenewal(request, response, cookiesByName));
-      } catch (TokenExpiredException expiredException) {
+      } catch (final TokenExpiredException expiredException) {
         // If the access token has expired, we try to renew the tokens using the refresh token
         tryCookieRenewal(request, response, cookiesByName);
-      } catch (IdentityException verificationException) {
+      } catch (final IdentityException verificationException) {
         // If any renewal fails or the access token is otherwise not valid, try to revoke the tokens
         // using the refresh token
         try {
@@ -74,13 +77,13 @@ public class CCSMAuthenticationCookieFilter extends AbstractPreAuthenticatedProc
               .ifPresent(
                   refreshTokenCookie ->
                       ccsmTokenService.revokeToken(refreshTokenCookie.getValue()));
-        } catch (IdentityException ex) {
+        } catch (final IdentityException ex) {
           // It's possible that the revoking will fail, but we catch it so that we can still delete
           // the cookies
         } finally {
           deleteCookies(response);
         }
-      } catch (NotAuthorizedException notAuthorizedException) {
+      } catch (final NotAuthorizedException notAuthorizedException) {
         // During token verification, it could be that the user is no longer authorized to access
         // Optimize, in which
         // case we delete any existing cookies
@@ -98,12 +101,12 @@ public class CCSMAuthenticationCookieFilter extends AbstractPreAuthenticatedProc
                 Arrays.stream(request.getCookies())
                     .filter(cookie -> cookie.getName().equals(OPTIMIZE_AUTHORIZATION))
                     .findFirst()
-                    .map(
-                        accessToken ->
-                            ccsmTokenService.getSubjectFromToken(accessToken.getValue())))
+                    .flatMap(accessToken -> validToken(accessToken.getValue()))
+                    .map(ccsmTokenService::getSubjectFromToken))
         .orElseGet(
             () ->
                 AuthCookieService.getAuthCookieToken(request)
+                    .flatMap(this::validToken)
                     .map(ccsmTokenService::getSubjectFromToken)
                     .orElse(null));
   }
@@ -118,6 +121,15 @@ public class CCSMAuthenticationCookieFilter extends AbstractPreAuthenticatedProc
                     .findFirst()
                     .map(Cookie::getValue))
         .orElseGet(() -> AuthCookieService.getAuthCookieToken(request).orElse(null));
+  }
+
+  private Optional<String> validToken(final String token) {
+    try {
+      ccsmTokenService.verifyToken(token);
+    } catch (final Exception e) {
+      return Optional.empty();
+    }
+    return Optional.ofNullable(token);
   }
 
   private void tryCookieRenewal(

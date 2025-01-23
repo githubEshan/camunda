@@ -17,21 +17,22 @@ import io.camunda.optimize.dto.optimize.query.IdentitySearchResultResponseDto;
 import io.camunda.optimize.service.security.CCSMTokenService;
 import io.camunda.optimize.service.util.configuration.ConfigurationService;
 import io.camunda.optimize.service.util.configuration.condition.CCSMCondition;
-import jakarta.ws.rs.container.ContainerRequestContext;
-import jakarta.ws.rs.core.Cookie;
+import jakarta.servlet.http.Cookie;
+import jakarta.servlet.http.HttpServletRequest;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
-import lombok.extern.slf4j.Slf4j;
+import org.slf4j.Logger;
 import org.springframework.context.annotation.Conditional;
 import org.springframework.stereotype.Component;
 
 @Component
-@Slf4j
 @Conditional(CCSMCondition.class)
 public class CCSMIdentityService extends AbstractIdentityService {
 
+  private static final Logger LOG = org.slf4j.LoggerFactory.getLogger(CCSMIdentityService.class);
   private final CCSMTokenService ccsmTokenService;
   private final CCSMUserCache userCache;
 
@@ -51,12 +52,15 @@ public class CCSMIdentityService extends AbstractIdentityService {
 
   @Override
   public Optional<UserDto> getCurrentUserById(
-      final String userId, final ContainerRequestContext requestContext) {
-    return Optional.ofNullable(requestContext.getCookies())
+      final String userId, final HttpServletRequest request) {
+    return Optional.ofNullable(request.getCookies())
         .flatMap(
             cookies -> {
               final Cookie authorizationCookie =
-                  requestContext.getCookies().get(OPTIMIZE_AUTHORIZATION);
+                  Arrays.stream(request.getCookies())
+                      .filter(cookie -> OPTIMIZE_AUTHORIZATION.equals(cookie.getName()))
+                      .findAny()
+                      .orElse(null);
               return Optional.ofNullable(authorizationCookie)
                   .map(
                       cookie ->
@@ -69,12 +73,6 @@ public class CCSMIdentityService extends AbstractIdentityService {
   public Optional<GroupDto> getGroupById(final String groupId) {
     // Groups do not exist in SaaS
     return Optional.empty();
-  }
-
-  @Override
-  public List<IdentityWithMetadataResponseDto> getGroupsById(final Set<String> groupIds) {
-    // Groups do not exist in CCSM
-    return Collections.emptyList();
   }
 
   @Override
@@ -102,14 +100,20 @@ public class CCSMIdentityService extends AbstractIdentityService {
             .toList());
   }
 
-  public List<UserDto> getUsersByEmail(final Set<String> emails) {
-    return userCache.searchForUsersUsingEmails(emails).stream().map(UserDto.class::cast).toList();
-  }
-
   @Override
   public List<IdentityWithMetadataResponseDto> getUsersById(final Set<String> userIds) {
     return userCache.getUsersById(userIds).stream()
         .map(IdentityWithMetadataResponseDto.class::cast)
         .toList();
+  }
+
+  @Override
+  public List<IdentityWithMetadataResponseDto> getGroupsById(final Set<String> groupIds) {
+    // Groups do not exist in CCSM
+    return Collections.emptyList();
+  }
+
+  public List<UserDto> getUsersByEmail(final Set<String> emails) {
+    return userCache.searchForUsersUsingEmails(emails).stream().map(UserDto.class::cast).toList();
   }
 }

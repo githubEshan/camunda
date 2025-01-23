@@ -9,6 +9,7 @@ package io.camunda.tasklist.webapp.security.se;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import io.camunda.authentication.entity.CamundaUser;
 import io.camunda.tasklist.es.RetryElasticsearchClient;
 import io.camunda.tasklist.management.SearchEngineHealthIndicator;
 import io.camunda.tasklist.property.TasklistProperties;
@@ -21,14 +22,18 @@ import io.camunda.tasklist.util.TestApplication;
 import io.camunda.tasklist.webapp.security.WebSecurityConfig;
 import io.camunda.tasklist.webapp.security.oauth.OAuth2WebConfigurer;
 import java.io.IOException;
+import java.time.Duration;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Set;
+import org.awaitility.Awaitility;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.RegisterExtension;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.crypto.password.PasswordEncoder;
 
@@ -51,6 +56,7 @@ import org.springframework.security.crypto.password.PasswordEncoder;
       TasklistProperties.PREFIX + ".archiver.rolloverEnabled = false",
       TasklistProperties.PREFIX + ".userId = user1",
       TasklistProperties.PREFIX + ".password = psw1",
+      TasklistProperties.PREFIX + ".zeebe.compatibility.enabled = true"
     },
     webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 public class SearchEngineUserDetailsServiceIT extends TasklistIntegrationTest {
@@ -89,15 +95,21 @@ public class SearchEngineUserDetailsServiceIT extends TasklistIntegrationTest {
 
     // and
     updateUserRealName();
+    Awaitility.await()
+        .atMost(Duration.ofSeconds(5))
+        .pollInterval(Duration.ofSeconds(1))
+        .until(() -> userDetailsService.loadUserByUsername(TEST_USERNAME) != null);
 
     // then
     final UserDetails userDetails = userDetailsService.loadUserByUsername(TEST_USERNAME);
-    assertThat(userDetails).isInstanceOf(User.class);
-    final User testUser = (User) userDetails;
+    assertThat(userDetails).isInstanceOf(CamundaUser.class);
+    final CamundaUser testUser = (CamundaUser) userDetails;
     assertThat(testUser.getUsername()).isEqualTo(TEST_USERNAME);
     assertThat(passwordEncoder.matches(TEST_PASSWORD, testUser.getPassword())).isTrue();
     assertThat(testUser.getUserId()).isEqualTo("user1");
     assertThat(testUser.getDisplayName()).isEqualTo(TEST_FIRSTNAME + " " + TEST_LASTNAME);
+    assertThat(testUser.getAuthorities())
+        .isEqualTo(Set.of(new SimpleGrantedAuthority(Role.OWNER.name())));
   }
 
   private void updateUserRealName() {

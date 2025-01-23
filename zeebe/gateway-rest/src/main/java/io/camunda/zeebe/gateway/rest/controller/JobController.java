@@ -21,13 +21,11 @@ import io.camunda.zeebe.gateway.rest.RequestMapper.ErrorJobRequest;
 import io.camunda.zeebe.gateway.rest.RequestMapper.FailJobRequest;
 import io.camunda.zeebe.gateway.rest.RequestMapper.UpdateJobRequest;
 import io.camunda.zeebe.gateway.rest.RestErrorMapper;
+import io.camunda.zeebe.gateway.rest.annotation.CamundaPatchMapping;
+import io.camunda.zeebe.gateway.rest.annotation.CamundaPostMapping;
 import java.util.concurrent.CompletableFuture;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
-import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 
@@ -38,7 +36,6 @@ public class JobController {
   private final ResponseObserverProvider responseObserverProvider;
   private final JobServices<JobActivationResponse> jobServices;
 
-  @Autowired
   public JobController(
       final JobServices<JobActivationResponse> jobServices,
       final ResponseObserverProvider responseObserverProvider) {
@@ -46,50 +43,35 @@ public class JobController {
     this.responseObserverProvider = responseObserverProvider;
   }
 
-  @PostMapping(
-      path = "/activation",
-      produces = {MediaType.APPLICATION_JSON_VALUE, MediaType.APPLICATION_PROBLEM_JSON_VALUE},
-      consumes = MediaType.APPLICATION_JSON_VALUE)
+  @CamundaPostMapping(path = "/activation")
   public CompletableFuture<ResponseEntity<Object>> activateJobs(
       @RequestBody final JobActivationRequest activationRequest) {
     return RequestMapper.toJobsActivationRequest(activationRequest)
         .fold(RestErrorMapper::mapProblemToCompletedResponse, this::activateJobs);
   }
 
-  @PostMapping(
-      path = "/{jobKey}/failure",
-      produces = {MediaType.APPLICATION_JSON_VALUE, MediaType.APPLICATION_PROBLEM_JSON_VALUE},
-      consumes = MediaType.APPLICATION_JSON_VALUE)
+  @CamundaPostMapping(path = "/{jobKey}/failure")
   public CompletableFuture<ResponseEntity<Object>> failureJob(
       @PathVariable final long jobKey,
       @RequestBody(required = false) final JobFailRequest failureRequest) {
     return failJob(RequestMapper.toJobFailRequest(failureRequest, jobKey));
   }
 
-  @PostMapping(
-      path = "/{jobKey}/error",
-      produces = {MediaType.APPLICATION_JSON_VALUE, MediaType.APPLICATION_PROBLEM_JSON_VALUE},
-      consumes = MediaType.APPLICATION_JSON_VALUE)
+  @CamundaPostMapping(path = "/{jobKey}/error")
   public CompletableFuture<ResponseEntity<Object>> errorJob(
       @PathVariable final long jobKey, @RequestBody final JobErrorRequest errorRequest) {
     return RequestMapper.toJobErrorRequest(errorRequest, jobKey)
         .fold(RestErrorMapper::mapProblemToCompletedResponse, this::errorJob);
   }
 
-  @PostMapping(
-      path = "/{jobKey}/completion",
-      produces = {MediaType.APPLICATION_JSON_VALUE, MediaType.APPLICATION_PROBLEM_JSON_VALUE},
-      consumes = MediaType.APPLICATION_JSON_VALUE)
+  @CamundaPostMapping(path = "/{jobKey}/completion")
   public CompletableFuture<ResponseEntity<Object>> completeJob(
       @PathVariable final long jobKey,
       @RequestBody(required = false) final JobCompletionRequest completionRequest) {
     return completeJob(RequestMapper.toJobCompletionRequest(completionRequest, jobKey));
   }
 
-  @PatchMapping(
-      path = "/{jobKey}",
-      produces = {MediaType.APPLICATION_JSON_VALUE, MediaType.APPLICATION_PROBLEM_JSON_VALUE},
-      consumes = MediaType.APPLICATION_JSON_VALUE)
+  @CamundaPatchMapping(path = "/{jobKey}")
   public CompletableFuture<ResponseEntity<Object>> updateJob(
       @PathVariable final long jobKey, @RequestBody final JobUpdateRequest jobUpdateRequest) {
     return RequestMapper.toJobUpdateRequest(jobUpdateRequest, jobKey)
@@ -100,8 +82,9 @@ public class JobController {
       final ActivateJobsRequest activationRequest) {
     final var result = new CompletableFuture<ResponseEntity<Object>>();
     final var responseObserver = responseObserverProvider.apply(result);
-    jobServices.activateJobs(
-        activationRequest, responseObserver, responseObserver::setCancelationHandler);
+    jobServices
+        .withAuthentication(RequestMapper.getAuthentication())
+        .activateJobs(activationRequest, responseObserver, responseObserver::setCancelationHandler);
     return result.handleAsync(
         (res, ex) -> {
           responseObserver.invokeCancelationHandler();
@@ -141,7 +124,10 @@ public class JobController {
         () ->
             jobServices
                 .withAuthentication(RequestMapper.getAuthentication())
-                .completeJob(completeJobRequest.jobKey(), completeJobRequest.variables()));
+                .completeJob(
+                    completeJobRequest.jobKey(),
+                    completeJobRequest.variables(),
+                    completeJobRequest.result()));
   }
 
   private CompletableFuture<ResponseEntity<Object>> updateJob(

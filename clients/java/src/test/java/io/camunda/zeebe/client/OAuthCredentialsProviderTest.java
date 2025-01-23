@@ -27,6 +27,8 @@ import com.github.tomakehurst.wiremock.client.WireMock;
 import com.github.tomakehurst.wiremock.junit5.WireMockRuntimeInfo;
 import com.github.tomakehurst.wiremock.junit5.WireMockTest;
 import com.github.tomakehurst.wiremock.matching.RequestPatternBuilder;
+import io.camunda.client.protocol.rest.ProblemDetail;
+import io.camunda.client.protocol.rest.TopologyResponse;
 import io.camunda.zeebe.client.CredentialsProvider.CredentialsApplier;
 import io.camunda.zeebe.client.CredentialsProvider.StatusCode;
 import io.camunda.zeebe.client.api.response.Topology;
@@ -34,8 +36,6 @@ import io.camunda.zeebe.client.impl.ZeebeClientCredentials;
 import io.camunda.zeebe.client.impl.oauth.OAuthCredentialsCache;
 import io.camunda.zeebe.client.impl.oauth.OAuthCredentialsProvider;
 import io.camunda.zeebe.client.impl.oauth.OAuthCredentialsProviderBuilder;
-import io.camunda.zeebe.client.protocol.rest.ProblemDetail;
-import io.camunda.zeebe.client.protocol.rest.TopologyResponse;
 import io.camunda.zeebe.client.util.RecordingGatewayService;
 import io.camunda.zeebe.client.util.RestGatewayPaths;
 import io.grpc.Metadata;
@@ -174,7 +174,7 @@ public final class OAuthCredentialsProviderTest {
 
     // then
     assertThat(shouldRetry).isTrue();
-    assertThat(cache.readCache().get(AUDIENCE))
+    assertThat(cache.readCache().get(CLIENT_ID))
         .get()
         .returns("foo", ZeebeClientCredentials::getAccessToken);
   }
@@ -219,7 +219,7 @@ public final class OAuthCredentialsProviderTest {
             .credentialsCachePath(cacheFilePath.toString())
             .build();
     mockCredentials(ACCESS_TOKEN, null);
-    cache.put(AUDIENCE, new ZeebeClientCredentials(ACCESS_TOKEN, EXPIRY, TOKEN_TYPE)).writeCache();
+    cache.put(CLIENT_ID, new ZeebeClientCredentials(ACCESS_TOKEN, EXPIRY, TOKEN_TYPE)).writeCache();
 
     // when - should not make any request, but use the cached credentials
     provider.applyCredentials(applier);
@@ -249,7 +249,7 @@ public final class OAuthCredentialsProviderTest {
 
     // then
     wireMockInfo.getWireMock().verifyThat(1, RequestPatternBuilder.allRequests());
-    assertThat(cache.readCache().get(AUDIENCE))
+    assertThat(cache.readCache().get(CLIENT_ID))
         .hasValue(new ZeebeClientCredentials(ACCESS_TOKEN, EXPIRY, TOKEN_TYPE));
   }
 
@@ -267,14 +267,14 @@ public final class OAuthCredentialsProviderTest {
             .credentialsCachePath(cacheFilePath.toString())
             .build();
     mockCredentials(ACCESS_TOKEN, null);
-    cache.put(AUDIENCE, new ZeebeClientCredentials("invalid", EXPIRY, TOKEN_TYPE)).writeCache();
+    cache.put(CLIENT_ID, new ZeebeClientCredentials("invalid", EXPIRY, TOKEN_TYPE)).writeCache();
 
     // when - should refresh on unauthorized and write new token
     provider.shouldRetryRequest(unauthorizedCode);
 
     // then
     wireMockInfo.getWireMock().verifyThat(1, RequestPatternBuilder.allRequests());
-    assertThat(cache.readCache().get(AUDIENCE))
+    assertThat(cache.readCache().get(CLIENT_ID))
         .hasValue(new ZeebeClientCredentials(ACCESS_TOKEN, EXPIRY, TOKEN_TYPE));
   }
 
@@ -474,7 +474,7 @@ public final class OAuthCredentialsProviderTest {
       final OAuthCredentialsCache cache = new OAuthCredentialsCache(cacheFilePath.toFile());
       final ZeebeClientBuilder builder = clientBuilder();
       cache
-          .put(AUDIENCE, new ZeebeClientCredentials("firstToken", EXPIRY, TOKEN_TYPE))
+          .put(CLIENT_ID, new ZeebeClientCredentials("firstToken", EXPIRY, TOKEN_TYPE))
           .writeCache();
       recordingInterceptor.setInterceptAction(
           (call, headers) -> {
@@ -503,7 +503,7 @@ public final class OAuthCredentialsProviderTest {
       final OAuthCredentialsCache cache = new OAuthCredentialsCache(cacheFilePath.toFile());
       final ZeebeClientBuilder builder = clientBuilder();
       cache
-          .put(AUDIENCE, new ZeebeClientCredentials(ACCESS_TOKEN, EXPIRY, TOKEN_TYPE))
+          .put(CLIENT_ID, new ZeebeClientCredentials(ACCESS_TOKEN, EXPIRY, TOKEN_TYPE))
           .writeCache();
       recordingInterceptor.setInterceptAction(
           (call, headers) -> call.close(Status.UNAUTHENTICATED, headers));
@@ -533,7 +533,7 @@ public final class OAuthCredentialsProviderTest {
       mockUnauthorizedRestRequest();
       mockAuthorizedRestRequest();
       cache
-          .put(AUDIENCE, new ZeebeClientCredentials("firstToken", EXPIRY, TOKEN_TYPE))
+          .put(CLIENT_ID, new ZeebeClientCredentials("firstToken", EXPIRY, TOKEN_TYPE))
           .writeCache();
       mockCredentials(ACCESS_TOKEN, null);
 
@@ -555,7 +555,7 @@ public final class OAuthCredentialsProviderTest {
       final ZeebeClientBuilder builder = clientBuilder();
       mockUnauthorizedRestRequest();
       cache
-          .put(AUDIENCE, new ZeebeClientCredentials(ACCESS_TOKEN, EXPIRY, TOKEN_TYPE))
+          .put(CLIENT_ID, new ZeebeClientCredentials(ACCESS_TOKEN, EXPIRY, TOKEN_TYPE))
           .writeCache();
       mockCredentials(ACCESS_TOKEN, null);
 

@@ -12,12 +12,11 @@ import io.camunda.service.ElementInstanceServices.SetVariablesRequest;
 import io.camunda.zeebe.gateway.protocol.rest.SetVariableRequest;
 import io.camunda.zeebe.gateway.rest.RequestMapper;
 import io.camunda.zeebe.gateway.rest.RestErrorMapper;
+import io.camunda.zeebe.gateway.rest.annotation.CamundaPutMapping;
 import java.util.concurrent.CompletableFuture;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.PathVariable;
-import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 
@@ -27,14 +26,12 @@ public class ElementInstanceController {
 
   private final ElementInstanceServices elementInstanceServices;
 
-  @Autowired
   public ElementInstanceController(final ElementInstanceServices elementInstanceServices) {
     this.elementInstanceServices = elementInstanceServices;
   }
 
-  @PutMapping(
+  @CamundaPutMapping(
       path = "/{elementInstanceKey}/variables",
-      produces = {MediaType.APPLICATION_JSON_VALUE, MediaType.APPLICATION_PROBLEM_JSON_VALUE},
       consumes = MediaType.APPLICATION_JSON_VALUE)
   public CompletableFuture<ResponseEntity<Object>> setVariables(
       @PathVariable final long elementInstanceKey,

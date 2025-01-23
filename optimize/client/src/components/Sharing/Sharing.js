@@ -15,8 +15,7 @@ import {Link} from '@carbon/react';
 import {
   ReportRenderer,
   DashboardRenderer,
-  Icon,
-  LoadingIndicator,
+  Loading,
   ErrorPage,
   EntityName,
   LastModifiedInfo,
@@ -25,6 +24,7 @@ import {
   DiagramScrollLock,
   PageTitle,
 } from 'components';
+import {CamundaLogo} from 'icons';
 import {useErrorHandling} from 'hooks';
 import {t} from 'translation';
 import {track} from 'tracking';
@@ -99,7 +99,7 @@ export function Sharing() {
   }, [performEvaluation, id, type]);
 
   if (loading) {
-    return <LoadingIndicator />;
+    return <Loading />;
   }
 
   if (!evaluationResult || !hasValidType(type)) {
@@ -131,9 +131,8 @@ export function Sharing() {
                     <LastModifiedInfo entity={evaluationResult} />
                   )
                 }
-              >
-                {evaluationResult.name}
-              </EntityName>
+                name={evaluationResult.name}
+              />
             )}
             {header !== 'titleOnly' && (
               <Link
@@ -154,7 +153,7 @@ export function Sharing() {
         {SharingView}
         {isEmbedded && (
           <a className="iconLink" href={getEntityUrl()} target="_blank" rel="noopener noreferrer">
-            <Icon type="optimize" size="20" />
+            <CamundaLogo width="20" height="20" />
           </a>
         )}
         {isEmbedded && isReport && <DiagramScrollLock />}

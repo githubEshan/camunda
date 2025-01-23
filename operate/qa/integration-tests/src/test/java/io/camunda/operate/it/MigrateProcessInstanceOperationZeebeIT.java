@@ -12,11 +12,6 @@ import static io.camunda.operate.util.ThreadUtil.sleepFor;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import io.camunda.operate.entities.*;
-import io.camunda.operate.schema.templates.FlowNodeInstanceTemplate;
-import io.camunda.operate.schema.templates.ListViewTemplate;
-import io.camunda.operate.schema.templates.OperationTemplate;
-import io.camunda.operate.schema.templates.VariableTemplate;
 import io.camunda.operate.util.*;
 import io.camunda.operate.webapp.reader.UserTaskReader;
 import io.camunda.operate.webapp.rest.dto.listview.ListViewProcessInstanceDto;
@@ -25,6 +20,17 @@ import io.camunda.operate.webapp.rest.dto.operation.CreateBatchOperationRequestD
 import io.camunda.operate.webapp.rest.dto.operation.MigrationPlanDto;
 import io.camunda.operate.webapp.rest.dto.operation.MigrationPlanDto.MappingInstruction;
 import io.camunda.operate.webapp.zeebe.operation.*;
+import io.camunda.webapps.schema.descriptors.operate.template.FlowNodeInstanceTemplate;
+import io.camunda.webapps.schema.descriptors.operate.template.ListViewTemplate;
+import io.camunda.webapps.schema.descriptors.operate.template.OperationTemplate;
+import io.camunda.webapps.schema.descriptors.operate.template.VariableTemplate;
+import io.camunda.webapps.schema.entities.operate.FlowNodeInstanceEntity;
+import io.camunda.webapps.schema.entities.operate.FlowNodeType;
+import io.camunda.webapps.schema.entities.operate.VariableEntity;
+import io.camunda.webapps.schema.entities.operation.BatchOperationEntity;
+import io.camunda.webapps.schema.entities.operation.OperationEntity;
+import io.camunda.webapps.schema.entities.operation.OperationState;
+import io.camunda.webapps.schema.entities.operation.OperationType;
 import io.camunda.zeebe.model.bpmn.Bpmn;
 import io.camunda.zeebe.model.bpmn.BpmnModelInstance;
 import java.util.List;
@@ -35,6 +41,7 @@ import org.junit.Before;
 import org.junit.Ignore;
 import org.junit.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.test.web.servlet.MvcResult;
 
 @Ignore
@@ -48,9 +55,13 @@ public class MigrateProcessInstanceOperationZeebeIT extends OperateZeebeAbstract
 
   @Autowired private ListViewTemplate listViewTemplate;
 
-  @Autowired private VariableTemplate variableTemplate;
+  @Autowired
+  @Qualifier("operateVariableTemplate")
+  private VariableTemplate variableTemplate;
 
-  @Autowired private FlowNodeInstanceTemplate flowNodeInstanceTemplate;
+  @Autowired
+  @Qualifier("operateFlowNodeInstanceTemplate")
+  private FlowNodeInstanceTemplate flowNodeInstanceTemplate;
 
   private Long initialBatchOperationMaxSize;
 
@@ -61,7 +72,7 @@ public class MigrateProcessInstanceOperationZeebeIT extends OperateZeebeAbstract
   public void before() {
     super.before();
 
-    migrateProcessInstanceHandler.setZeebeClient(super.getClient());
+    migrateProcessInstanceHandler.setCamundaClient(super.getClient());
     mockMvc = mockMvcTestRule.getMockMvc();
     initialBatchOperationMaxSize = operateProperties.getBatchOperationMaxSize();
   }
@@ -92,12 +103,12 @@ public class MigrateProcessInstanceOperationZeebeIT extends OperateZeebeAbstract
     final var beforeUserTasks = userTaskReader.getUserTasks();
     final var userTask1 =
         beforeUserTasks.stream()
-            .filter(u -> "UserTask-1".equals(u.getElementId()))
+            .filter(u -> "UserTask-1".equals(u.getFlowNodeBpmnId()))
             .findFirst()
             .get();
     final var userTask3 =
         beforeUserTasks.stream()
-            .filter(u -> "UserTask-3".equals(u.getElementId()))
+            .filter(u -> "UserTask-3".equals(u.getFlowNodeBpmnId()))
             .findFirst()
             .get();
     final ListViewQueryDto query = createGetAllProcessInstancesQuery();
@@ -137,16 +148,16 @@ public class MigrateProcessInstanceOperationZeebeIT extends OperateZeebeAbstract
     final var afterUserTasks = userTaskReader.getUserTasks();
     final var afterUserTask1 =
         afterUserTasks.stream()
-            .filter(u -> "UserTask-1".equals(u.getElementId()))
+            .filter(u -> "UserTask-1".equals(u.getFlowNodeBpmnId()))
             .findFirst()
             .get();
-    assertThat(userTask1.getUserTaskKey()).isNotEqualTo(afterUserTask1.getUserTaskKey());
+    assertThat(userTask1.getKey()).isNotEqualTo(afterUserTask1.getKey());
     final var afterUserTask3 =
         afterUserTasks.stream()
-            .filter(u -> "UserTask-3".equals(u.getElementId()))
+            .filter(u -> "UserTask-3".equals(u.getFlowNodeBpmnId()))
             .findFirst()
             .get();
-    assertThat(userTask3.getUserTaskKey()).isEqualTo(afterUserTask3.getUserTaskKey());
+    assertThat(userTask3.getKey()).isEqualTo(afterUserTask3.getKey());
   }
 
   @Test

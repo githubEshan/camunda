@@ -9,14 +9,32 @@ package io.camunda.optimize.service.util.configuration.engine;
 
 import static io.camunda.optimize.service.util.configuration.ConfigurationServiceConstants.IMPORT_USER_TASK_IDENTITY_META_DATA;
 
-import lombok.Data;
-import lombok.EqualsAndHashCode;
-
-@Data
-@EqualsAndHashCode(callSuper = true)
 public class UserTaskIdentityCacheConfiguration extends IdentityCacheConfiguration {
+
+  public UserTaskIdentityCacheConfiguration() {}
+
   @Override
   public String getConfigName() {
     return IMPORT_USER_TASK_IDENTITY_META_DATA;
+  }
+
+  @Override
+  protected boolean canEqual(final Object other) {
+    return other instanceof UserTaskIdentityCacheConfiguration;
+  }
+
+  @Override
+  public int hashCode() {
+    return org.apache.commons.lang3.builder.HashCodeBuilder.reflectionHashCode(this);
+  }
+
+  @Override
+  public boolean equals(final Object o) {
+    return org.apache.commons.lang3.builder.EqualsBuilder.reflectionEquals(this, o);
+  }
+
+  @Override
+  public String toString() {
+    return "UserTaskIdentityCacheConfiguration()";
   }
 }

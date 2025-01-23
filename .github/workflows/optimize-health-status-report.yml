@@ -15,7 +15,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 # v4
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
 
       - name: Import secrets
         id: secrets
@@ -45,10 +45,18 @@ jobs:
           config_file_path: ${{ github.workspace }}/.github/optimize/scripts/healthStatusReport/config.json
           github_token: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Format infra report for Slack
+        id: format-report
+        run: echo "formatted_report=${{ steps.get-report.outputs.infra_report }}" | sed ':a;N;$!ba;s/\n/\\n/g' >> $GITHUB_ENV
+
       - name: Send report to slack channel
-        uses: slackapi/slack-github-action@37ebaef184d7626c5f204ab8d3baff4262dd30f0 # v1.27.0
+        uses: slackapi/slack-github-action@485a9d42d3a73031f12ec201c457e2162c45d02d # v2.0.0
         with:
-          channel-id: "#optimize-status"
-          slack-message: ${{ steps.get-report.outputs.infra_report }}
-        env:
-          SLACK_BOT_TOKEN: ${{ steps.secrets.outputs.SLACK_API_KEY }}
+          method: chat.postMessage
+          token: ${{ steps.secrets.outputs.SLACK_API_KEY }}
+          # "C04FM0DRJT0" is the ID of the #optimize-status channel
+          payload: |
+            {
+              "channel": "C04FM0DRJT0",
+              "text": "${{ env.formatted_report }}"
+            }

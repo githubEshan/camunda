@@ -14,8 +14,10 @@ import io.atomix.cluster.discovery.BootstrapDiscoveryProvider;
 import io.atomix.cluster.impl.DiscoveryMembershipProtocol;
 import io.atomix.primitive.partition.PartitionId;
 import io.atomix.primitive.partition.PartitionMetadata;
+import io.camunda.zeebe.dynamic.config.changes.ClusterChangeExecutor.NoopClusterChangeExecutor;
 import io.camunda.zeebe.dynamic.config.changes.ConfigurationChangeCoordinator;
 import io.camunda.zeebe.dynamic.config.changes.NoopPartitionChangeExecutor;
+import io.camunda.zeebe.dynamic.config.changes.PartitionScalingChangeExecutor.NoopPartitionScalingChangeExecutor;
 import io.camunda.zeebe.dynamic.config.gossip.ClusterConfigurationGossiperConfig;
 import io.camunda.zeebe.dynamic.config.state.ClusterConfigurationChangeOperation.PartitionChangeOperation.PartitionJoinOperation;
 import io.camunda.zeebe.dynamic.config.state.ClusterConfigurationChangeOperation.PartitionChangeOperation.PartitionLeaveOperation;
@@ -179,7 +181,7 @@ class ClusterConfigurationManagementIntegrationTest {
                 Either.right(
                     List.of(
                         new PartitionJoinOperation(MemberId.from("0"), 2, 1),
-                        new PartitionLeaveOperation(MemberId.from("1"), 1))))
+                        new PartitionLeaveOperation(MemberId.from("1"), 1, 1))))
         .join();
 
     // then
@@ -211,7 +213,7 @@ class ClusterConfigurationManagementIntegrationTest {
                 Either.right(
                     List.of(
                         new PartitionJoinOperation(MemberId.from("0"), 2, 1),
-                        new PartitionLeaveOperation(MemberId.from("1"), 1),
+                        new PartitionLeaveOperation(MemberId.from("1"), 1, 1),
                         new PartitionJoinOperation(MemberId.from("1"), 1, 1))))
         .join();
 
@@ -249,8 +251,9 @@ class ClusterConfigurationManagementIntegrationTest {
             cluster.getCommunicationService(),
             cluster.getMembershipService(),
             new ClusterConfigurationGossiperConfig(
-                true, Duration.ofSeconds(1), Duration.ofMillis(100), 2),
-            true);
+                Duration.ofSeconds(1), Duration.ofMillis(100), 2),
+            true,
+            new NoopClusterChangeExecutor());
     return new TestNode(cluster, service);
   }
 
@@ -309,7 +312,8 @@ class ClusterConfigurationManagementIntegrationTest {
       startFuture.onComplete(
           (ignore, error) -> {
             if (error == null) {
-              service.registerPartitionChangeExecutor(new NoopPartitionChangeExecutor());
+              service.registerPartitionChangeExecutors(
+                  new NoopPartitionChangeExecutor(), new NoopPartitionScalingChangeExecutor());
             }
           },
           Runnable::run);

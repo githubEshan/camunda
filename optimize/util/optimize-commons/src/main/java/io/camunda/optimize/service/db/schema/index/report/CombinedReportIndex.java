@@ -8,12 +8,13 @@
 package io.camunda.optimize.service.db.schema.index.report;
 
 import static io.camunda.optimize.service.db.DatabaseConstants.COMBINED_REPORT_INDEX_NAME;
-import static io.camunda.optimize.service.db.DatabaseConstants.MAPPING_ENABLED_SETTING;
 
-import java.io.IOException;
-import org.elasticsearch.xcontent.XContentBuilder;
+import co.elastic.clients.elasticsearch._types.mapping.Property;
+import co.elastic.clients.elasticsearch._types.mapping.TypeMapping;
+import io.camunda.webapps.schema.descriptors.backup.Prio6Backup;
 
-public abstract class CombinedReportIndex<TBuilder> extends AbstractReportIndex<TBuilder> {
+public abstract class CombinedReportIndex<TBuilder> extends AbstractReportIndex<TBuilder>
+    implements Prio6Backup {
 
   public static final int VERSION = 5;
 
@@ -35,32 +36,28 @@ public abstract class CombinedReportIndex<TBuilder> extends AbstractReportIndex<
   }
 
   @Override
-  protected XContentBuilder addReportTypeSpecificFields(XContentBuilder xContentBuilder)
-      throws IOException {
-    // @formatter:off
-    return xContentBuilder
-        .startObject(DATA)
-        .field("type", "nested")
-        .startObject("properties")
-        .startObject(CONFIGURATION)
-        .field(MAPPING_ENABLED_SETTING, false)
-        .endObject()
-        .startObject(VISUALIZATION)
-        .field("type", "keyword")
-        .endObject()
-        .startObject(REPORTS)
-        .field("type", "nested")
-        .startObject("properties")
-        .startObject(REPORT_ITEM_ID)
-        .field("type", "keyword")
-        .endObject()
-        .startObject(REPORT_ITEM_COLOR)
-        .field("type", "keyword")
-        .endObject()
-        .endObject()
-        .endObject()
-        .endObject()
-        .endObject();
-    // @formatter:on
+  protected TypeMapping.Builder addReportTypeSpecificFields(
+      final TypeMapping.Builder xContentBuilder) {
+    return xContentBuilder.properties(
+        DATA,
+        Property.of(
+            p ->
+                p.nested(
+                    n ->
+                        n.properties(CONFIGURATION, np -> np.object(nk -> nk.enabled(false)))
+                            .properties(VISUALIZATION, Property.of(t -> t.keyword(k -> k)))
+                            .properties(
+                                REPORTS,
+                                Property.of(
+                                    t ->
+                                        t.nested(
+                                            k ->
+                                                k.properties(
+                                                        REPORT_ITEM_ID,
+                                                        Property.of(na -> na.keyword(y -> y)))
+                                                    .properties(
+                                                        REPORT_ITEM_COLOR,
+                                                        Property.of(
+                                                            na -> na.keyword(y -> y)))))))));
   }
 }

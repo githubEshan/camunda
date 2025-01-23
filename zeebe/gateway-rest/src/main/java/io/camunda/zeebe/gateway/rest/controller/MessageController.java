@@ -7,20 +7,18 @@
  */
 package io.camunda.zeebe.gateway.rest.controller;
 
+import io.camunda.security.configuration.MultiTenancyConfiguration;
 import io.camunda.service.MessageServices;
 import io.camunda.service.MessageServices.CorrelateMessageRequest;
 import io.camunda.service.MessageServices.PublicationMessageRequest;
-import io.camunda.zeebe.gateway.impl.configuration.MultiTenancyCfg;
 import io.camunda.zeebe.gateway.protocol.rest.MessageCorrelationRequest;
 import io.camunda.zeebe.gateway.protocol.rest.MessagePublicationRequest;
 import io.camunda.zeebe.gateway.rest.RequestMapper;
 import io.camunda.zeebe.gateway.rest.ResponseMapper;
 import io.camunda.zeebe.gateway.rest.RestErrorMapper;
+import io.camunda.zeebe.gateway.rest.annotation.CamundaPostMapping;
 import java.util.concurrent.CompletableFuture;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 
@@ -29,29 +27,23 @@ import org.springframework.web.bind.annotation.RequestMapping;
 public class MessageController {
 
   private final MessageServices messageServices;
-  private final MultiTenancyCfg multiTenancyCfg;
+  private final MultiTenancyConfiguration multiTenancyCfg;
 
-  @Autowired
   public MessageController(
-      final MessageServices messageServices, final MultiTenancyCfg multiTenancyCfg) {
+      final MessageServices messageServices, final MultiTenancyConfiguration multiTenancyCfg) {
     this.messageServices = messageServices;
     this.multiTenancyCfg = multiTenancyCfg;
   }
 
-  @PostMapping(
-      path = "/publication",
-      produces = {MediaType.APPLICATION_JSON_VALUE, MediaType.APPLICATION_PROBLEM_JSON_VALUE},
-      consumes = MediaType.APPLICATION_JSON_VALUE)
+  @CamundaPostMapping(path = "/publication")
   public CompletableFuture<ResponseEntity<Object>> publishMessage(
       @RequestBody final MessagePublicationRequest publicationRequest) {
-    return RequestMapper.toMessagePublicationRequest(publicationRequest)
+    return RequestMapper.toMessagePublicationRequest(
+            publicationRequest, multiTenancyCfg.isEnabled())
         .fold(RestErrorMapper::mapProblemToCompletedResponse, this::publishMessage);
   }
 
-  @PostMapping(
-      path = "/correlation",
-      produces = {MediaType.APPLICATION_JSON_VALUE, MediaType.APPLICATION_PROBLEM_JSON_VALUE},
-      consumes = MediaType.APPLICATION_JSON_VALUE)
+  @CamundaPostMapping(path = "/correlation")
   public CompletableFuture<ResponseEntity<Object>> correlateMessage(
       @RequestBody final MessageCorrelationRequest correlationRequest) {
     return RequestMapper.toMessageCorrelationRequest(

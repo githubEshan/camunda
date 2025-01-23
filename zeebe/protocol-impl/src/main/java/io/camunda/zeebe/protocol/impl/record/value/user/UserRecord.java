@@ -14,12 +14,11 @@ import io.camunda.zeebe.msgpack.property.LongProperty;
 import io.camunda.zeebe.msgpack.property.StringProperty;
 import io.camunda.zeebe.protocol.impl.record.UnifiedRecordValue;
 import io.camunda.zeebe.protocol.record.value.UserRecordValue;
-import io.camunda.zeebe.util.buffer.BufferUtil;
 import org.agrona.DirectBuffer;
 
 public final class UserRecord extends UnifiedRecordValue implements UserRecordValue {
   private final LongProperty userKeyProp = new LongProperty("userKey", -1L);
-  private final StringProperty usernameProp = new StringProperty("username");
+  private final StringProperty usernameProp = new StringProperty("username", "");
   private final StringProperty nameProp = new StringProperty("name", "");
   private final StringProperty emailProp = new StringProperty("email", "");
   private final StringProperty passwordProp = new StringProperty("password", "");
@@ -33,20 +32,9 @@ public final class UserRecord extends UnifiedRecordValue implements UserRecordVa
         .declareProperty(passwordProp);
   }
 
-  public void wrap(final UserRecord record) {
-    userKeyProp.setValue(record.getUserKey());
-    usernameProp.setValue(record.getUsernameBuffer());
-    nameProp.setValue(record.getNameBuffer());
-    emailProp.setValue(record.getEmailBuffer());
-    passwordProp.setValue(record.getPasswordBuffer());
-  }
-
   public UserRecord copy() {
-    final var copy = new UserRecord();
-    copy.usernameProp.setValue(BufferUtil.cloneBuffer(getUsernameBuffer()));
-    copy.nameProp.setValue(BufferUtil.cloneBuffer(getNameBuffer()));
-    copy.emailProp.setValue(BufferUtil.cloneBuffer(getEmailBuffer()));
-    copy.passwordProp.setValue(BufferUtil.cloneBuffer(getPasswordBuffer()));
+    final UserRecord copy = new UserRecord();
+    copy.copyFrom(this);
     return copy;
   }
 
@@ -55,7 +43,7 @@ public final class UserRecord extends UnifiedRecordValue implements UserRecordVa
     return userKeyProp.getValue();
   }
 
-  public UserRecord setUserKey(final Long userKey) {
+  public UserRecord setUserKey(final long userKey) {
     userKeyProp.setValue(userKey);
     return this;
   }

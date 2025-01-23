@@ -12,8 +12,6 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
 
-import io.camunda.operate.entities.OperationType;
-import io.camunda.operate.entities.listview.ProcessInstanceForListViewEntity;
 import io.camunda.operate.store.SequenceFlowStore;
 import io.camunda.operate.webapp.elasticsearch.reader.ProcessInstanceReader;
 import io.camunda.operate.webapp.reader.FlowNodeInstanceReader;
@@ -30,8 +28,10 @@ import io.camunda.operate.webapp.rest.exception.NotAuthorizedException;
 import io.camunda.operate.webapp.rest.validation.ModifyProcessInstanceRequestValidator;
 import io.camunda.operate.webapp.rest.validation.ProcessInstanceRequestValidator;
 import io.camunda.operate.webapp.security.identity.IdentityPermission;
-import io.camunda.operate.webapp.security.identity.PermissionsService;
+import io.camunda.operate.webapp.security.permission.PermissionsService;
 import io.camunda.operate.webapp.writer.BatchOperationWriter;
+import io.camunda.webapps.schema.entities.operate.listview.ProcessInstanceForListViewEntity;
+import io.camunda.webapps.schema.entities.operation.OperationType;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -73,6 +73,7 @@ public class ProcessInstanceRestServiceTest {
             flowNodeStatisticsReader,
             sequenceFlowStore);
 
+    when(permissionsService.permissionsEnabled()).thenReturn(true);
     when(permissionsService.hasPermissionForProcess(any(), any())).thenReturn(true);
   }
 
@@ -97,7 +98,8 @@ public class ProcessInstanceRestServiceTest {
     final String bpmnProcessId = "processId";
     when(processInstanceReader.getProcessInstanceByKey(Long.valueOf(processInstanceId)))
         .thenReturn(new ProcessInstanceForListViewEntity().setBpmnProcessId(bpmnProcessId));
-    when(permissionsService.hasPermissionForProcess(bpmnProcessId, IdentityPermission.READ))
+    when(permissionsService.hasPermissionForProcess(
+            bpmnProcessId, IdentityPermission.READ_PROCESS_INSTANCE))
         .thenReturn(false);
 
     final NotAuthorizedException exception =
@@ -105,7 +107,8 @@ public class ProcessInstanceRestServiceTest {
             NotAuthorizedException.class,
             () -> underTest.queryProcessInstanceById(processInstanceId));
 
-    assertThat(exception.getMessage()).contains("No READ permission for process instance");
+    assertThat(exception.getMessage())
+        .contains("No READ_PROCESS_INSTANCE permission for process instance");
   }
 
   @Test
@@ -116,7 +119,8 @@ public class ProcessInstanceRestServiceTest {
     // when
     when(processInstanceReader.getProcessInstanceByKey(Long.valueOf(processInstanceId)))
         .thenReturn(new ProcessInstanceForListViewEntity().setBpmnProcessId(bpmnProcessId));
-    when(permissionsService.hasPermissionForProcess(bpmnProcessId, IdentityPermission.READ))
+    when(permissionsService.hasPermissionForProcess(
+            bpmnProcessId, IdentityPermission.READ_PROCESS_INSTANCE))
         .thenReturn(false);
 
     final NotAuthorizedException exception =
@@ -124,7 +128,8 @@ public class ProcessInstanceRestServiceTest {
             NotAuthorizedException.class,
             () -> underTest.queryIncidentsByProcessInstanceId(processInstanceId));
 
-    assertThat(exception.getMessage()).contains("No READ permission for process instance");
+    assertThat(exception.getMessage())
+        .contains("No READ_PROCESS_INSTANCE permission for process instance");
   }
 
   @Test
@@ -135,7 +140,8 @@ public class ProcessInstanceRestServiceTest {
     // when
     when(processInstanceReader.getProcessInstanceByKey(Long.valueOf(processInstanceId)))
         .thenReturn(new ProcessInstanceForListViewEntity().setBpmnProcessId(bpmnProcessId));
-    when(permissionsService.hasPermissionForProcess(bpmnProcessId, IdentityPermission.READ))
+    when(permissionsService.hasPermissionForProcess(
+            bpmnProcessId, IdentityPermission.READ_PROCESS_INSTANCE))
         .thenReturn(false);
 
     final NotAuthorizedException exception =
@@ -143,7 +149,8 @@ public class ProcessInstanceRestServiceTest {
             NotAuthorizedException.class,
             () -> underTest.querySequenceFlowsByProcessInstanceId(processInstanceId));
 
-    assertThat(exception.getMessage()).contains("No READ permission for process instance");
+    assertThat(exception.getMessage())
+        .contains("No READ_PROCESS_INSTANCE permission for process instance");
   }
 
   @Test
@@ -154,7 +161,8 @@ public class ProcessInstanceRestServiceTest {
     // when
     when(processInstanceReader.getProcessInstanceByKey(Long.valueOf(processInstanceId)))
         .thenReturn(new ProcessInstanceForListViewEntity().setBpmnProcessId(bpmnProcessId));
-    when(permissionsService.hasPermissionForProcess(bpmnProcessId, IdentityPermission.READ))
+    when(permissionsService.hasPermissionForProcess(
+            bpmnProcessId, IdentityPermission.READ_PROCESS_INSTANCE))
         .thenReturn(false);
 
     final NotAuthorizedException exception =
@@ -162,7 +170,8 @@ public class ProcessInstanceRestServiceTest {
             NotAuthorizedException.class,
             () -> underTest.getVariables(processInstanceId, new VariableRequestDto()));
 
-    assertThat(exception.getMessage()).contains("No READ permission for process instance");
+    assertThat(exception.getMessage())
+        .contains("No READ_PROCESS_INSTANCE permission for process instance");
   }
 
   @Test
@@ -173,14 +182,16 @@ public class ProcessInstanceRestServiceTest {
     // when
     when(processInstanceReader.getProcessInstanceByKey(Long.valueOf(processInstanceId)))
         .thenReturn(new ProcessInstanceForListViewEntity().setBpmnProcessId(bpmnProcessId));
-    when(permissionsService.hasPermissionForProcess(bpmnProcessId, IdentityPermission.READ))
+    when(permissionsService.hasPermissionForProcess(
+            bpmnProcessId, IdentityPermission.READ_PROCESS_INSTANCE))
         .thenReturn(false);
 
     final NotAuthorizedException exception =
         assertThrows(
             NotAuthorizedException.class, () -> underTest.getFlowNodeStates(processInstanceId));
 
-    assertThat(exception.getMessage()).contains("No READ permission for process instance");
+    assertThat(exception.getMessage())
+        .contains("No READ_PROCESS_INSTANCE permission for process instance");
   }
 
   @Test
@@ -191,14 +202,16 @@ public class ProcessInstanceRestServiceTest {
     // when
     when(processInstanceReader.getProcessInstanceByKey(Long.valueOf(processInstanceId)))
         .thenReturn(new ProcessInstanceForListViewEntity().setBpmnProcessId(bpmnProcessId));
-    when(permissionsService.hasPermissionForProcess(bpmnProcessId, IdentityPermission.READ))
+    when(permissionsService.hasPermissionForProcess(
+            bpmnProcessId, IdentityPermission.READ_PROCESS_INSTANCE))
         .thenReturn(false);
 
     final NotAuthorizedException exception =
         assertThrows(
             NotAuthorizedException.class, () -> underTest.getStatistics(processInstanceId));
 
-    assertThat(exception.getMessage()).contains("No READ permission for process instance");
+    assertThat(exception.getMessage())
+        .contains("No READ_PROCESS_INSTANCE permission for process instance");
   }
 
   @Test
@@ -209,7 +222,8 @@ public class ProcessInstanceRestServiceTest {
     // when
     when(processInstanceReader.getProcessInstanceByKey(Long.valueOf(processInstanceId)))
         .thenReturn(new ProcessInstanceForListViewEntity().setBpmnProcessId(bpmnProcessId));
-    when(permissionsService.hasPermissionForProcess(bpmnProcessId, IdentityPermission.READ))
+    when(permissionsService.hasPermissionForProcess(
+            bpmnProcessId, IdentityPermission.READ_PROCESS_INSTANCE))
         .thenReturn(false);
 
     final NotAuthorizedException exception =
@@ -218,7 +232,8 @@ public class ProcessInstanceRestServiceTest {
             () ->
                 underTest.getFlowNodeMetadata(processInstanceId, new FlowNodeMetadataRequestDto()));
 
-    assertThat(exception.getMessage()).contains("No READ permission for process instance");
+    assertThat(exception.getMessage())
+        .contains("No READ_PROCESS_INSTANCE permission for process instance");
   }
 
   @Test
@@ -303,13 +318,15 @@ public class ProcessInstanceRestServiceTest {
     // when
     when(processInstanceReader.getProcessInstanceByKey(Long.valueOf(processInstanceId)))
         .thenReturn(new ProcessInstanceForListViewEntity().setBpmnProcessId(bpmnProcessId));
-    when(permissionsService.hasPermissionForProcess(bpmnProcessId, IdentityPermission.READ))
+    when(permissionsService.hasPermissionForProcess(
+            bpmnProcessId, IdentityPermission.READ_PROCESS_INSTANCE))
         .thenReturn(false);
 
     final NotAuthorizedException exception =
         assertThrows(
             NotAuthorizedException.class, () -> underTest.getVariable(processInstanceId, "var1"));
 
-    assertThat(exception.getMessage()).contains("No READ permission for process instance");
+    assertThat(exception.getMessage())
+        .contains("No READ_PROCESS_INSTANCE permission for process instance");
   }
 }
