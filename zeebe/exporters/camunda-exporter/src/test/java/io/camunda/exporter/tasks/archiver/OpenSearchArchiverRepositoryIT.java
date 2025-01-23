@@ -61,6 +61,7 @@ import org.testcontainers.junit.jupiter.Testcontainers;
 @SuppressWarnings("resource")
 @Testcontainers
 final class OpenSearchArchiverRepositoryIT {
+
   private static final Logger LOGGER =
       LoggerFactory.getLogger(OpenSearchArchiverRepositoryIT.class);
 
@@ -163,7 +164,7 @@ final class OpenSearchArchiverRepositoryIT {
       untouchedIndices.add("other-" + "tasklist-record-8.3.0_2024-01-02");
     }
 
-    connectConfiguration.setIndexPrefix(prefix);
+    connectConfiguration.setPrefix(prefix);
     final var repository = createRepository();
     final var indices = new ArrayList<>(expectedIndices);
     indices.addAll(untouchedIndices);
@@ -408,7 +409,7 @@ final class OpenSearchArchiverRepositoryIT {
         1,
         config,
         retention,
-        connectConfiguration.getIndexPrefix(),
+        connectConfiguration.getPrefix(),
         processInstanceIndex,
         batchOperationIndex,
         client,
@@ -478,6 +479,7 @@ final class OpenSearchArchiverRepositoryIT {
   }
 
   private interface TDocument {
+
     String id();
   }
 }

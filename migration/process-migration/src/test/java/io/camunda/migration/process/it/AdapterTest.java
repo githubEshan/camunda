@@ -96,19 +96,17 @@ public abstract class AdapterTest {
 
   private static void createIndices() {
     final OpensearchEngineClient osEngine = new OpensearchEngineClient(osClient);
-    processIndex = new ProcessIndex(ES_CONFIGURATION.getIndexPrefix(), false);
-    migrationRepositoryIndex =
-        new MigrationRepositoryIndex(ES_CONFIGURATION.getIndexPrefix(), false);
-    importPositionIndex = new ImportPositionIndex(ES_CONFIGURATION.getIndexPrefix(), false);
+    processIndex = new ProcessIndex(ES_CONFIGURATION.getPrefix(), false);
+    migrationRepositoryIndex = new MigrationRepositoryIndex(ES_CONFIGURATION.getPrefix(), false);
+    importPositionIndex = new ImportPositionIndex(ES_CONFIGURATION.getPrefix(), false);
     osEngine.createIndex(processIndex, new IndexSettings());
     osEngine.createIndex(migrationRepositoryIndex, new IndexSettings());
     osEngine.createIndex(importPositionIndex, new IndexSettings());
 
     final ElasticsearchEngineClient esEngine = new ElasticsearchEngineClient(esClient);
-    processIndex = new ProcessIndex(ES_CONFIGURATION.getIndexPrefix(), true);
-    migrationRepositoryIndex =
-        new MigrationRepositoryIndex(ES_CONFIGURATION.getIndexPrefix(), true);
-    importPositionIndex = new ImportPositionIndex(ES_CONFIGURATION.getIndexPrefix(), true);
+    processIndex = new ProcessIndex(ES_CONFIGURATION.getPrefix(), true);
+    migrationRepositoryIndex = new MigrationRepositoryIndex(ES_CONFIGURATION.getPrefix(), true);
+    importPositionIndex = new ImportPositionIndex(ES_CONFIGURATION.getPrefix(), true);
     esEngine.createIndex(processIndex, new IndexSettings());
     esEngine.createIndex(migrationRepositoryIndex, new IndexSettings());
     esEngine.createIndex(importPositionIndex, new IndexSettings());

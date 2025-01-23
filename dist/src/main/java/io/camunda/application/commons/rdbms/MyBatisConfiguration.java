@@ -61,8 +61,8 @@ public class MyBatisConfiguration {
       matchIfMissing = true)
   public MultiTenantSpringLiquibase rdbmsExporterLiquibase(
       final DataSource dataSource,
-      @Value("${camunda.database.index-prefix:}") final String indexPrefix) {
-    final String prefix = StringUtils.trimToEmpty(indexPrefix);
+      @Value("${camunda.database.prefix:}") final String prefixProperty) {
+    final String prefix = StringUtils.trimToEmpty(prefixProperty);
     LOGGER.info("Initializing Liquibase for RDBMS with global table prefix '{}'.", prefix);
 
     final var moduleConfig = new MultiTenantSpringLiquibase();
@@ -117,7 +117,7 @@ public class MyBatisConfiguration {
       final DataSource dataSource,
       final DatabaseIdProvider databaseIdProvider,
       final VendorDatabaseProperties databaseProperties,
-      @Value("${camunda.database.index-prefix:}") final String indexPrefix)
+      @Value("${camunda.database.prefix:}") final String prefixProperty)
       throws Exception {
 
     final var configuration = new org.apache.ibatis.session.Configuration();
@@ -132,7 +132,7 @@ public class MyBatisConfiguration {
         new PathMatchingResourcePatternResolver().getResources("classpath*:mapper/*.xml"));
 
     final Properties p = new Properties();
-    p.put("prefix", StringUtils.trimToEmpty(indexPrefix));
+    p.put("prefix", StringUtils.trimToEmpty(prefixProperty));
     p.putAll(databaseProperties.properties());
     factoryBean.setConfigurationProperties(p);
     return factoryBean.getObject();
