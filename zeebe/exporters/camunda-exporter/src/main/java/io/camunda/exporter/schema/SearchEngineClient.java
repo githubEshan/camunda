@@ -8,13 +8,11 @@
 package io.camunda.exporter.schema;
 
 import io.camunda.exporter.config.ExporterConfiguration.IndexSettings;
-import io.camunda.exporter.utils.ReindexResult;
 import io.camunda.webapps.schema.descriptors.IndexDescriptor;
 import io.camunda.webapps.schema.descriptors.IndexTemplateDescriptor;
 import java.util.Collection;
 import java.util.List;
 import java.util.Map;
-import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
 
 public interface SearchEngineClient {
   void createIndex(final IndexDescriptor indexDescriptor, final IndexSettings settings);
@@ -46,10 +44,4 @@ public interface SearchEngineClient {
 
   boolean importersCompleted(
       final int partitionId, final List<IndexDescriptor> importPositionIndices);
-
-  List<ReindexResult> reindex(
-      Map<String, String> sourceToTargetIndices, ThreadPoolTaskExecutor executor);
-
-  void cloneArchivedIndices(
-      final String oldOperatePrefix, final String oldTasklistPrefix, final String newPrefix);
 }

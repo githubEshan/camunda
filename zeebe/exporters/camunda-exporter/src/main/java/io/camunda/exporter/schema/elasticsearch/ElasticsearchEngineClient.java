@@ -13,11 +13,8 @@ import static io.camunda.exporter.utils.SearchEngineClientUtils.mapToSettings;
 
 import co.elastic.clients.elasticsearch.ElasticsearchClient;
 import co.elastic.clients.elasticsearch._types.ElasticsearchException;
-import co.elastic.clients.elasticsearch._types.OpType;
 import co.elastic.clients.elasticsearch._types.mapping.Property;
 import co.elastic.clients.elasticsearch._types.mapping.TypeMapping;
-import co.elastic.clients.elasticsearch.cat.indices.IndicesRecord;
-import co.elastic.clients.elasticsearch.core.ReindexRequest;
 import co.elastic.clients.elasticsearch.core.SearchRequest;
 import co.elastic.clients.elasticsearch.ilm.PutLifecycleRequest;
 import co.elastic.clients.elasticsearch.indices.Alias;
@@ -40,8 +37,6 @@ import io.camunda.exporter.schema.IndexMapping;
 import io.camunda.exporter.schema.IndexMappingProperty;
 import io.camunda.exporter.schema.MappingSource;
 import io.camunda.exporter.schema.SearchEngineClient;
-import io.camunda.exporter.utils.ReindexResult;
-import io.camunda.exporter.utils.SearchEngineClientUtils;
 import io.camunda.webapps.schema.descriptors.IndexDescriptor;
 import io.camunda.webapps.schema.descriptors.IndexTemplateDescriptor;
 import io.camunda.webapps.schema.descriptors.operate.index.ImportPositionIndex;
@@ -53,11 +48,9 @@ import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Set;
-import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
 
 public class ElasticsearchEngineClient implements SearchEngineClient {
   private static final Logger LOG = LoggerFactory.getLogger(ElasticsearchEngineClient.class);
@@ -229,86 +222,6 @@ public class ElasticsearchEngineClient implements SearchEngineClient {
       LOG.error(errMsg, e);
       return false;
     }
-  }
-
-  @Override
-  public List<ReindexResult> reindex(
-      final Map<String, String> sourceToTargetIndices, final ThreadPoolTaskExecutor executor) {
-    return SearchEngineClientUtils.reindex(
-        sourceToTargetIndices,
-        LOG,
-        executor,
-        (src, dest) -> {
-          final var reindexRequest =
-              new ReindexRequest.Builder()
-                  .source(s -> s.index(src))
-                  .dest(d -> d.index(dest).opType(OpType.Create))
-                  .build();
-
-          try {
-            client.reindex(reindexRequest);
-          } catch (final IOException e) {
-            throw new RuntimeException(e);
-          }
-        });
-  }
-
-  @Override
-  public void cloneArchivedIndices(
-      final String oldOperatePrefix, final String oldTasklistPrefix, final String newPrefix) {
-    try {
-      cloneIndicesWithPrefix(oldOperatePrefix, newPrefix + "-operate");
-      cloneIndicesWithPrefix(oldTasklistPrefix, newPrefix + "-tasklist");
-    } catch (final Exception e) {
-      LOG.error(
-          "Failed to migrate archived indices with prefixes [{}],[{}]",
-          oldOperatePrefix,
-          oldTasklistPrefix,
-          e);
-    }
-  }
-
-  private void cloneIndicesWithPrefix(final String oldPrefix, final String newPrefix)
-      throws IOException {
-    final var archivedIndices = getArchivedIndices(oldPrefix);
-    markIndexReadOnly(archivedIndices);
-
-    LOG.info("Migrating archived indices for prefix: {}", oldPrefix);
-    for (final var srcIdx : archivedIndices) {
-      final var targetIdx = srcIdx.replace(oldPrefix, newPrefix);
-      cloneIndex(srcIdx, targetIdx);
-    }
-  }
-
-  private List<String> getArchivedIndices(final String prefix) throws IOException {
-    return client.cat().indices(i -> i.index(prefix + "*")).valueBody().stream()
-        .map(IndicesRecord::index)
-        .filter(index -> Pattern.matches(".*\\d{4}-\\d{2}-\\d{2}$", index))
-        .toList();
-  }
-
-  private void markIndexReadOnly(final List<String> indices) throws IOException {
-    client
-        .indices()
-        .putSettings(
-            r -> r.index(indices).settings(s -> s.index(i -> i.blocks(b -> b.write(true)))));
-  }
-
-  private void cloneIndex(final String src, final String target) throws IOException {
-    final var targetAlias = target.substring(0, target.length() - 10) + "alias";
-    client
-        .indices()
-        .clone(
-            c ->
-                c.index(src)
-                    .target(target)
-                    .settings(
-                        Map.of(
-                            "index.blocks.write",
-                            JsonData.of(false),
-                            "number_of_replicas",
-                            JsonData.of(0)))
-                    .aliases(targetAlias, new Alias.Builder().build()));
   }
 
   private SearchRequest allImportPositionDocuments(
