@@ -55,9 +55,11 @@ public class CamundaClientPropertiesPostProcessor implements EnvironmentPostProc
             propertySource -> {
               for (final String propertyName : propertySource.getPropertyNames()) {
                 for (final String prefix : LEGACY_OVERRIDE_PREFIX) {
-                  if (propertyName.startsWith(prefix)) {
+                  final String normalizedPropertyName =
+                      propertyName.replaceAll("_", ".").toLowerCase();
+                  if (normalizedPropertyName.startsWith(prefix)) {
                     final String newPropertyName =
-                        OVERRIDE_PREFIX + propertyName.substring(prefix.length());
+                        OVERRIDE_PREFIX + normalizedPropertyName.substring(prefix.length());
                     if (!properties.containsKey(newPropertyName)
                         && !environment.containsProperty(newPropertyName)) {
                       LOG.debug(
