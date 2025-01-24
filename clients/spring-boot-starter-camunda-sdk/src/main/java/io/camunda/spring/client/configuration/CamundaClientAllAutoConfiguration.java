@@ -40,7 +40,7 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Import;
 
 @ConditionalOnProperty(
-    prefix = "zeebe.client",
+    prefix = "camunda.client",
     name = "enabled",
     havingValue = "true",
     matchIfMissing = true)
