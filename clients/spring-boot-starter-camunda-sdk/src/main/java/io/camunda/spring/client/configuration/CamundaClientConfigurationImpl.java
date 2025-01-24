@@ -15,6 +15,8 @@
  */
 package io.camunda.spring.client.configuration;
 
+import static java.util.Optional.ofNullable;
+
 import io.camunda.client.CamundaClientConfiguration;
 import io.camunda.client.CredentialsProvider;
 import io.camunda.client.api.JsonMapper;
@@ -31,6 +33,7 @@ import java.util.concurrent.ScheduledExecutorService;
 import org.apache.hc.client5.http.async.AsyncExecChainHandler;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.util.unit.DataSize;
 
 public class CamundaClientConfigurationImpl implements CamundaClientConfiguration {
   public static final CamundaClientBuilderImpl DEFAULT =
@@ -182,14 +185,18 @@ public class CamundaClientConfigurationImpl implements CamundaClientConfiguratio
 
   @Override
   public int getMaxMessageSize() {
-    return propertyOrDefault(
-        camundaClientProperties.getMaxMessageSize(), DEFAULT.getMaxMessageSize());
+    return ofNullable(camundaClientProperties.getMaxMessageSize())
+        .map(DataSize::toBytes)
+        .map(Math::toIntExact)
+        .orElse(DEFAULT.getMaxMessageSize());
   }
 
   @Override
   public int getMaxMetadataSize() {
-    return propertyOrDefault(
-        camundaClientProperties.getMaxMetadataSize(), DEFAULT.getMaxMetadataSize());
+    return ofNullable(camundaClientProperties.getMaxMetadataSize())
+        .map(DataSize::toBytes)
+        .map(Math::toIntExact)
+        .orElse(DEFAULT.getMaxMetadataSize());
   }
 
   @Override

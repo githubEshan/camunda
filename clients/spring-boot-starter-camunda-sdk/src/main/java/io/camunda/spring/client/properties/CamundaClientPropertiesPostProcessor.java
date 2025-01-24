@@ -115,10 +115,13 @@ public class CamundaClientPropertiesPostProcessor implements EnvironmentPostProc
 
   private void processClientMode(final ConfigurableEnvironment environment) {
     try {
-      final ClientMode clientMode =
-          environment.getProperty("camunda.client.mode", ClientMode.class);
+      ClientMode clientMode = environment.getProperty("camunda.client.mode", ClientMode.class);
       if (clientMode == null) {
-        return;
+        if (isImplicitSaas(environment)) {
+          clientMode = ClientMode.saas;
+        } else {
+          return;
+        }
       }
       final YamlPropertySourceLoader loader = new YamlPropertySourceLoader();
       final String propertiesFile = determinePropertiesFile(clientMode);
@@ -130,6 +133,14 @@ public class CamundaClientPropertiesPostProcessor implements EnvironmentPostProc
     } catch (final Exception e) {
       throw new IllegalStateException("Error while post processing camunda properties", e);
     }
+  }
+
+  private boolean isImplicitSaas(final ConfigurableEnvironment environment) {
+    if (environment.containsProperty("camunda.client.cloud.cluster-id")) {
+      LOG.debug("Cluster id detected, setting implicit saas mode");
+      return true;
+    }
+    return false;
   }
 
   private String determinePropertiesFile(final ClientMode clientMode) {

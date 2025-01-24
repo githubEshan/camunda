@@ -48,8 +48,8 @@ import wiremock.com.fasterxml.jackson.databind.node.JsonNodeFactory;
     classes = {CredentialsProviderConfiguration.class},
     properties = {
       "camunda.client.mode=saas",
-      "camunda.client.cluster-id=12345",
-      "camunda.client.region=bru-2",
+      "camunda.client.cloud.cluster-id=12345",
+      "camunda.client.cloud.region=bru-2",
       "camunda.client.auth.client-id=my-client-id",
       "camunda.client.auth.client-secret=my-client-secret"
     })

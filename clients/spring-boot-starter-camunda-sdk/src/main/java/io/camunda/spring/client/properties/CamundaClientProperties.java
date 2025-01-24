@@ -24,13 +24,20 @@ import java.util.List;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.boot.context.properties.DeprecatedConfigurationProperty;
 import org.springframework.boot.context.properties.NestedConfigurationProperty;
+import org.springframework.util.unit.DataSize;
 
 @ConfigurationProperties("camunda.client")
 public class CamundaClientProperties {
   private Boolean enabled;
   private ClientMode mode;
+
+  @Deprecated(forRemoval = true, since = "8.7")
   private String clusterId;
+
+  @Deprecated(forRemoval = true, since = "8.7")
   private String region;
+
+  @NestedConfigurationProperty private CamundaClientCloudProperties cloud;
 
   @Deprecated(forRemoval = true, since = "8.7")
   @NestedConfigurationProperty
@@ -43,8 +50,8 @@ public class CamundaClientProperties {
   @NestedConfigurationProperty private ZeebeClientProperties zeebe = new ZeebeClientProperties();
   private Integer executionThreads;
   private Duration messageTimeToLive;
-  private Integer maxMessageSize;
-  private Integer maxMetadataSize;
+  private DataSize maxMessageSize;
+  private DataSize maxMetadataSize;
   private String caCertificatePath;
   private Duration keepAlive;
   private String overrideAuthority;
@@ -61,6 +68,14 @@ public class CamundaClientProperties {
 
   private String tenantId;
   private Duration requestTimeout;
+
+  public CamundaClientCloudProperties getCloud() {
+    return cloud;
+  }
+
+  public void setCloud(final CamundaClientCloudProperties cloud) {
+    this.cloud = cloud;
+  }
 
   public Duration getRequestTimeout() {
     return requestTimeout;
@@ -126,19 +141,19 @@ public class CamundaClientProperties {
     this.overrideAuthority = overrideAuthority;
   }
 
-  public Integer getMaxMessageSize() {
+  public DataSize getMaxMessageSize() {
     return maxMessageSize;
   }
 
-  public void setMaxMessageSize(final Integer maxMessageSize) {
+  public void setMaxMessageSize(final DataSize maxMessageSize) {
     this.maxMessageSize = maxMessageSize;
   }
 
-  public Integer getMaxMetadataSize() {
+  public DataSize getMaxMetadataSize() {
     return maxMetadataSize;
   }
 
-  public void setMaxMetadataSize(final Integer maxMetadataSize) {
+  public void setMaxMetadataSize(final DataSize maxMetadataSize) {
     this.maxMetadataSize = maxMetadataSize;
   }
 

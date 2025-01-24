@@ -62,7 +62,7 @@ public class CamundaClientConfigurationImplSaasTest {
   @Test
   void shouldHaveGatewayAddress() throws URISyntaxException {
     assertThat(camundaClientConfiguration.getGrpcAddress())
-        .isEqualTo(new URI("https://12345.bru-2.zeebe.camunda.io"));
+        .isEqualTo(new URI("https://12345.bru-2.zeebe.camunda.io:443"));
   }
 
   @Test
