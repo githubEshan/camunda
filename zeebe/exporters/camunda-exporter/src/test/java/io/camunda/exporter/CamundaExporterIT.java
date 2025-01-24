@@ -38,6 +38,7 @@ import io.camunda.exporter.schema.SchemaTestUtil;
 import io.camunda.exporter.utils.CamundaExporterITTemplateExtension;
 import io.camunda.exporter.utils.SearchClientAdapter;
 import io.camunda.exporter.utils.SearchDBExtension;
+import io.camunda.exporter.utils.TestObjectMapper;
 import io.camunda.webapps.schema.descriptors.IndexDescriptor;
 import io.camunda.webapps.schema.descriptors.IndexTemplateDescriptor;
 import io.camunda.webapps.schema.descriptors.operate.index.ImportPositionIndex;
@@ -403,7 +404,8 @@ final class CamundaExporterIT {
         config,
         mock(ExporterEntityCacheProvider.class),
         new SimpleMeterRegistry(),
-        new ExporterMetadata());
+        new ExporterMetadata(TestObjectMapper.objectMapper()),
+        TestObjectMapper.objectMapper());
     final var expectedHandlers =
         resourceProvider.getExportHandlers().stream()
             .filter(exportHandler -> exportHandler.getHandledValueType() == valueType)
@@ -465,7 +467,8 @@ final class CamundaExporterIT {
         config,
         mock(ExporterEntityCacheProvider.class),
         new SimpleMeterRegistry(),
-        new ExporterMetadata());
+        new ExporterMetadata(TestObjectMapper.objectMapper()),
+        TestObjectMapper.objectMapper());
 
     final CamundaExporter camundaExporter = new CamundaExporter();
     final ExporterTestContext exporterTestContext =
@@ -497,7 +500,8 @@ final class CamundaExporterIT {
         config,
         mock(ExporterEntityCacheProvider.class),
         new SimpleMeterRegistry(),
-        new ExporterMetadata());
+        new ExporterMetadata(TestObjectMapper.objectMapper()),
+        TestObjectMapper.objectMapper());
 
     final CamundaExporter camundaExporter = new CamundaExporter();
     final ExporterTestContext exporterTestContext =
@@ -564,7 +568,8 @@ final class CamundaExporterIT {
         config,
         mock(ExporterEntityCacheProvider.class),
         new SimpleMeterRegistry(),
-        new ExporterMetadata());
+        new ExporterMetadata(TestObjectMapper.objectMapper()),
+        TestObjectMapper.objectMapper());
 
     return defaultExporterResourceProvider.getExportHandlers().stream()
         .map(handler -> (ExportHandler<T, R>) handler)
@@ -641,7 +646,8 @@ final class CamundaExporterIT {
         config,
         mock(ExporterEntityCacheProvider.class),
         new SimpleMeterRegistry(),
-        new ExporterMetadata());
+        new ExporterMetadata(TestObjectMapper.objectMapper()),
+        TestObjectMapper.objectMapper());
 
     when(provider.getIndexDescriptors()).thenReturn(indexDescriptors);
     when(provider.getIndexTemplateDescriptors()).thenReturn(templateDescriptors);

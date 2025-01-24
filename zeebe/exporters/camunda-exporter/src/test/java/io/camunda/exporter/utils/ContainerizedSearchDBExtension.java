@@ -8,6 +8,7 @@
 package io.camunda.exporter.utils;
 
 import co.elastic.clients.elasticsearch.ElasticsearchClient;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import io.camunda.exporter.config.ExporterConfiguration;
 import io.camunda.exporter.config.ExporterConfiguration.IndexSettings;
 import io.camunda.exporter.schema.elasticsearch.ElasticsearchEngineClient;
@@ -27,6 +28,8 @@ public class ContainerizedSearchDBExtension extends SearchDBExtension {
 
   private static ElasticsearchClient elsClient;
   private static OpenSearchClient osClient;
+  private ObjectMapper osObjectMapper;
+  private ObjectMapper esObjectMapper;
 
   @Override
   public void beforeAll(final ExtensionContext context) throws Exception {
@@ -38,20 +41,28 @@ public class ContainerizedSearchDBExtension extends SearchDBExtension {
 
     final var config = new ExporterConfiguration();
     config.getConnect().setUrl(elasticsearchContainer.getHttpHostAddress());
-    elsClient = new ElasticsearchConnector(config.getConnect()).createClient();
+    final var esConnector = new ElasticsearchConnector(config.getConnect());
+    esObjectMapper = esConnector.objectMapper();
+    elsClient = esConnector.createClient();
 
     final var osConfig = new ExporterConfiguration();
     osConfig.getConnect().setType("opensearch");
     osConfig.getConnect().setUrl(opensearchContainer.getHttpHostAddress());
-    osClient = new OpensearchConnector(osConfig.getConnect()).createClient();
+    final var osConnector = new OpensearchConnector(osConfig.getConnect());
+    osObjectMapper = osConnector.objectMapper();
+    osClient = osConnector.createClient();
   }
 
   @Override
   public void beforeEach(final ExtensionContext context) throws Exception {
-    new ElasticsearchEngineClient(elsClient).createIndex(PROCESS_INDEX, new IndexSettings());
-    new OpensearchEngineClient(osClient).createIndex(PROCESS_INDEX, new IndexSettings());
-    new ElasticsearchEngineClient(elsClient).createIndex(FORM_INDEX, new IndexSettings());
-    new OpensearchEngineClient(osClient).createIndex(FORM_INDEX, new IndexSettings());
+    new ElasticsearchEngineClient(elsClient, esObjectMapper)
+        .createIndex(PROCESS_INDEX, new IndexSettings());
+    new OpensearchEngineClient(osClient, osObjectMapper)
+        .createIndex(PROCESS_INDEX, new IndexSettings());
+    new ElasticsearchEngineClient(elsClient, esObjectMapper)
+        .createIndex(FORM_INDEX, new IndexSettings());
+    new OpensearchEngineClient(osClient, osObjectMapper)
+        .createIndex(FORM_INDEX, new IndexSettings());
   }
 
   @Override
@@ -60,6 +71,12 @@ public class ContainerizedSearchDBExtension extends SearchDBExtension {
     osClient.indices().delete(req -> req.index(PROCESS_INDEX.getFullQualifiedName()));
     elsClient.indices().delete(req -> req.index(FORM_INDEX.getFullQualifiedName()));
     osClient.indices().delete(req -> req.index(FORM_INDEX.getFullQualifiedName()));
+  }
+
+  @Override
+  public ObjectMapper objectMapper() {
+    // which one to return?
+    return osObjectMapper;
   }
 
   @Override
