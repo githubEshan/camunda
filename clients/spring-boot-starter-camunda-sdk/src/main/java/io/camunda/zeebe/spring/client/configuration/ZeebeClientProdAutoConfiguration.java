@@ -36,7 +36,11 @@ import org.springframework.context.annotation.Configuration;
 
 @Deprecated(since = "8.6", forRemoval = true)
 @Configuration
-@ConditionalOnProperty(prefix = "camunda.client.zeebe", name = "enabled", havingValue = "true")
+@ConditionalOnProperty(
+    prefix = "camunda.client.zeebe",
+    name = "enabled",
+    havingValue = "true",
+    matchIfMissing = true)
 @ConditionalOnMissingBean(CamundaSpringProcessTestContext.class)
 @ConditionalOnBean(CamundaClientConfiguration.class)
 public class ZeebeClientProdAutoConfiguration {
