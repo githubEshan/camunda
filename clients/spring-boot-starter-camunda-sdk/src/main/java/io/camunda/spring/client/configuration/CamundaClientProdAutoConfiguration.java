@@ -25,7 +25,6 @@ import io.camunda.spring.client.jobhandling.CamundaClientExecutorService;
 import io.camunda.spring.client.properties.CamundaClientProperties;
 import io.camunda.spring.client.testsupport.CamundaSpringProcessTestContext;
 import io.camunda.zeebe.gateway.protocol.GatewayGrpc;
-import io.camunda.zeebe.spring.client.configuration.ZeebeClientProdAutoConfiguration;
 import io.grpc.ClientInterceptor;
 import io.grpc.ManagedChannel;
 import java.util.List;
@@ -52,8 +51,7 @@ import org.springframework.context.annotation.Bean;
   ExecutorServiceConfiguration.class,
   CamundaActuatorConfiguration.class,
   JsonMapperConfiguration.class,
-  CredentialsProviderConfiguration.class,
-  ZeebeClientProdAutoConfiguration.class
+  CredentialsProviderConfiguration.class
 })
 @AutoConfigureBefore(CamundaClientAllAutoConfiguration.class)
 public class CamundaClientProdAutoConfiguration {

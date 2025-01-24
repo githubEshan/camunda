@@ -22,6 +22,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import io.camunda.client.CamundaClient;
 import io.camunda.spring.client.event.CamundaLifecycleEventProducer;
 import io.camunda.spring.client.testsupport.CamundaSpringProcessTestContext;
+import io.camunda.zeebe.spring.client.configuration.ZeebeClientProdAutoConfiguration;
 import org.springframework.boot.autoconfigure.AutoConfigureAfter;
 import org.springframework.boot.autoconfigure.ImportAutoConfiguration;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
@@ -37,7 +38,8 @@ import org.springframework.context.annotation.Configuration;
   CamundaClientAllAutoConfiguration.class,
   CamundaActuatorConfiguration.class,
   MetricsDefaultConfiguration.class,
-  JsonMapperConfiguration.class
+  JsonMapperConfiguration.class,
+  ZeebeClientProdAutoConfiguration.class
 })
 @AutoConfigureAfter(JacksonAutoConfiguration.class)
 public class CamundaAutoConfiguration {
