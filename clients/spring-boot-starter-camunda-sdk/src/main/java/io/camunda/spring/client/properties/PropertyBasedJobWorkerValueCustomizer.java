@@ -189,11 +189,10 @@ public class PropertyBasedJobWorkerValueCustomizer implements JobWorkerValueCust
   }
 
   private void applyDefaultJobWorkerTenantIds(final JobWorkerValue zeebeWorker) {
-    final Set<String> defaultJobWorkerTenantIds = new HashSet<>();
-    defaultJobWorkerTenantIds.addAll(
-        ofNullable(camundaClientProperties.getWorker().getDefaults().getTenantIds())
-            .orElse(Collections.emptyList()));
-    defaultJobWorkerTenantIds.addAll(camundaClientProperties.getTenantIds());
+    final Set<String> defaultJobWorkerTenantIds =
+        new HashSet<>(
+            ofNullable(camundaClientProperties.getWorker().getDefaults().getTenantIds())
+                .orElse(Collections.emptyList()));
     if (zeebeWorker.getTenantIds() == null || zeebeWorker.getTenantIds().isEmpty()) {
       if (!defaultJobWorkerTenantIds.isEmpty()) {
         LOG.debug(

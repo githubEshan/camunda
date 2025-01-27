@@ -505,7 +505,7 @@ public class CamundaClientPropertiesPostProcessorTest {
 
         @Test
         void shouldReadZeebeEnabled() {
-          assertThat(camundaClientProperties.getZeebe().getEnabled()).isFalse();
+          assertThat(camundaClientProperties.getEnabled()).isFalse();
         }
 
         @Test

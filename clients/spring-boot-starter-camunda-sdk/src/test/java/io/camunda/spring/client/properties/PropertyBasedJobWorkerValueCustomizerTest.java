@@ -139,7 +139,7 @@ public class PropertyBasedJobWorkerValueCustomizerTest {
   void shouldSetDefaultTenantIds() {
     // given
     final CamundaClientProperties properties = properties();
-    properties.setTenantIds(List.of("customTenantId"));
+    properties.getWorker().getDefaults().setTenantIds(List.of("customTenantId"));
 
     final PropertyBasedJobWorkerValueCustomizer customizer =
         new PropertyBasedJobWorkerValueCustomizer(properties);
