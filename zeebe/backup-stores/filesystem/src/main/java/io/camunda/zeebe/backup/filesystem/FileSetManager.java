@@ -7,16 +7,14 @@
  */
 package io.camunda.zeebe.backup.filesystem;
 
-import com.azure.storage.blob.models.BlobErrorCode;
-import com.azure.storage.blob.models.BlobStorageException;
 import io.camunda.zeebe.backup.api.BackupIdentifier;
 import io.camunda.zeebe.backup.api.NamedFileSet;
 import io.camunda.zeebe.backup.common.FileSet;
 import io.camunda.zeebe.backup.common.FileSet.NamedFile;
 import io.camunda.zeebe.backup.common.NamedFileSetImpl;
-import io.camunda.zeebe.backup.filesystem.FilesystemBackupStoreException.BlobAlreadyExists;
 import java.io.IOException;
 import java.nio.file.Files;
+import java.nio.file.NoSuchFileException;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.nio.file.StandardCopyOption;
@@ -25,7 +23,7 @@ import java.util.stream.Collectors;
 
 final class FileSetManager {
 
-  // The path format is constructed by contents/partitionId/checkpointId/nodeId/nameOfFile
+  // The path format is constructed by basePath/contents/partitionId/checkpointId/nodeId/nameOfFile
   private static final String PATH_FORMAT = "%s/contents/%s/%s/%s/%s/";
   private final String basePath;
 
@@ -50,11 +48,6 @@ final class FileSetManager {
       try {
         final var binaryData = Files.readAllBytes(Paths.get(String.valueOf(filePath)));
         Files.write(targetFilePath, binaryData, StandardOpenOption.CREATE_NEW);
-      } catch (final BlobStorageException e) {
-        if (e.getErrorCode() == BlobErrorCode.BLOB_ALREADY_EXISTS) {
-          throw new BlobAlreadyExists("File already exists.", e.getCause());
-        }
-        throw e;
       } catch (final IOException e) {
         throw new RuntimeException(e);
       }
@@ -71,10 +64,14 @@ final class FileSetManager {
               p -> {
                 try {
                   Files.delete(p);
+                } catch (final NoSuchFileException e) {
+                  // ignore
                 } catch (final IOException e) {
                   throw new RuntimeException(e);
                 }
               });
+    } catch (final NoSuchFileException e) {
+      // ignore
     } catch (final IOException e) {
       throw new RuntimeException(e);
     }

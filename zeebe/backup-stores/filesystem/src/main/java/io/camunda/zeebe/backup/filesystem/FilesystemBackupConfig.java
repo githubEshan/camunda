@@ -14,6 +14,12 @@ public record FilesystemBackupConfig(
 
     private String basePath;
 
+    /**
+     * The base path to store all related backup files in.
+     *
+     * @param basePath the base path of all backups
+     * @return the builder for chaining
+     */
     public Builder withBasePath(final String basePath) {
       this.basePath = basePath;
       return this;

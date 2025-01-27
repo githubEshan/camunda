@@ -27,7 +27,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /**
- * {@link BackupStore} for Azure. Stores all backups in a given bucket.
+ * {@link BackupStore} for local filesystem. Stores all backups in a given baseDir.
  *
  * <p>All created object keys are prefixed by the {@link BackupIdentifier}, with the following
  * scheme: {@code basePath/partitionId/checkpointId/nodeId}.
@@ -46,6 +46,7 @@ public final class FilesystemBackupStore implements BackupStore {
   private final ManifestManager manifestManager;
 
   public FilesystemBackupStore(final FilesystemBackupConfig config) {
+    validateConfig(config);
     executor = Executors.newVirtualThreadPerTaskExecutor();
 
     fileSetManager = new FileSetManager(config.basePath());
@@ -145,11 +146,11 @@ public final class FilesystemBackupStore implements BackupStore {
             executor.shutdown();
             final var closed = executor.awaitTermination(1, TimeUnit.MINUTES);
             if (!closed) {
-              LOG.warn("Failed to orderly shutdown Azure Store Executor within one minute.");
+              LOG.warn("Failed to orderly shutdown Filesystem Store Executor within one minute.");
               executor.shutdownNow();
             }
           } catch (final Exception e) {
-            LOG.error("Failed to shutdown of Azure Store Executor.");
+            LOG.error("Failed to shutdown of Filesystem Store Executor.");
             throw new RuntimeException(e);
           }
         });
