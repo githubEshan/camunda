@@ -39,4 +39,14 @@ public class CamundaClientWorkerProperties {
   public void setOverride(final Map<String, JobWorkerValue> override) {
     this.override = override;
   }
+
+  @Override
+  public String toString() {
+    return "CamundaClientWorkerProperties{"
+        + "defaults="
+        + defaults
+        + ", override="
+        + override
+        + '}';
+  }
 }

@@ -52,4 +52,21 @@ public class CamundaClientCloudProperties {
   public void setBaseUrl(final String baseUrl) {
     this.baseUrl = baseUrl;
   }
+
+  @Override
+  public String toString() {
+    return "CamundaClientCloudProperties{"
+        + "region='"
+        + region
+        + '\''
+        + ", clusterId='"
+        + clusterId
+        + '\''
+        + ", baseUrl='"
+        + baseUrl
+        + '\''
+        + ", port="
+        + port
+        + '}';
+  }
 }

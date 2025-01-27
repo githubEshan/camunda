@@ -216,6 +216,7 @@ public class CamundaClientProperties {
     return zeebe;
   }
 
+  @Deprecated
   public void setZeebe(final ZeebeClientProperties zeebe) {
     this.zeebe = zeebe;
   }
@@ -241,18 +242,24 @@ public class CamundaClientProperties {
     this.tenantIds = tenantIds;
   }
 
+  @Deprecated(forRemoval = true, since = "8.7")
+  @DeprecatedConfigurationProperty(replacement = "camunda.client.cloud.cluster-id")
   public String getClusterId() {
     return clusterId;
   }
 
+  @Deprecated(forRemoval = true)
   public void setClusterId(final String clusterId) {
     this.clusterId = clusterId;
   }
 
+  @Deprecated(forRemoval = true, since = "8.7")
+  @DeprecatedConfigurationProperty(replacement = "camunda.client.cloud.region")
   public String getRegion() {
     return region;
   }
 
+  @Deprecated(forRemoval = true, since = "8.7")
   public void setRegion(final String region) {
     this.region = region;
   }
@@ -268,12 +275,16 @@ public class CamundaClientProperties {
   @Override
   public String toString() {
     return "CamundaClientProperties{"
-        + "auth="
+        + "enabled="
+        + enabled
+        + ", mode="
+        + mode
+        + ", cloud="
+        + cloud
+        + ", auth="
         + auth
         + ", identity="
         + identity
-        + ", zeebe="
-        + zeebe
         + ", executionThreads="
         + executionThreads
         + ", messageTimeToLive="
@@ -305,16 +316,6 @@ public class CamundaClientProperties {
         + '\''
         + ", requestTimeout="
         + requestTimeout
-        + ", region='"
-        + region
-        + '\''
-        + ", clusterId='"
-        + clusterId
-        + '\''
-        + ", mode="
-        + mode
-        + ", enabled="
-        + enabled
         + '}';
   }
 

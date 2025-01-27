@@ -25,4 +25,9 @@ public class CamundaClientDeploymentProperties {
   public void setEnabled(final boolean enabled) {
     this.enabled = enabled;
   }
+
+  @Override
+  public String toString() {
+    return "CamundaClientDeploymentProperties{" + "enabled=" + enabled + '}';
+  }
 }
