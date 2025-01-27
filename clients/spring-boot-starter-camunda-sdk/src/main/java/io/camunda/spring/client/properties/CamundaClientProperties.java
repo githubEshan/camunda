@@ -37,7 +37,8 @@ public class CamundaClientProperties {
   @Deprecated(forRemoval = true, since = "8.7")
   private String region;
 
-  @NestedConfigurationProperty private CamundaClientCloudProperties cloud;
+  @NestedConfigurationProperty
+  private CamundaClientCloudProperties cloud = new CamundaClientCloudProperties();
 
   @Deprecated(forRemoval = true, since = "8.7")
   @NestedConfigurationProperty
@@ -47,7 +48,11 @@ public class CamundaClientProperties {
   private CamundaClientAuthProperties auth = new CamundaClientAuthProperties();
 
   @NestedConfigurationProperty private IdentityProperties identity = new IdentityProperties();
-  @NestedConfigurationProperty private ZeebeClientProperties zeebe = new ZeebeClientProperties();
+
+  @NestedConfigurationProperty
+  @Deprecated(forRemoval = true, since = "8.7")
+  private ZeebeClientProperties zeebe = new ZeebeClientProperties();
+
   private Integer executionThreads;
   private Duration messageTimeToLive;
   private DataSize maxMessageSize;
@@ -205,6 +210,8 @@ public class CamundaClientProperties {
     this.auth = auth;
   }
 
+  @Deprecated(forRemoval = true, since = "8.7")
+  @DeprecatedConfigurationProperty(replacement = "camunda.client")
   public ZeebeClientProperties getZeebe() {
     return zeebe;
   }
@@ -213,6 +220,8 @@ public class CamundaClientProperties {
     this.zeebe = zeebe;
   }
 
+  @Deprecated(forRemoval = true, since = "8.7")
+  @DeprecatedConfigurationProperty
   public IdentityProperties getIdentity() {
     return identity;
   }

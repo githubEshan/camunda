@@ -76,7 +76,7 @@ public class ZeebeClientProperties extends ApiProperties {
     this.messageTimeToLive = messageTimeToLive;
   }
 
-  @DeprecatedConfigurationProperty(replacement = "camunda.client.worker.request-timeout")
+  @DeprecatedConfigurationProperty(replacement = "camunda.client.worker.defaults.request-timeout")
   public Duration getRequestTimeout() {
     return requestTimeout;
   }

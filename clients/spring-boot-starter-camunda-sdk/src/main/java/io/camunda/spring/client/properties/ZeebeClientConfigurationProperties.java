@@ -320,7 +320,7 @@ public class ZeebeClientConfigurationProperties {
     this.defaultJobWorkerTenantIds = defaultJobWorkerTenantIds;
   }
 
-  @DeprecatedConfigurationProperty(replacement = "camunda.client.worker.stream-enabled")
+  @DeprecatedConfigurationProperty(replacement = "camunda.client.worker.defaults.stream-enabled")
   public boolean getDefaultJobWorkerStreamEnabled() {
     return defaultJobWorkerStreamEnabled;
   }
@@ -355,27 +355,27 @@ public class ZeebeClientConfigurationProperties {
     return worker.getThreads();
   }
 
-  @DeprecatedConfigurationProperty(replacement = "camunda.client.worker.max-jobs-active")
+  @DeprecatedConfigurationProperty(replacement = "camunda.client.worker.defaults.max-jobs-active")
   public int getDefaultJobWorkerMaxJobsActive() {
     return worker.getMaxJobsActive();
   }
 
-  @DeprecatedConfigurationProperty(replacement = "camunda.client.worker.name")
+  @DeprecatedConfigurationProperty(replacement = "camunda.client.worker.defaults.name")
   public String getDefaultJobWorkerName() {
     return worker.getDefaultName();
   }
 
-  @DeprecatedConfigurationProperty(replacement = "camunda.client.worker.type")
+  @DeprecatedConfigurationProperty(replacement = "camunda.client.worker.defaults.defaults.type")
   public String getDefaultJobWorkerType() {
     return worker.getDefaultType();
   }
 
-  @DeprecatedConfigurationProperty(replacement = "camunda.client.worker.timeout")
+  @DeprecatedConfigurationProperty(replacement = "camunda.client.worker.defaults.defaults.timeout")
   public Duration getDefaultJobTimeout() {
     return job.getTimeout();
   }
 
-  @DeprecatedConfigurationProperty(replacement = "camunda.client.worker.poll-interval")
+  @DeprecatedConfigurationProperty(replacement = "camunda.client.worker.defaults.poll-interval")
   public Duration getDefaultJobPollInterval() {
     return job.getPollInterval();
   }
@@ -789,7 +789,7 @@ public class ZeebeClientConfigurationProperties {
       this.override = override;
     }
 
-    @DeprecatedConfigurationProperty(replacement = "camunda.client.worker.max-jobs-active")
+    @DeprecatedConfigurationProperty(replacement = "camunda.client.worker.defaults.max-jobs-active")
     public Integer getMaxJobsActive() {
       return maxJobsActive;
     }
@@ -807,7 +807,7 @@ public class ZeebeClientConfigurationProperties {
       this.threads = threads;
     }
 
-    @DeprecatedConfigurationProperty(replacement = "camunda.client.worker.name")
+    @DeprecatedConfigurationProperty(replacement = "camunda.client.worker.defaults.name")
     public String getDefaultName() {
       return defaultName;
     }
@@ -816,7 +816,7 @@ public class ZeebeClientConfigurationProperties {
       this.defaultName = defaultName;
     }
 
-    @DeprecatedConfigurationProperty(replacement = "camunda.client.worker.type")
+    @DeprecatedConfigurationProperty(replacement = "camunda.client.worker.defaults.type")
     public String getDefaultType() {
       return defaultType;
     }
@@ -870,7 +870,7 @@ public class ZeebeClientConfigurationProperties {
     private Duration timeout = DEFAULT.getDefaultJobTimeout();
     private Duration pollInterval = DEFAULT.getDefaultJobPollInterval();
 
-    @DeprecatedConfigurationProperty(replacement = "camunda.client.worker.timeout")
+    @DeprecatedConfigurationProperty(replacement = "camunda.client.worker.defaults.timeout")
     public Duration getTimeout() {
       return timeout;
     }
@@ -879,7 +879,7 @@ public class ZeebeClientConfigurationProperties {
       this.timeout = timeout;
     }
 
-    @DeprecatedConfigurationProperty(replacement = "camunda.client.worker.poll-interval")
+    @DeprecatedConfigurationProperty(replacement = "camunda.client.worker.defaults.poll-interval")
     public Duration getPollInterval() {
       return pollInterval;
     }
