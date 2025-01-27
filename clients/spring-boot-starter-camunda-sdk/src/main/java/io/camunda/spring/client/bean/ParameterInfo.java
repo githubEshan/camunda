@@ -40,6 +40,10 @@ public class ParameterInfo implements BeanInfo {
     return parameterName;
   }
 
+  public MethodInfo getMethodInfo() {
+    return methodInfo;
+  }
+
   @Override
   public String toString() {
     return "ParameterInfo{"
