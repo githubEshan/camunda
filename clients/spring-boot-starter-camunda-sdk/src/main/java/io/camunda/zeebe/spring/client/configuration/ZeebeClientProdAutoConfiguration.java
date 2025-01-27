@@ -37,7 +37,7 @@ import org.springframework.context.annotation.Configuration;
 @Deprecated(since = "8.6", forRemoval = true)
 @Configuration
 @ConditionalOnProperty(
-    prefix = "camunda.client.zeebe",
+    prefix = "camunda.client",
     name = "enabled",
     havingValue = "true",
     matchIfMissing = true)
