@@ -43,17 +43,12 @@ public class FilesystemBackupStoreIT implements BackupStoreTestKit {
   public FilesystemBackupConfig backupConfig;
   public FilesystemBackupStore backupStore;
 
-  @TempDir
-  Path backupDir;
-
+  @TempDir Path backupDir;
 
   @BeforeEach
   public void setUpStore() {
     System.out.println("backupDir: " + backupDir);
-    backupConfig =
-        new FilesystemBackupConfig.Builder()
-            .withBasePath(backupDir.toString())
-            .build();
+    backupConfig = new FilesystemBackupConfig.Builder().withBasePath(backupDir.toString()).build();
     backupStore = new FilesystemBackupStore(backupConfig);
   }
 

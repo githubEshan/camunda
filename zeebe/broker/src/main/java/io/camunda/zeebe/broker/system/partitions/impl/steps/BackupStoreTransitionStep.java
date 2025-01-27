@@ -64,9 +64,10 @@ public final class BackupStoreTransitionStep implements PartitionTransitionStep 
         case GCS -> installGcsStore(context, backupCfg, installed);
         case AZURE -> installAzureStore(context, backupCfg, installed);
         case FILESYSTEM -> installFilesystemStore(context, backupCfg, installed);
-        default -> installed.completeExceptionally(
-            new IllegalArgumentException(
-                "Unknown backup store type %s".formatted(backupCfg.getStore())));
+        default ->
+            installed.completeExceptionally(
+                new IllegalArgumentException(
+                    "Unknown backup store type %s".formatted(backupCfg.getStore())));
       }
     } else {
       installed.complete(null);
@@ -129,8 +130,8 @@ public final class BackupStoreTransitionStep implements PartitionTransitionStep 
       final ActorFuture<Void> installed) {
     try {
       final var brokerFilesystemConfig = backupCfg.getFilesystem();
-      final var storeFilesystemConfig = FilesystemBackupStoreConfig.toStoreConfig(
-          brokerFilesystemConfig);
+      final var storeFilesystemConfig =
+          FilesystemBackupStoreConfig.toStoreConfig(brokerFilesystemConfig);
       final var filesystemStore = new FilesystemBackupStore(storeFilesystemConfig);
       context.setBackupStore(filesystemStore);
       installed.complete(null);

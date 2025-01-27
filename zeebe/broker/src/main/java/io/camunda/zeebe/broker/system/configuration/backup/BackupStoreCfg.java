@@ -102,9 +102,7 @@ public class BackupStoreCfg implements ConfigurationEntry {
      */
     FILESYSTEM,
 
-    /**
-     * Set type = NONE when no backup store is available. No backup will be taken.
-     */
+    /** Set type = NONE when no backup store is available. No backup will be taken. */
     NONE
   }
 }

@@ -24,9 +24,7 @@ public class FilesystemBackupStoreConfig implements ConfigurationEntry {
   }
 
   public static FilesystemBackupConfig toStoreConfig(final FilesystemBackupStoreConfig config) {
-    return new FilesystemBackupConfig.Builder()
-        .withBasePath(config.getBasePath())
-        .build();
+    return new FilesystemBackupConfig.Builder().withBasePath(config.getBasePath()).build();
   }
 
   @Override
@@ -48,10 +46,6 @@ public class FilesystemBackupStoreConfig implements ConfigurationEntry {
 
   @Override
   public String toString() {
-    return "FilesystemBackupStoreConfig{"
-        + "basePath='"
-        + basePath
-        + '\''
-        + '}';
+    return "FilesystemBackupStoreConfig{" + "basePath='" + basePath + '\'' + '}';
   }
 }

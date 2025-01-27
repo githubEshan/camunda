@@ -44,8 +44,9 @@ final class BackupStoreComponent {
       case GCS -> buildGcsBackupStore(backupCfg);
       case AZURE -> buildAzureBackupStore(backupCfg);
       case FILESYSTEM -> buildFilesystemBackupStore(backupCfg);
-      case NONE -> throw new IllegalArgumentException(
-          "No backup store configured, cannot restore from backup.");
+      case NONE ->
+          throw new IllegalArgumentException(
+              "No backup store configured, cannot restore from backup.");
     };
   }
 
@@ -66,8 +67,8 @@ final class BackupStoreComponent {
 
   private static FilesystemBackupStore buildFilesystemBackupStore(
       final BackupStoreCfg backupStoreCfg) {
-    final var storeConfig = FilesystemBackupStoreConfig.toStoreConfig(
-        backupStoreCfg.getFilesystem());
+    final var storeConfig =
+        FilesystemBackupStoreConfig.toStoreConfig(backupStoreCfg.getFilesystem());
     return new FilesystemBackupStore(storeConfig);
   }
 }

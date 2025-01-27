@@ -48,7 +48,8 @@ public final class ManifestManager {
    *   <li>{@code "manifest.json"}
    * </ul>
    *
-   * The path format is constructed by basePath/manifests/partitionId/checkpointId/nodeId/manifest.json
+   * The path format is constructed by
+   * basePath/manifests/partitionId/checkpointId/nodeId/manifest.json
    */
   private static final String MANIFEST_PATH_FORMAT = "%s/manifests/%s/%s/%s/manifest.json";
 
@@ -151,8 +152,9 @@ public final class ManifestManager {
 
   Manifest getManifest(final BackupIdentifier id) {
     return getManifestWithPath(
-        Path.of(MANIFEST_PATH_FORMAT.formatted(basePath, id.partitionId(), id.checkpointId(),
-            id.nodeId())));
+        Path.of(
+            MANIFEST_PATH_FORMAT.formatted(
+                basePath, id.partitionId(), id.checkpointId(), id.nodeId())));
   }
 
   private Manifest getManifestWithPath(final Path path) {
@@ -184,12 +186,12 @@ public final class ManifestManager {
   }
 
   private Path manifestIdPath(final BackupIdentifier backupIdentifier) {
-    return Path.of(MANIFEST_PATH_FORMAT.formatted(
-        basePath,
-        backupIdentifier.partitionId(),
-        backupIdentifier.checkpointId(),
-        backupIdentifier.nodeId()
-    ));
+    return Path.of(
+        MANIFEST_PATH_FORMAT.formatted(
+            basePath,
+            backupIdentifier.partitionId(),
+            backupIdentifier.checkpointId(),
+            backupIdentifier.nodeId()));
   }
 
   private boolean filterBlobsByWildcard(

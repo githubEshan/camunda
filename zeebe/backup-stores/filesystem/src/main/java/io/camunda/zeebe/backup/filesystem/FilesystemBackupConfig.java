@@ -7,8 +7,7 @@
  */
 package io.camunda.zeebe.backup.filesystem;
 
-public record FilesystemBackupConfig(
-    String basePath) {
+public record FilesystemBackupConfig(String basePath) {
 
   public static class Builder {
 

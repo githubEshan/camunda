@@ -104,7 +104,7 @@ final class FileSetManager {
 
   private Path fileSetPath(final BackupIdentifier id, final String fileSetName) {
     return Path.of(
-        PATH_FORMAT.formatted(basePath, id.partitionId(), id.checkpointId(), id.nodeId(),
-            fileSetName));
+        PATH_FORMAT.formatted(
+            basePath, id.partitionId(), id.checkpointId(), id.nodeId(), fileSetName));
   }
 }
