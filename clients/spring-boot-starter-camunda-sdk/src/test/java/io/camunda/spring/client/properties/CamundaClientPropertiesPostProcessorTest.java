@@ -29,8 +29,6 @@ import org.springframework.util.unit.DataSize;
 @ContextConfiguration(classes = CamundaClientPropertiesTestConfig.class)
 public class CamundaClientPropertiesPostProcessorTest {
 
-  @Autowired private CamundaClientProperties camundaClientProperties;
-
   @SpringBootTest(
       properties = {
         "zeebe.client.broker.grpc-address=http://legacy:26500",
@@ -102,7 +100,7 @@ public class CamundaClientPropertiesPostProcessorTest {
   @Nested
   class CompatibilityTest {
     @Nested
-    class _8_5 {
+    class Version85 {
 
       @SpringBootTest(
           properties = {
@@ -388,7 +386,7 @@ public class CamundaClientPropertiesPostProcessorTest {
     }
 
     @Nested
-    class _8_6 {
+    class Version86 {
 
       @Nested
       @SpringBootTest(
@@ -535,6 +533,229 @@ public class CamundaClientPropertiesPostProcessorTest {
         @Test
         void shouldReadScope() {
           assertThat(camundaClientProperties.getAuth().getScope()).isEqualTo("scope");
+        }
+      }
+
+      @Nested
+      @SpringBootTest(properties = {"camunda.client.zeebe.defaults.type=foo"})
+      class DefaultType {
+        @Autowired CamundaClientProperties camundaClientProperties;
+
+        @Test
+        void shouldReadType() {
+          assertThat(camundaClientProperties.getWorker().getDefaults().getType()).isEqualTo("foo");
+        }
+      }
+
+      @Nested
+      @SpringBootTest(properties = "camunda.client.zeebe.defaults.auto-complete=false")
+      class DefaultAutoComplete {
+        @Autowired CamundaClientProperties camundaClientProperties;
+
+        @Test
+        void shouldReadAutoComplete() {
+          assertThat(camundaClientProperties.getWorker().getDefaults().getAutoComplete()).isFalse();
+        }
+      }
+
+      @Nested
+      @SpringBootTest(properties = "camunda.client.zeebe.override.foo.auto-complete=false")
+      class FooAutoComplete {
+        @Autowired CamundaClientProperties camundaClientProperties;
+
+        @Test
+        void shouldReadAutoComplete() {
+          assertThat(camundaClientProperties.getWorker().getOverride().get("foo").getAutoComplete())
+              .isFalse();
+        }
+      }
+
+      @Nested
+      @SpringBootTest(
+          properties = {
+            "camunda.client.mode=self-managed",
+            "camunda.client.auth.username=jonny",
+            "camunda.client.auth.password=prosciutto"
+          })
+      class BasicAuthCredentials {
+        @Autowired CamundaClientProperties camundaClientProperties;
+
+        @Test
+        void shouldReadUsername() {
+          assertThat(camundaClientProperties.getAuth().getUsername()).isEqualTo("jonny");
+        }
+
+        @Test
+        void shouldReadPassword() {
+          assertThat(camundaClientProperties.getAuth().getPassword()).isEqualTo("prosciutto");
+        }
+      }
+
+      @Nested
+      @SpringBootTest(
+          properties = {
+            "camunda.client.mode=self-managed",
+            "camunda.client.auth.keystore-path=/key/store/path",
+            "camunda.client.auth.keystore-password=changeit",
+            "camunda.client.auth.keystore-key-password=changeit2",
+            "camunda.client.auth.truststore-path=/trust/store/path",
+            "camunda.client.auth.truststore-password=changeit3"
+          })
+      class CertificateAuth {
+        @Autowired CamundaClientProperties camundaClientProperties;
+
+        @Test
+        void shouldReadKeystorePath() {
+          assertThat(camundaClientProperties.getAuth().getKeystorePath())
+              .isEqualTo("/key/store/path");
+        }
+
+        @Test
+        void shouldReadKeystorePassword() {
+          assertThat(camundaClientProperties.getAuth().getKeystorePassword()).isEqualTo("changeit");
+        }
+
+        @Test
+        void shouldReadKeystoreKeyPassword() {
+          assertThat(camundaClientProperties.getAuth().getKeystoreKeyPassword())
+              .isEqualTo("changeit2");
+        }
+
+        @Test
+        void shouldReadTruststorePath() {
+          assertThat(camundaClientProperties.getAuth().getTruststorePath())
+              .isEqualTo("/trust/store/path");
+        }
+
+        @Test
+        void shouldReadTruststorePassword() {
+          assertThat(camundaClientProperties.getAuth().getTruststorePassword())
+              .isEqualTo("changeit3");
+        }
+      }
+
+      @Nested
+      @SpringBootTest(properties = {"camunda.client.zeebe.execution-threads=5"})
+      class ExecutionThreads {
+        @Autowired CamundaClientProperties camundaClientProperties;
+
+        @Test
+        void shouldReadExecutionThreads() {
+          assertThat(camundaClientProperties.getExecutionThreads()).isEqualTo(5);
+        }
+      }
+
+      @Nested
+      @SpringBootTest(properties = "camunda.client.zeebe.message-time-to-live=PT3H")
+      class MessageTimeToLive {
+        @Autowired CamundaClientProperties camundaClientProperties;
+
+        @Test
+        void shouldReadMessageTimeToLive() {
+          assertThat(camundaClientProperties.getMessageTimeToLive()).isEqualTo(Duration.ofHours(3));
+        }
+      }
+
+      @SpringBootTest({"camunda.client.zeebe.max-message-size=3145728"})
+      @Nested
+      class MessageSize {
+        @Autowired CamundaClientProperties camundaClientProperties;
+
+        @Test
+        void shouldReadMessageSize() {
+          assertThat(camundaClientProperties.getMaxMessageSize())
+              .isEqualTo(DataSize.parse("3145728"));
+        }
+      }
+
+      @SpringBootTest({"camunda.client.zeebe.max-metadata-size=3145728"})
+      @Nested
+      class MetadataSize {
+        @Autowired CamundaClientProperties camundaClientProperties;
+
+        @Test
+        void shouldReadMessageSize() {
+          assertThat(camundaClientProperties.getMaxMetadataSize())
+              .isEqualTo(DataSize.parse("3145728"));
+        }
+      }
+
+      @SpringBootTest({"camunda.client.zeebe.request-timeout=PT20S"})
+      @Nested
+      class RequestTimeout {
+        @Autowired CamundaClientProperties camundaClientProperties;
+
+        @Test
+        void shouldReadRequestTimeout() {
+          assertThat(camundaClientProperties.getRequestTimeout()).isEqualTo(Duration.ofSeconds(20));
+        }
+      }
+
+      @SpringBootTest({"camunda.client.zeebe.ca-certificate-path=/path/to/cert.pem"})
+      @Nested
+      class CaCertificatePath {
+        @Autowired CamundaClientProperties camundaClientProperties;
+
+        @Test
+        void shouldReadCaCertificatePath() {
+          assertThat(camundaClientProperties.getCaCertificatePath()).isEqualTo("/path/to/cert.pem");
+        }
+      }
+
+      @SpringBootTest({"camunda.client.zeebe.keep-alive=PT1M"})
+      @Nested
+      class KeepAlive {
+        @Autowired CamundaClientProperties camundaClientProperties;
+
+        @Test
+        void shouldReadKeepAlive() {
+          assertThat(camundaClientProperties.getKeepAlive()).isEqualTo(Duration.ofMinutes(1));
+        }
+      }
+
+      @SpringBootTest({"camunda.client.zeebe.override-authority=host:port"})
+      @Nested
+      class OverrideAuthority {
+        @Autowired CamundaClientProperties camundaClientProperties;
+
+        @Test
+        void shouldReadOverrideAuthority() {
+          assertThat(camundaClientProperties.getOverrideAuthority()).isEqualTo("host:port");
+        }
+      }
+
+      @SpringBootTest({"camunda.client.zeebe.prefer-rest-over-grpc=true"})
+      @Nested
+      class PreferRestOverGrpc {
+        @Autowired CamundaClientProperties camundaClientProperties;
+
+        @Test
+        void shouldReadPreferRestOverGrpc() {
+          assertThat(camundaClientProperties.getPreferRestOverGrpc()).isEqualTo(true);
+        }
+      }
+
+      @SpringBootTest({"camunda.client.zeebe.grpc-address=http://localhostaaa:26500"})
+      @Nested
+      class GrpcAddress {
+        @Autowired CamundaClientProperties camundaClientProperties;
+
+        @Test
+        void shouldReadGrpcAddress() {
+          assertThat(camundaClientProperties.getGrpcAddress())
+              .isEqualTo(URI.create("http://localhostaaa:26500"));
+        }
+      }
+
+      @SpringBootTest({"camunda.client.zeebe.rest-address=http://localhostaaa:8080"})
+      @Nested
+      class RestAddress {
+        @Autowired CamundaClientProperties camundaClientProperties;
+
+        @Test
+        void shouldReadGrpcAddress() {
+          assertThat(camundaClientProperties.getRestAddress())
+              .isEqualTo(URI.create("http://localhostaaa:8080"));
         }
       }
     }
