@@ -47,7 +47,6 @@ public class FilesystemBackupStoreIT implements BackupStoreTestKit {
 
   @BeforeEach
   public void setUpStore() {
-    System.out.println("backupDir: " + backupDir);
     backupConfig = new FilesystemBackupConfig.Builder().withBasePath(backupDir.toString()).build();
     backupStore = new FilesystemBackupStore(backupConfig);
   }

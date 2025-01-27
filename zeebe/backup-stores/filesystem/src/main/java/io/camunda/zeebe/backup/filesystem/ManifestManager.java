@@ -122,7 +122,6 @@ public final class ManifestManager {
       try {
         final var serializedManifest = MAPPER.writeValueAsBytes(updatedManifest);
         final var path = manifestPath(manifest);
-        System.out.println("Writing failed manifest to " + path);
         Files.write(path, serializedManifest);
       } catch (final Exception e) {
         throw new RuntimeException(e);
