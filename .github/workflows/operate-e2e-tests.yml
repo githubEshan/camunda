@@ -115,10 +115,13 @@ jobs:
         # we're excluding optimize from the build, not to impact this operate's workflow.
         run: ./mvnw clean install -T1C -DskipChecks -P -docker,skipFrontendBuild -DskipTests=true -B -DskipRemoteStaging=true -Dmaven.deploy.skip=true
       - name: Start Operate
-        run: ./mvnw -q -B spring-boot:start -pl dist -Dspring-boot.run.fork=true -Dspring-boot.run.main-class=io.camunda.application.StandaloneOperate
+        run: >
+          ./mvnw -q -B spring-boot:start -pl dist
+          -Dspring-boot.run.fork=true
+          -Dspring-boot.run.main-class=io.camunda.application.StandaloneCamunda
+          -Dspring-boot.run.jvmArguments="-Dspring.profiles.active=operate,standalone,consolidated-auth --camunda.security.authentication.basic.allow-unauthenticated-api-access=true"
         env:
           CAMUNDA_OPERATE_CSRF_PREVENTION_ENABLED: false
-          SPRING_PROFILES_ACTIVE: consolidated-auth
       - name: Run tests
         working-directory: ./operate/client
         run: yarn run test:e2e:ci
