@@ -17,8 +17,6 @@
 
   <properties>
     <version.picocli>4.7.6</version.picocli>
-    <version.graalvm>0.10.3</version.graalvm>
-    <version.graalsdk>24.1.1</version.graalsdk>
     <version.jsonb>2.4</version.jsonb>
   </properties>
 
@@ -63,14 +61,6 @@
       <version>${version.jsonb}</version>
       <scope>provided</scope>
       <optional>true</optional>
-    </dependency>
-
-    <!-- GraalVM packages to add substitutions or build-time features -->
-    <dependency>
-      <groupId>org.graalvm.sdk</groupId>
-      <artifactId>graal-sdk</artifactId>
-      <version>${version.graalsdk}</version>
-      <scope>provided</scope>
     </dependency>
 
     <!-- General annotations -->
@@ -129,7 +119,6 @@
             <dependency>org.slf4j:slf4j-simple:jar</dependency>
             <!-- used for annotations and runtime features -->
             <dependency>io.avaje:avaje-jsonb-generator:jar</dependency>
-            <dependency>org.graalvm.sdk:graal-sdk:jar</dependency>
           </ignoredUnusedDeclaredDependencies>
         </configuration>
       </plugin>
@@ -149,48 +138,8 @@
         <skipNativeTests>true</skipNativeTests>
       </properties>
 
-      <dependencies>
-        <dependency>
-          <groupId>org.graalvm.buildtools</groupId>
-          <artifactId>junit-platform-native</artifactId>
-          <version>${version.graalvm}</version>
-          <scope>test</scope>
-        </dependency>
-      </dependencies>
-
       <build>
         <plugins>
-          <plugin>
-            <groupId>org.graalvm.buildtools</groupId>
-            <artifactId>native-maven-plugin</artifactId>
-            <version>${version.graalvm}</version>
-            <extensions>true</extensions>
-            <configuration>
-              <skipNativeTests>${skipNativeTests}</skipNativeTests>
-              <mainClass>io.camunda.zeebe.zbctl.Application</mainClass>
-              <imageName>${build.finalName}</imageName>
-              <metadataRepository>
-                <enabled>true</enabled>
-              </metadataRepository>
-            </configuration>
-            <executions>
-              <execution>
-                <id>build-native</id>
-                <goals>
-                  <goal>compile-no-fork</goal>
-                </goals>
-                <phase>package</phase>
-              </execution>
-              <execution>
-                <id>test-native</id>
-                <goals>
-                  <goal>test</goal>
-                </goals>
-                <phase>test</phase>
-              </execution>
-            </executions>
-          </plugin>
-
           <!-- Compresses the final executable; this can easily cut down on executable size by
                30% or more, at the cost of a very small startup overhead  -->
           <plugin>
