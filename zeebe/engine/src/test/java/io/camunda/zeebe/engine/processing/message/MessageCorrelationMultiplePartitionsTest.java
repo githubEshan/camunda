@@ -110,16 +110,22 @@ public final class MessageCorrelationMultiplePartitionsTest {
             .withVariable("correlationKey", correlationKey)
             .createOnPartition(2);
 
-    // when
+    RecordingExporter.messageSubscriptionRecords(MessageSubscriptionIntent.CREATED)
+        .withProcessInstanceKey(processInstanceKey)
+        .await();
     engine.pauseProcessing(2);
-    engine
-        .message()
-        .withId("messageId")
-        .withName(messageName)
-        .withCorrelationKey(correlationKey)
-        .withTimeToLive(Duration.ofMinutes(30))
-        .onPartition(1)
-        .publish();
+
+    // when
+    for (int i = 0; i < 10; i++) {
+      engine
+          .message()
+          //          .withId("messageId")
+          .withName(messageName)
+          .withCorrelationKey(correlationKey)
+          .withTimeToLive(Duration.ofMinutes(30))
+          .onPartition(1)
+          .publish();
+    }
 
     // This sleep can replaced by waiting for multiple CORRELATE commands on partition 2
     Thread.sleep(3000);
@@ -135,9 +141,11 @@ public final class MessageCorrelationMultiplePartitionsTest {
             RecordingExporter.processInstanceRecords(ProcessInstanceIntent.ELEMENT_ACTIVATED)
                 .withProcessInstanceKey(processInstanceKey)
                 .withElementId(eventSubProcessStartId)
-                .limit(2)
+                .limit(11)
                 .count())
-        .isEqualTo(1);
+        .isEqualTo(10);
+
+    assert false;
   }
 
   @Test
