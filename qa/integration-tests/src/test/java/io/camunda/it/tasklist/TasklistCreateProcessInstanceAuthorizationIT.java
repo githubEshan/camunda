@@ -110,6 +110,7 @@ public class TasklistCreateProcessInstanceAuthorizationIT {
     // given
     adminAuthClient.createPermissions(
         testUserKey,
+        TEST_USER_NAME,
         new Permissions(
             ResourceTypeEnum.PROCESS_DEFINITION,
             PermissionTypeEnum.CREATE_PROCESS_INSTANCE,

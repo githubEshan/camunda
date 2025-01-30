@@ -155,6 +155,7 @@ public class TasklistCompleteUserTaskAuthorizationIT {
     // given
     adminAuthClient.createPermissions(
         testUserKey,
+        TEST_USER_NAME,
         new Permissions(
             ResourceTypeEnum.PROCESS_DEFINITION,
             PermissionTypeEnum.UPDATE_USER_TASK,
@@ -177,6 +178,7 @@ public class TasklistCompleteUserTaskAuthorizationIT {
     // given
     adminAuthClient.createPermissions(
         testUserKey,
+        TEST_USER_NAME,
         new Permissions(
             ResourceTypeEnum.PROCESS_DEFINITION,
             PermissionTypeEnum.UPDATE_USER_TASK,
