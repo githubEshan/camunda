@@ -14,7 +14,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.http.HttpStatus.FORBIDDEN;
 import static org.springframework.http.HttpStatus.OK;
 
-import io.camunda.application.Profile;
 import io.camunda.client.CamundaClient;
 import io.camunda.client.api.response.Process;
 import io.camunda.qa.util.cluster.TestRestOperateClient;
@@ -52,7 +51,7 @@ public class OperatePermissionsIT {
     testInstance =
         new TestStandaloneCamunda()
             .withCamundaExporter()
-            .withAdditionalProfile(Profile.AUTH_BASIC)
+            .withUnauthenticatedAccess()
             .withAuthorizationsEnabled();
   }
 
