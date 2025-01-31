@@ -24,7 +24,7 @@ import java.lang.annotation.*;
 @Target(ElementType.METHOD)
 @Retention(RetentionPolicy.RUNTIME)
 @Documented
-@Deprecated(forRemoval = true, since = "8.7")
+@Deprecated(forRemoval = true, since = "8.8")
 public @interface JobWorker {
 
   /**

@@ -23,7 +23,7 @@ import java.lang.annotation.*;
 @Target(ElementType.PARAMETER)
 @Retention(RetentionPolicy.RUNTIME)
 @Documented
-@Deprecated(forRemoval = true, since = "8.7")
+@Deprecated(forRemoval = true, since = "8.8")
 public @interface Variable {
   String DEFAULT_NAME = "$NULL$";
 

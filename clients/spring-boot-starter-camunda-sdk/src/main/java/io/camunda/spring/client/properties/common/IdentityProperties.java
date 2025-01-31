@@ -17,7 +17,7 @@ package io.camunda.spring.client.properties.common;
 
 import java.net.URL;
 
-@Deprecated(forRemoval = true, since = "8.7")
+@Deprecated(forRemoval = true, since = "8.8")
 public class IdentityProperties extends ApiProperties {
   private URL baseUrl;
 

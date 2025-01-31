@@ -24,7 +24,7 @@ import java.lang.annotation.*;
 @Retention(RetentionPolicy.RUNTIME)
 @Documented
 @Inherited // has to be inherited to work on spring aop beans
-@Deprecated(forRemoval = true, since = "8.7")
+@Deprecated(forRemoval = true, since = "8.8")
 public @interface Deployment {
 
   String[] resources() default {};

@@ -18,7 +18,7 @@ package io.camunda.spring.client.properties.common;
 import java.net.URL;
 import org.springframework.boot.context.properties.DeprecatedConfigurationProperty;
 
-@Deprecated(forRemoval = true, since = "8.7")
+@Deprecated(forRemoval = true, since = "8.8")
 public class ApiProperties {
   private Boolean enabled;
   @Deprecated private URL baseUrl;

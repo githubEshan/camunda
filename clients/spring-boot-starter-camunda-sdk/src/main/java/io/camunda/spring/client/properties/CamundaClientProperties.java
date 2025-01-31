@@ -31,16 +31,16 @@ public class CamundaClientProperties {
   private Boolean enabled;
   private ClientMode mode;
 
-  @Deprecated(forRemoval = true, since = "8.7")
+  @Deprecated(forRemoval = true, since = "8.8")
   private String clusterId;
 
-  @Deprecated(forRemoval = true, since = "8.7")
+  @Deprecated(forRemoval = true, since = "8.8")
   private String region;
 
   @NestedConfigurationProperty
   private CamundaClientCloudProperties cloud = new CamundaClientCloudProperties();
 
-  @Deprecated(forRemoval = true, since = "8.7")
+  @Deprecated(forRemoval = true, since = "8.8")
   @NestedConfigurationProperty
   private List<String> tenantIds = new ArrayList<>();
 
@@ -50,7 +50,7 @@ public class CamundaClientProperties {
   @NestedConfigurationProperty private IdentityProperties identity = new IdentityProperties();
 
   @NestedConfigurationProperty
-  @Deprecated(forRemoval = true, since = "8.7")
+  @Deprecated(forRemoval = true, since = "8.8")
   private ZeebeClientProperties zeebe = new ZeebeClientProperties();
 
   private Integer executionThreads;
@@ -210,7 +210,7 @@ public class CamundaClientProperties {
     this.auth = auth;
   }
 
-  @Deprecated(forRemoval = true, since = "8.7")
+  @Deprecated(forRemoval = true, since = "8.8")
   @DeprecatedConfigurationProperty(replacement = "camunda.client")
   public ZeebeClientProperties getZeebe() {
     return zeebe;
@@ -221,7 +221,7 @@ public class CamundaClientProperties {
     this.zeebe = zeebe;
   }
 
-  @Deprecated(forRemoval = true, since = "8.7")
+  @Deprecated(forRemoval = true, since = "8.8")
   @DeprecatedConfigurationProperty
   public IdentityProperties getIdentity() {
     return identity;
@@ -231,18 +231,18 @@ public class CamundaClientProperties {
     this.identity = identity;
   }
 
-  @Deprecated(forRemoval = true, since = "8.7")
+  @Deprecated(forRemoval = true, since = "8.8")
   @DeprecatedConfigurationProperty(replacement = "camunda.client.worker.defaults.tenant-ids")
   public List<String> getTenantIds() {
     return tenantIds;
   }
 
-  @Deprecated(forRemoval = true, since = "8.7")
+  @Deprecated(forRemoval = true, since = "8.8")
   public void setTenantIds(final List<String> tenantIds) {
     this.tenantIds = tenantIds;
   }
 
-  @Deprecated(forRemoval = true, since = "8.7")
+  @Deprecated(forRemoval = true, since = "8.8")
   @DeprecatedConfigurationProperty(replacement = "camunda.client.cloud.cluster-id")
   public String getClusterId() {
     return clusterId;
@@ -253,13 +253,13 @@ public class CamundaClientProperties {
     this.clusterId = clusterId;
   }
 
-  @Deprecated(forRemoval = true, since = "8.7")
+  @Deprecated(forRemoval = true, since = "8.8")
   @DeprecatedConfigurationProperty(replacement = "camunda.client.cloud.region")
   public String getRegion() {
     return region;
   }
 
-  @Deprecated(forRemoval = true, since = "8.7")
+  @Deprecated(forRemoval = true, since = "8.8")
   public void setRegion(final String region) {
     this.region = region;
   }
