@@ -42,9 +42,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.RegisterExtension;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.testcontainers.junit.jupiter.Testcontainers;
 
-@Testcontainers
 abstract class BatchOperationUpdateRepositoryIT {
   @RegisterExtension protected static SearchDBExtension searchDB = SearchDBExtension.create();
   private static final Logger LOGGER =

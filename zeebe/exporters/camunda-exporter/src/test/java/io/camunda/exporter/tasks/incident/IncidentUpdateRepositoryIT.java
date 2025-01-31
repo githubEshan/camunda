@@ -64,21 +64,17 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.condition.DisabledIfSystemProperty;
+import org.junit.jupiter.api.extension.RegisterExtension;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
 import org.junit.jupiter.params.provider.EnumSource.Mode;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.testcontainers.junit.jupiter.Testcontainers;
 
 @SuppressWarnings("resource")
-@Testcontainers
-@DisabledIfSystemProperty(
-    named = SearchDBExtension.IT_OPENSEARCH_AWS_INSTANCE_URL_PROPERTY,
-    matches = "^(?=\\s*\\S).*$",
-    disabledReason = "Excluding from AWS OS IT CI")
 abstract class IncidentUpdateRepositoryIT {
   public static final int PARTITION_ID = 1;
+  @RegisterExtension protected static SearchDBExtension searchDB = SearchDBExtension.create();
   private static final Logger LOGGER = LoggerFactory.getLogger(IncidentUpdateRepositoryIT.class);
   private static final Duration REQUEST_TIMEOUT = Duration.ofSeconds(5);
   protected final PostImporterQueueTemplate postImporterQueueTemplate;

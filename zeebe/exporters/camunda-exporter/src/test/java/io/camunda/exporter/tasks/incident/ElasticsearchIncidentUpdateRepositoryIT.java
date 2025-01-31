@@ -14,31 +14,30 @@ import co.elastic.clients.elasticsearch._types.query_dsl.QueryBuilders;
 import co.elastic.clients.elasticsearch.core.search.Hit;
 import co.elastic.clients.json.jackson.JacksonJsonpMapper;
 import co.elastic.clients.transport.rest_client.RestClientTransport;
-import io.camunda.zeebe.test.util.testcontainers.TestSearchContainers;
+import io.camunda.exporter.utils.SearchDBExtension;
 import java.io.IOException;
 import java.util.Collection;
 import java.util.List;
 import org.apache.http.HttpHost;
 import org.elasticsearch.client.RestClient;
 import org.junit.jupiter.api.AutoClose;
+import org.junit.jupiter.api.condition.DisabledIfSystemProperty;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.testcontainers.elasticsearch.ElasticsearchContainer;
-import org.testcontainers.junit.jupiter.Container;
 
+@DisabledIfSystemProperty(
+    named = SearchDBExtension.IT_OPENSEARCH_AWS_INSTANCE_URL_PROPERTY,
+    matches = "^(?=\\s*\\S).*$",
+    disabledReason = "Excluding from AWS OS IT CI")
 final class ElasticsearchIncidentUpdateRepositoryIT extends IncidentUpdateRepositoryIT {
   private static final Logger LOGGER =
       LoggerFactory.getLogger(ElasticsearchIncidentUpdateRepositoryIT.class);
-
-  @Container
-  private static final ElasticsearchContainer CONTAINER =
-      TestSearchContainers.createDefeaultElasticsearchContainer();
 
   @AutoClose private final RestClientTransport transport = createTransport();
   private final ElasticsearchAsyncClient client = new ElasticsearchAsyncClient(transport);
 
   public ElasticsearchIncidentUpdateRepositoryIT() {
-    super("http://" + CONTAINER.getHttpHostAddress(), true);
+    super("http://" + searchDB.esUrl(), true);
   }
 
   @Override
@@ -69,8 +68,7 @@ final class ElasticsearchIncidentUpdateRepositoryIT extends IncidentUpdateReposi
   }
 
   private RestClientTransport createTransport() {
-    final var restClient =
-        RestClient.builder(HttpHost.create(CONTAINER.getHttpHostAddress())).build();
+    final var restClient = RestClient.builder(HttpHost.create(searchDB.esUrl())).build();
     return new RestClientTransport(restClient, new JacksonJsonpMapper());
   }
 }
