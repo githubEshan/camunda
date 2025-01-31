@@ -15,6 +15,7 @@ import io.camunda.db.rdbms.write.domain.UserTaskDbModel.UserTaskState;
 import java.util.List;
 import java.util.Map;
 import java.util.function.Function;
+import java.util.stream.IntStream;
 
 public final class UserTaskFixtures extends CommonFixtures {
 
@@ -28,8 +29,8 @@ public final class UserTaskFixtures extends CommonFixtures {
     final var builder =
         new Builder()
             .userTaskKey(nextKey())
-            .elementId("flowNodeBpmnId-" + RANDOM.nextInt(1000))
-            .processDefinitionId("processDefinitionId-" + RANDOM.nextInt(1000))
+            .elementId(createRandomString("flowNodeBpmnId"))
+            .processDefinitionId(createRandomString("processDefinitionId"))
             .processInstanceKey(nextKey())
             .creationDate(NOW)
             .completionDate(NOW.plusDays(1))
@@ -39,18 +40,27 @@ public final class UserTaskFixtures extends CommonFixtures {
             .processDefinitionKey(nextKey())
             .processInstanceKey(nextKey())
             .elementInstanceKey(nextKey())
-            .tenantId("tenant-" + RANDOM.nextInt(1000))
+            .tenantId(createRandomString("tenant"))
             .dueDate(NOW.plusDays(3))
             .followUpDate(NOW.plusDays(2))
-            .candidateGroups(
-                List.of("group" + RANDOM.nextInt(1000), "group" + RANDOM.nextInt(1000)))
-            .candidateUsers(List.of("user" + RANDOM.nextInt(1000), "user" + RANDOM.nextInt(1000)))
-            .externalFormReference("externalFormReference-" + RANDOM.nextInt(1000))
+            .candidateGroups(createRandomStrings("group", 2))
+            .candidateUsers(createRandomStrings("user", 2))
+            .externalFormReference(createRandomString("externalFormReference"))
             .processDefinitionVersion(RANDOM.nextInt(100))
             .customHeaders(Map.of("key", "value"))
             .priority(RANDOM.nextInt(100));
 
     return builderFunction.apply(builder).build();
+  }
+
+  private static String createRandomString(final String prefix) {
+    return "%s-%s".formatted(prefix, RANDOM.nextInt(1000));
+  }
+
+  private static List<String> createRandomStrings(final String prefix, final int n) {
+    return IntStream.range(0, n)
+        .mapToObj(i -> createRandomString("%s%02d".formatted(prefix, i)))
+        .toList();
   }
 
   public static void createAndSaveRandomUserTasks(final RdbmsService rdbmsService) {
