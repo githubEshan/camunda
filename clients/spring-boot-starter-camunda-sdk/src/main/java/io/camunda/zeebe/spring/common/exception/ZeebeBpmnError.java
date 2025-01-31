@@ -15,6 +15,7 @@
  */
 package io.camunda.zeebe.spring.common.exception;
 
+import io.camunda.spring.client.exception.CamundaBpmnError;
 import java.util.Map;
 
 /**
@@ -22,29 +23,10 @@ import java.util.Map;
  * href="https://docs.camunda.io/docs/reference/bpmn-processes/error-events/error-events/">...</a>
  */
 @Deprecated(since = "8.8", forRemoval = true)
-public class ZeebeBpmnError extends RuntimeException {
-
-  private final String errorCode;
-  private final String errorMessage;
-  private final Map<String, Object> variables;
+public class ZeebeBpmnError extends CamundaBpmnError {
 
   public ZeebeBpmnError(
       final String errorCode, final String errorMessage, final Map<String, Object> variables) {
-    super("[" + errorCode + "] " + errorMessage);
-    this.errorCode = errorCode;
-    this.errorMessage = errorMessage;
-    this.variables = variables;
-  }
-
-  public String getErrorMessage() {
-    return errorMessage;
-  }
-
-  public String getErrorCode() {
-    return errorCode;
-  }
-
-  public Map<String, Object> getVariables() {
-    return variables;
+    super(errorCode, errorMessage, variables);
   }
 }
